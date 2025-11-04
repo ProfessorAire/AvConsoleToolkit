@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>ct</AssemblyName>
+    <OutputType>exe</OutputType>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!--<PublishSingleFile>true</PublishSingleFile>-->
+    <!--<SelfContained>true</SelfContained>-->
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console.Analyzer" Version="1.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Spectre.Console.Cli" Version="0.53.0" />
+    <PackageReference Include="Spectre.Console.Testing" Version="0.53.0" />
+    <PackageReference Include="SSH.NET" Version="2025.1.0" />
+  </ItemGroup>
+
+</Project>
