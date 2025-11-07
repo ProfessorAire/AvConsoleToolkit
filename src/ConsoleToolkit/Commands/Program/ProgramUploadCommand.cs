@@ -13,6 +13,9 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml;
+using ConsoleToolkit.Crestron;
+using ConsoleToolkit.Ssh;
 using Renci.SshNet;
 using Renci.SshNet.Sftp;
 using Spectre.Console;
@@ -76,6 +79,11 @@ namespace ConsoleToolkit.Commands.Program
                 AnsiConsole.MarkupLine($"\r\n[red]Error:[/] {ex.Message}");
                 return 1;
             }
+        }
+
+        private static string? ParseEntryPointFromConfig(string xml)
+        {
+            return null;
         }
 
         private void EnsureRemoteDirectoryExists(ISftpClient sftpClient, string remotePath)
@@ -194,61 +202,47 @@ namespace ConsoleToolkit.Commands.Program
             return hasChanged;
         }
 
-        private async Task<int> RegisterProgram(ShellStream shellStream, int slot, string extension, string tempDirectory)
+        private async Task<int> RegisterProgram(IShellStream shellStream, int slot, string extension, string tempDirectory, CancellationToken cancellationToken)
         {
+            var success = false;
             if (extension == ".lpz")
             {
-                AnsiConsole.MarkupLine("[cyan]Registering .lpz program...[/]");
-                var regCommand = $"progreg -P:{slot}";
-                AnsiConsole.MarkupLine($"[yellow]Executing:[/] {regCommand}");
-
-                shellStream.WriteLine(regCommand);
-                shellStream.WriteLine("progreg");
-                var (success, output) = await this.WaitForCommandCompletionAsync(
-          shellStream,
-        [$"Program {slot} is registered"],
-      [],
-         3000
-      );
-
-                if (success)
-                {
-                    AnsiConsole.MarkupLine("[green]Program registered successfully.[/]");
-                    return 0;
-                }
-                else
-                {
-                    AnsiConsole.MarkupLine("[red]Error:[/] Program registration failed or timed out.");
-                    return 1;
-                }
+                success = await CommandHandlers.RegisterProgramAsync(shellStream, slot, cancellationToken);
             }
             else if (extension == ".cpz")
             {
                 AnsiConsole.MarkupLine("[cyan]Registering .cpz program...[/]");
 
-                // Parse manifest.info to get the MainAssembly name
-                var manifestPath = Path.Combine(tempDirectory, "manifest.info");
-                if (!File.Exists(manifestPath))
+                var result = await this.TryGetMainAssemblyNameAsync(tempDirectory);
+                if (!result.Success)
                 {
-                    AnsiConsole.MarkupLine("[red]Error:[/] manifest.info not found in .cpz archive.");
+                    AnsiConsole.MarkupLine("[red]Error:[/] Could not determine main assembly name from manifest.info or ProgramInfo.config.");
                     return 1;
                 }
 
-                string? mainAssemblyName = null;
+                success = await CommandHandlers.RegisterProgramAsync(shellStream, slot, result.MainAssemblyName, cancellationToken);
+            }
+
+            return success ? 0 : 1;
+        }
+
+        private async Task<(bool Success, string? MainAssemblyName)> TryGetMainAssemblyNameAsync(string tempDirectory)
+        {
+            var manifestPath = Path.Combine(tempDirectory, "manifest.info");
+            string? mainAssemblyName = null;
+            if (File.Exists(manifestPath))
+            {
                 var manifestLines = await File.ReadAllLinesAsync(manifestPath);
                 foreach (var line in manifestLines)
                 {
                     if (line.StartsWith("MainAssembly=", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Parse: MainAssembly=MainAssembly_Value.dll:0bc3347061cf0c8fac98f56da4471541
                         var assemblyPart = line[13..];
                         var colonIndex = assemblyPart.IndexOf(':');
                         if (colonIndex > 0)
                         {
                             assemblyPart = assemblyPart.Substring(0, colonIndex);
                         }
-
-                        // Remove .dll extension if present
                         if (assemblyPart.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
                         {
                             mainAssemblyName = assemblyPart.Substring(0, assemblyPart.Length - 4);
@@ -257,41 +251,37 @@ namespace ConsoleToolkit.Commands.Program
                         {
                             mainAssemblyName = assemblyPart;
                         }
+
                         break;
                     }
                 }
-
-                if (string.IsNullOrEmpty(mainAssemblyName))
+            }
+            else
+            {
+                // Try ProgramInfo.config
+                var configPath = Path.Combine(tempDirectory, "ProgramInfo.config");
+                if (File.Exists(configPath))
                 {
-                    AnsiConsole.MarkupLine("[red]Error:[/] Could not parse MainAssembly from manifest.info.");
-                    return 1;
-                }
-
-                var regCommand = $"progreg -P:{slot} -C:{mainAssemblyName}";
-                AnsiConsole.MarkupLine($"[yellow]Executing:[/] {regCommand}");
-                shellStream.WriteLine(regCommand);
-                shellStream.WriteLine("progreg");
-
-                var (success, output) = await this.WaitForCommandCompletionAsync(
-                    shellStream,
-                     [$"Program {slot} is registered (#)"],
-                     [],
-                     5000
-                    );
-
-                if (success)
-                {
-                    AnsiConsole.MarkupLine("[green]Program registered successfully.[/]");
-                    return 0;
-                }
-                else
-                {
-                    AnsiConsole.MarkupLine("[red]Error:[/] Program registration failed or timed out.");
-                    return 1;
+                    try
+                    {
+                        var xml = await File.ReadAllTextAsync(configPath);
+                        using var reader = new XmlTextReader(new StringReader(xml));
+                        while (reader.Read())
+                        {
+                            if (reader.NodeType == XmlNodeType.Element && reader.Name == "EntryPoint")
+                            {
+                                mainAssemblyName = reader.ReadString();
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        AnsiConsole.MarkupLine($"[red]Error:[/] Failed to parse ProgramInfo.config: {ex.Message}");
+                    }
                 }
             }
 
-            return 0;
+            return (!string.IsNullOrEmpty(mainAssemblyName), mainAssemblyName);
         }
 
         private async Task<int> UploadChangedFilesAsync(
@@ -437,7 +427,7 @@ namespace ConsoleToolkit.Commands.Program
                              ctx.Status("SSH Connected");
                          });
 
-                using var shellStream = sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024);
+                using var shellStream = new ShellStreamWrapper(sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024));
 
                 // Stop or kill program based on flag
                 string stopCommand;
@@ -460,10 +450,7 @@ namespace ConsoleToolkit.Commands.Program
                     AnsiConsole.MarkupLine("[cyan]Waiting for program to stop...[/]");
                 }
 
-                var (success, stopOutput) = await this.WaitForCommandCompletionAsync(
-                    shellStream,
-                    successPatterns,
-                    ["Failed to stop program"]);
+                var success = await shellStream.WaitForCommandCompletionAsync(successPatterns, [], cancellationToken);
 
                 if (!success)
                 {
@@ -584,7 +571,7 @@ namespace ConsoleToolkit.Commands.Program
                 // TODO: Register program (different for .lpz vs .cpz, .clz assumed already registered)
                 if (extension == ".lpz" || extension == ".cpz")
                 {
-                    var registrationResult = await this.RegisterProgram(shellStream, settings.Slot, extension, tempDirectory);
+                    var registrationResult = await this.RegisterProgram(shellStream, settings.Slot, extension, tempDirectory, cancellationToken);
                     if (registrationResult != 0)
                     {
                         AnsiConsole.MarkupLine("[red]Program upload failed due to registration error.[/]");
@@ -593,18 +580,11 @@ namespace ConsoleToolkit.Commands.Program
                 }
 
                 // Execute progres command
-                var progresCommand = $"progres -P:{settings.Slot}";
-                AnsiConsole.MarkupLine($"[yellow]Executing:[/] {progresCommand}");
-
-                shellStream.WriteLine(progresCommand);
-                var (progresSuccess, progresOutput) = await this.WaitForCommandCompletionAsync(
-                    shellStream,
-                    ["Program(s) Started..."],
-                    [$"Specified program({settings.Slot}) not registered. Please use the progreg command."]);
+                var progresSuccess = await CommandHandlers.RestartProgramAsync(shellStream, settings.Slot, cancellationToken);
 
                 if (progresSuccess)
                 {
-                    AnsiConsole.MarkupLine("[green]Program updated successfully![/]");
+                    AnsiConsole.MarkupLine("[green]Program updated successfully.[/]");
                     return 0;
                 }
                 else
