@@ -61,22 +61,22 @@ namespace ConsoleToolkit.Crestron
             ArgumentOutOfRangeException.ThrowIfGreaterThan(slot, 10);
             
             AnsiConsole.MarkupLine("[cyan]Registering program...[/]");
-            var registerCommand = $"progreg -p:{slot}{(!string.IsNullOrWhiteSpace(programEntryPoint) ? $"-C:{programEntryPoint}" : string.Empty)}";
+            var registerCommand = $"progreg -p:{slot}{(!string.IsNullOrWhiteSpace(programEntryPoint) ? $" -C:{programEntryPoint}" : string.Empty)}";
             AnsiConsole.MarkupLine($"[yellow]Executing:[/] {registerCommand}");
             stream.WriteLine(registerCommand);
+            stream.WriteLine("progreg");
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            AnsiConsole.MarkupLine("[cyan]Waiting for program to register...[/]");
-
-            var result = await stream.WaitForCommandCompletionAsync(["Program(s) Registered..."], ["ERROR:Invalid Program Identifier specified."], cancellationToken, 60000);
+            var regSuccess = $"Program {slot} is registered{(!string.IsNullOrWhiteSpace(programEntryPoint) ? " (#)" : string.Empty)}";
+            var result = await stream.WaitForCommandCompletionAsync([regSuccess], ["ERROR:Invalid Program Identifier specified."], cancellationToken, 60000);
             if (result)
             {
                 AnsiConsole.MarkupLineInterpolated($"[green]Program {slot} registered successfully.[/]");
             }
             else
             {
-                AnsiConsole.MarkupLineInterpolated($"[red]Error:[/] Program {slot} registration failed or timed out.");
+                AnsiConsole.MarkupLineInterpolated($"[red]Error: Program {slot} registration failed or timed out.[/]");
             }
 
             return result;
@@ -97,7 +97,17 @@ namespace ConsoleToolkit.Crestron
             AnsiConsole.MarkupLine("[cyan]Waiting for program to start...[/]");
 
             IEnumerable<string> successPatterns = ["Program(s) Started..."];
-            return await stream.WaitForCommandCompletionAsync(successPatterns, ["ERROR:Invalid Program Identifier specified.", $"Specified program({slot}) not registered."], cancellationToken, 60000);
+            var result = await stream.WaitForCommandCompletionAsync(successPatterns, ["ERROR:Invalid Program Identifier specified.", $"Specified program({slot}) not registered."], cancellationToken, 60000);
+            if (result)
+            {
+                AnsiConsole.MarkupLine("[green]Program started successfully.[/]");
+            }
+            else
+            {
+                AnsiConsole.MarkupLine("[red]Error: Program start failed or timed out.[/]");
+            }
+
+            return result;
         }
     }
 }

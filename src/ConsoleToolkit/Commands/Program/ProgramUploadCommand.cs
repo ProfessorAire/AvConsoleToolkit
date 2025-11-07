@@ -41,13 +41,13 @@ namespace ConsoleToolkit.Commands.Program
                 var extension = Path.GetExtension(settings.ProgramFile).ToLowerInvariant();
                 if (!SupportedExtensions.Contains(extension))
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Unsupported file extension. Supported: {string.Join(", ", SupportedExtensions)}");
+                    AnsiConsole.MarkupLine($"[red]Error: Unsupported file extension. Supported: {string.Join(", ", SupportedExtensions)}[/]");
                     return 1;
                 }
 
                 if (settings.Slot < 1 || settings.Slot > 10)
                 {
-                    AnsiConsole.MarkupLine("[red]Error:[/] Slot must be between 1 and 10.");
+                    AnsiConsole.MarkupLine("[red]Error: Slot must be between 1 and 10.[/]");
                     return 1;
                 }
 
@@ -65,11 +65,11 @@ namespace ConsoleToolkit.Commands.Program
 
                 if (result == 0)
                 {
-                    AnsiConsole.MarkupLine("\r\n[green]The command: 'program upload' completed.[/]");
+                    AnsiConsole.MarkupLine("\r\n[green]Program upload completed.[/]");
                 }
                 else
                 {
-                    AnsiConsole.MarkupLine("\r\n[red]The command: 'program upload' failed.[/]");
+                    AnsiConsole.MarkupLine("\r\n[red]Program upload failed.[/]");
                 }
 
                 return result;
@@ -79,11 +79,6 @@ namespace ConsoleToolkit.Commands.Program
                 AnsiConsole.MarkupLine($"\r\n[red]Error:[/] {ex.Message}");
                 return 1;
             }
-        }
-
-        private static string? ParseEntryPointFromConfig(string xml)
-        {
-            return null;
         }
 
         private void EnsureRemoteDirectoryExists(ISftpClient sftpClient, string remotePath)
@@ -527,7 +522,8 @@ namespace ConsoleToolkit.Commands.Program
                         {
                             var remoteFilePath = $"{remotePath}/{fileChange.RelativePath}";
                             var status = fileChange.IsNew ? "[blue](new)[/]" : "[yellow](updated)[/]";
-                            var uploadTask = ctx.AddTask($"{status} {remoteFilePath}");
+                            string displayName = settings.Verbose ? remoteFilePath : Path.GetFileName(remoteFilePath);
+                            var uploadTask = ctx.AddTask($"{status} {displayName}");
 
                             // Ensure remote directory exists
                             var remoteDir = Path.GetDirectoryName(remoteFilePath)?.Replace('\\', '/');
@@ -656,8 +652,8 @@ namespace ConsoleToolkit.Commands.Program
                 {
                     var fileName = Path.GetFileName(settings.ProgramFile);
                     var remoteFilePath = $"{remotePath}/{fileName}";
-
-                    var uploadTask = ctx.AddTask($"[green]Uploading to {remoteFilePath}[/]");
+                    string displayName = settings.Verbose ? remoteFilePath : fileName;
+                    var uploadTask = ctx.AddTask($"[green]Uploading to {displayName}[/]");
 
                     // Ensure remote directory exists
                     this.EnsureRemoteDirectoryExists(sftpClient, remotePath);
