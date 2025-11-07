@@ -1,15 +1,18 @@
-﻿// <copyright file="IShellStream.cs" company="AVI-SPL Global LLC.">
-// Copyright (C) AVI-SPL Global LLC. All Rights Reserved.
-// The intellectual and technical concepts contained herein are proprietary to AVI-SPL Global LLC. and subject to AVI-SPL's standard software license agreement.
-// These materials may not be copied, reproduced, distributed or disclosed, in whole or in part, in any way without the written permission of an authorized
-// representative of AVI-SPL. All references to AVI-SPL Global LLC. shall also be references to AVI-SPL Global LLC's affiliates.
+﻿// <copyright file="Device.cs">
+// Copyright © Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
+// to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Renci.SshNet;
 
 namespace ConsoleToolkit.Ssh
 {
@@ -30,12 +33,6 @@ namespace ConsoleToolkit.Ssh
         string Read();
 
         /// <summary>
-        /// Writes a line to the shell stream.
-        /// </summary>
-        /// <param name="line">The line to write.</param>
-        void WriteLine(string line);
-
-        /// <summary>
         /// Asynchronously waits for the completion of a command executed on the shell stream.
         /// </summary>
         /// <param name="successPatterns">A collection of string patterns indicating successful command completion.</param>
@@ -54,5 +51,11 @@ namespace ConsoleToolkit.Ssh
             CancellationToken cancellationToken,
             int timeoutMs = 15000,
             bool writeReceivedData = true);
+
+        /// <summary>
+        /// Writes a line to the shell stream.
+        /// </summary>
+        /// <param name="line">The line to write.</param>
+        void WriteLine(string line);
     }
 }
