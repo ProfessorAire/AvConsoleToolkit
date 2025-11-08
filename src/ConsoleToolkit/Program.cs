@@ -9,7 +9,10 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
+using Config.Net;
 using ConsoleToolkit.Commands.Program;
+using ConsoleToolkit.Configuration;
+using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace ConsoleToolkit
@@ -18,6 +21,9 @@ namespace ConsoleToolkit
     {
         public static int Main(string[] args)
         {
+            AnsiConsole.WriteLine($"AddressBook Location: {AppConfig.Settings.Connection.AddressBooksLocation}");
+            AnsiConsole.Prompt(new ConfirmationPrompt("Continue?"));
+
             var app = new CommandApp();
 
             app.Configure(config =>
