@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ConsoleToolkit": {
+      "commandName": "Project",
+      "commandLineArgs": "crestron program upload -s 1 -h Bunny \"D:\\git\\evands\\house\\office\\OfficeBackend\\bin\\Debug\\net8.0\\OfficeBackend.cpz\" -k"
+    }
+  }
+}

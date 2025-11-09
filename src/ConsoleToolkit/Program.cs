@@ -9,10 +9,9 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using Config.Net;
+using ConsoleToolkit.Commands;
+using ConsoleToolkit.Commands.Config;
 using ConsoleToolkit.Commands.Program;
-using ConsoleToolkit.Configuration;
-using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace ConsoleToolkit
@@ -21,9 +20,6 @@ namespace ConsoleToolkit
     {
         public static int Main(string[] args)
         {
-            AnsiConsole.WriteLine($"AddressBook Location: {AppConfig.Settings.Connection.AddressBooksLocation}");
-            AnsiConsole.Prompt(new ConfirmationPrompt("Continue?"));
-
             var app = new CommandApp();
 
             app.Configure(config =>
@@ -36,20 +32,50 @@ namespace ConsoleToolkit
                 {
                     branch.SetDescription("Commands for Crestron hardware management");
 
-                    //branch.AddExample("crestron program upload program.cpz -s 1 -h 192.168.100.1 -u user -p password");
-                    //branch.AddExample("crestron program upload program.cpz -s 1 -h 192.168.100.1 -u user -p password -k -c");
-
                     branch.AddBranch("program", program =>
                     {
                         program.AddCommand<ProgramUploadCommand>("upload")
                             .WithAlias("u")
                             .WithDescription("Upload a program to Crestron hardware")
-                            .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "-h", "192.168.1.100", "-u", "admin", "-p", "password"])
-                            .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "-h", "192.168.1.100", "-u", "admin", "-p", "password", "-c"]);
+                            .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "--address", "192.168.1.100", "-u", "admin", "-p", "password"])
+                            .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "-a", "192.168.1.100", "-u", "admin", "-p", "password", "-c"]);
                     })
                     .WithAlias("p");
                 })
                 .WithAlias("c");
+
+                config.AddBranch("config", cfg =>
+                {
+                    cfg.SetDescription("Configuration management, such as setting or reading configuration values.");
+
+                    cfg.AddCommand<ListConfigCommand>("list")
+                        .WithAlias("l")
+                        .WithDescription("Lists all configuration keys and values from merged configuration.")
+                        .WithExample(["config", "list"])
+                        .WithExample(["config", "l", "--show-sources"]);
+
+                    cfg.AddCommand<SetConfigCommand>("set")
+                        .WithAlias("s")
+                        .WithDescription("Sets a single configuration key.")
+                        .WithExample(["config", "set", "Connection", "AddressBooksLocation", "C:/addressBooks"])
+                        .WithExample(["config", "set", "Connection", "AddressBooksLocation", "C:/addressBooks", "--global"]);
+
+                    cfg.AddCommand<RemoveConfigCommand>("remove")
+                        .WithAlias("r")
+                        .WithDescription("Removes a single configuration key.")
+                        .WithExample(["config", "remove", "Connection", "AddressBooksLocation"])
+                        .WithExample(["config", "r", "Connection", "AddressBooksLocation", "--global"]);
+                                    });
+
+                config.AddBranch("addressbook", ab =>
+                {
+                    ab.SetDescription("Utilities for looking up Crestron device information from address books.");
+                    ab.AddCommand<AddressBookLookupCommand>("lookup")
+                        .WithAlias("l")
+                        .WithExample("addressbook", "lookup", "SomeEntryName")
+                        .WithExample("ab", "l", "10.10.120.12");
+                })
+                .WithAlias("ab");
             });
 
             return app.Run(args);

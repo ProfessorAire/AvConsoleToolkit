@@ -55,7 +55,42 @@ namespace ConsoleToolkit.Commands.Program
                     return 1;
                 }
 
+                if (string.IsNullOrEmpty(settings.Username) && string.IsNullOrEmpty(settings.Password))
+                {
+                    if (settings.Verbose)
+                    {
+                        AnsiConsole.MarkupLine("[fuschia]No username/password provided, looking up values from address books.[/]");
+                    }
+
+                    var entry = await AddressBook.LookupEntryAsync(settings.Host);
+                    if (entry is null)
+                    {
+                        if (settings.Verbose)
+                        {
+                            AnsiConsole.MarkupLine("[red]Error: Could not find device in address books and no username/password provided.[/]");
+                        }
+
+                        return 101;
+                    }
+
+                    if (entry.Username is null || entry.Password is null)
+                    {
+                        if (settings.Verbose)
+                        {
+                            AnsiConsole.MarkupLine("[red]Error: Address book entry is missing username or password.[/]");
+                        }
+
+                        return 102;
+                    }
+
+                    settings.Username = entry.Username;
+                    settings.Password = entry.Password;
+                }
+                ;
+
                 var remotePath = $"program{settings.Slot:D2}";
+
+                AnsiConsole.MarkupLineInterpolated($"[teal]Uploading program to slot {settings.Slot} on device '{settings.Host}'...[/]");
 
                 int result = -1;
                 if (settings.ChangedOnly)
@@ -567,8 +602,6 @@ namespace ConsoleToolkit.Commands.Program
                         }
                     });
 
-                // Output after all progress indicators are complete
-                // TODO: Register program (different for .lpz vs .cpz, .clz assumed already registered)
                 if (extension == ".lpz" || extension == ".cpz")
                 {
                     var registrationResult = await this.RegisterProgram(shellStream, settings.Slot, extension, tempDirectory, cancellationToken);
@@ -752,13 +785,13 @@ namespace ConsoleToolkit.Commands.Program
         [CommandOption("-c|--changed-only")]
         public bool ChangedOnly { get; set; }
 
-        [CommandOption("-h|--host")]
+        [CommandOption("-a|--address", true)]
         public string Host { get; set; } = string.Empty;
 
         [CommandOption("-k|--kill")]
         public bool KillProgram { get; set; }
 
-        [CommandOption("-p|--password")]
+        [CommandOption("-p|--password", false)]
         public string Password { get; set; } = string.Empty;
 
         [CommandArgument(0, "<PROGRAM>")]
@@ -767,7 +800,7 @@ namespace ConsoleToolkit.Commands.Program
         [CommandOption("-s|--slot")]
         public int Slot { get; set; }
 
-        [CommandOption("-u|--username")]
+        [CommandOption("-u|--username", false)]
         public string Username { get; set; } = string.Empty;
 
         [CommandOption("-v|--verbose")]
