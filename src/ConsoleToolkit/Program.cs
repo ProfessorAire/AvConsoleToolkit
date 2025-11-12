@@ -24,11 +24,17 @@ namespace ConsoleToolkit
 
             app.Configure(config =>
             {
-                config.SetApplicationName("ConsoleToolkit")
+                config.SetApplicationName("ct")
                 .PropagateExceptions()
                 .UseAssemblyInformationalVersion()
-                .ValidateExamples()
-                .AddBranch("crestron", branch =>
+                .ValidateExamples();
+
+                config.AddCommand<UpdateCommand>("update")
+                    .WithDescription("Check for and install updates")
+                    .WithExample(["update"])
+                    .WithExample(["update", "--yes"]);
+
+                config.AddBranch("crestron", branch =>
                 {
                     branch.SetDescription("Commands for Crestron hardware management");
 

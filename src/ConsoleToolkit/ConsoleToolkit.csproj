@@ -10,11 +10,15 @@
     <!--<PublishSingleFile>true</PublishSingleFile>-->
     <!--<SelfContained>true</SelfContained>-->
     <PublishTrimmed>false</PublishTrimmed>
+    <FileVersion>1.0.0.100</FileVersion>
+    <VersionPrefix>1.0.0</VersionPrefix>
+    <VersionSuffix>beta.1</VersionSuffix>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Config.Net" Version="5.2.1" />
     <PackageReference Include="ini-parser" Version="2.5.2" NoWarn="NU1701" />
+    <PackageReference Include="Onova" Version="2.6.13" />
     <PackageReference Include="Spectre.Console.Analyzer" Version="1.0.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
