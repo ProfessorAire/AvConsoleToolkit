@@ -32,7 +32,7 @@ namespace AvConsoleToolkit
 
             app.Configure(config =>
             {
-                config.SetApplicationName("ct")
+                config.SetApplicationName("act")
                 .PropagateExceptions()
                 .UseAssemblyInformationalVersion()
                 .ValidateExamples();
