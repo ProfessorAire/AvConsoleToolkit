@@ -1,31 +1,46 @@
-// <copyright file="Device.cs">
+// <copyright file="ListConfigCommand.cs">
+// The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using ConsoleToolkit.Configuration;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace ConsoleToolkit.Commands.Config
 {
+    /// <summary>
+    /// Command to list merged application configuration values.
+    /// Displays top-level (global) settings and nested section properties, and optionally
+    /// shows the file paths of configuration sources in order of precedence.
+    /// </summary>
     public class ListConfigCommand : Command<ListConfigSettings>
     {
+        /// <summary>
+        /// Executes the list-config command.
+        /// Uses reflection to enumerate properties on <see cref="AppConfig.Settings"/>, grouping
+        /// nested interface-typed settings as sections and printing their property values.
+        /// </summary>
+        /// <param name="context">The command execution context provided by Spectre.Console.Cli.</param>
+        /// <param name="settings">The settings provided by the user on the command line.</param>
+        /// <param name="cancellationToken">A token that can be used to cancel the operation. Not currently observed.</param>
+        /// <returns>Always returns 0 on completion.</returns>
+        /// <exception cref="IOException">I/O errors when checking for the presence of configuration files.</exception>
+        /// <exception cref="UnauthorizedAccessException">Insufficient permissions while accessing configuration file locations.</exception>
         public override int Execute(CommandContext context, ListConfigSettings settings, CancellationToken cancellationToken)
         {
             var config = AppConfig.Settings;
@@ -115,12 +130,5 @@ namespace ConsoleToolkit.Commands.Config
 
             return 0;
         }
-    }
-
-    public class ListConfigSettings : CommandSettings
-    {
-        [CommandOption("--show-sources")]
-        [Description("Show the file paths of the configuration sources")]
-        public bool ShowSources { get; set; }
     }
 }

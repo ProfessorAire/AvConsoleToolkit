@@ -1,23 +1,35 @@
-// <copyright file="Device.cs">
+// <copyright file="Program.cs">
+// The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
+using System;
 using ConsoleToolkit.Commands;
+using ConsoleToolkit.Commands.AddressBook;
 using ConsoleToolkit.Commands.Config;
-using ConsoleToolkit.Commands.Program;
+using ConsoleToolkit.Commands.Crestron.Program;
 using Spectre.Console.Cli;
 
 namespace ConsoleToolkit
 {
+    /// <summary>
+    /// Entry point for the ConsoleToolkit application.
+    /// Configures and runs the Spectre.Console.Cli command application.
+    /// </summary>
     public static class Program
     {
+        /// <summary>
+        /// Main method. Configures the command-line interface and runs the application.
+        /// </summary>
+        /// <param name="args">Command-line arguments.</param>
+        /// <returns>Exit code.</returns>
         public static int Main(string[] args)
         {
             var app = new CommandApp();
@@ -29,10 +41,13 @@ namespace ConsoleToolkit
                 .UseAssemblyInformationalVersion()
                 .ValidateExamples();
 
-                config.AddCommand<UpdateCommand>("update")
-                    .WithDescription("Check for and install updates")
-                    .WithExample(["update"])
-                    .WithExample(["update", "--yes"]);
+                if (OperatingSystem.IsWindows())
+                {
+                    config.AddCommand<UpdateCommand>("update")
+                        .WithDescription("Check for and install updates for this application")
+                        .WithExample(["update"])
+                        .WithExample(["update", "--yes"]);
+                }
 
                 config.AddBranch("crestron", branch =>
                 {
@@ -63,15 +78,15 @@ namespace ConsoleToolkit
                     cfg.AddCommand<SetConfigCommand>("set")
                         .WithAlias("s")
                         .WithDescription("Sets a single configuration key.")
-                        .WithExample(["config", "set", "Connection", "AddressBooksLocation", "C:/addressBooks"])
-                        .WithExample(["config", "set", "Connection", "AddressBooksLocation", "C:/addressBooks", "--global"]);
+                        .WithExample(["config", "set", "-s", "Connection", "AddressBooksLocation", "C:/addressBooks"])
+                        .WithExample(["config", "set", "--section", "Connection", "AddressBooksLocation", "C:/addressBooks", "--local"]);
 
                     cfg.AddCommand<RemoveConfigCommand>("remove")
                         .WithAlias("r")
                         .WithDescription("Removes a single configuration key.")
                         .WithExample(["config", "remove", "Connection", "AddressBooksLocation"])
                         .WithExample(["config", "r", "Connection", "AddressBooksLocation", "--global"]);
-                                    });
+                });
 
                 config.AddBranch("addressbook", ab =>
                 {

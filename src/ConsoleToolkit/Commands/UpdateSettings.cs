@@ -1,4 +1,4 @@
-﻿// <copyright file="ISettings.cs">
+﻿// <copyright file="UpdateSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
@@ -11,24 +11,27 @@
 // </copyright>
 
 using System.ComponentModel;
+using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Configuration
+namespace ConsoleToolkit.Commands
 {
     /// <summary>
-    /// Defines the application's settings.
+    /// Settings for the update command, controlling confirmation and verbosity.
     /// </summary>
-    public interface ISettings
+    public class UpdateSettings : CommandSettings
     {
         /// <summary>
-        /// Gets the current connection settings used to configure connection related functionality.
+        /// Automatically confirm all prompts during update.
         /// </summary>
-        IConnectionSettings Connection { get; }
+        [CommandOption("-y|--yes")]
+        [Description("Automatically confirm all prompts")]
+        public bool AutoConfirm { get; set; }
 
         /// <summary>
-        /// Gets or sets the GitHub token used for accessing the GitHub API. If not set, specific operations
-        /// may prompt for the token instead.
+        /// Show detailed error information if an error occurs.
         /// </summary>
-        [DefaultValue("")]
-        string GithubToken { get; set; }
+        [CommandOption("-v|--verbose")]
+        [Description("Show detailed error information")]
+        public bool Verbose { get; set; }
     }
 }

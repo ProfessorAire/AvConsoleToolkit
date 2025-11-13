@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>ct</AssemblyName>
@@ -10,12 +10,13 @@
     <!--<PublishSingleFile>true</PublishSingleFile>-->
     <!--<SelfContained>true</SelfContained>-->
     <PublishTrimmed>false</PublishTrimmed>
-    <FileVersion>1.0.0.100</FileVersion>
-    <VersionPrefix>1.0.0</VersionPrefix>
+    <FileVersion>0.1.0.0</FileVersion>
+    <VersionPrefix>0.1.0</VersionPrefix>
     <VersionSuffix>beta.1</VersionSuffix>
   </PropertyGroup>
 
   <ItemGroup>
+    <SupportedPlatform Include="Windows;Linux" />
     <PackageReference Include="Config.Net" Version="5.2.1" />
     <PackageReference Include="ini-parser" Version="2.5.2" NoWarn="NU1701" />
     <PackageReference Include="Onova" Version="2.6.13" />
@@ -26,10 +27,6 @@
     <PackageReference Include="Spectre.Console.Cli" Version="0.53.0" />
     <PackageReference Include="Spectre.Console.Testing" Version="0.53.0" />
     <PackageReference Include="SSH.NET" Version="2025.1.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Commands\AddressBook\" />
   </ItemGroup>
 
 </Project>

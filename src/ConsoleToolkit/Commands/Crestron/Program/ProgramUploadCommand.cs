@@ -25,7 +25,7 @@ using Renci.SshNet.Sftp;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands.Program
+namespace ConsoleToolkit.Commands.Crestron.Program
 {
     public sealed class ProgramUploadCommand : AsyncCommand<ProgramUploadSettings>
     {
@@ -62,7 +62,7 @@ namespace ConsoleToolkit.Commands.Program
                         AnsiConsole.MarkupLine("[fuschia]No username/password provided, looking up values from address books.[/]");
                     }
 
-                    var entry = await AddressBook.LookupEntryAsync(settings.Host);
+                    var entry = await ConsoleToolkit.Crestron.ToolboxAddressBook.LookupEntryAsync(settings.Host);
                     if (entry is null)
                     {
                         if (settings.Verbose)
@@ -92,7 +92,7 @@ namespace ConsoleToolkit.Commands.Program
 
                 AnsiConsole.MarkupLineInterpolated($"[teal]Uploading program to slot {settings.Slot} on device '{settings.Host}'...[/]");
 
-                int result = -1;
+                var result = -1;
                 if (settings.ChangedOnly)
                 {
                     result = await this.UploadChangedFilesAsync(settings, remotePath, extension, cancellationToken);
@@ -241,7 +241,7 @@ namespace ConsoleToolkit.Commands.Program
             var success = false;
             if (extension == ".lpz")
             {
-                success = await CommandHandlers.RegisterProgramAsync(shellStream, slot, cancellationToken);
+                success = await ConsoleCommands.RegisterProgramAsync(shellStream, slot, cancellationToken);
             }
             else if (extension == ".cpz")
             {
@@ -254,7 +254,7 @@ namespace ConsoleToolkit.Commands.Program
                     return 1;
                 }
 
-                success = await CommandHandlers.RegisterProgramAsync(shellStream, slot, result.MainAssemblyName, cancellationToken);
+                success = await ConsoleCommands.RegisterProgramAsync(shellStream, slot, result.MainAssemblyName, cancellationToken);
             }
 
             return success ? 0 : 1;
@@ -503,7 +503,7 @@ namespace ConsoleToolkit.Commands.Program
                     .StartAsync(async ctx =>
                     {
                         var initialMaxConcurrency = 4; // You can choose a reasonable default
-                        int sessionMaxConcurrency = initialMaxConcurrency;
+                        var sessionMaxConcurrency = initialMaxConcurrency;
                         var semaphore = new SemaphoreSlim(initialMaxConcurrency, initialMaxConcurrency);
                         var activeUploads = 0;
                         var failedUploads = new List<(string LocalPath, string RemoteFilePath)>();
@@ -524,7 +524,7 @@ namespace ConsoleToolkit.Commands.Program
                                     {
                                         sftpClient.UploadFile(fileStream, remoteFilePath, true, uploaded =>
                                         {
-                                            var percentage = (((double)uploaded) / fileSize) * 100;
+                                            var percentage = (double)uploaded / fileSize * 100;
                                             uploadTask.Value = percentage;
                                         });
                                     });
@@ -554,6 +554,7 @@ namespace ConsoleToolkit.Commands.Program
                                     }
                                 }
                             }
+
                             return false;
                         }
 
@@ -561,7 +562,7 @@ namespace ConsoleToolkit.Commands.Program
                         {
                             var remoteFilePath = $"{remotePath}/{fileChange.RelativePath}";
                             var status = fileChange.IsNew ? "[blue](new)[/]" : "[yellow](updated)[/]";
-                            string displayName = settings.Verbose ? remoteFilePath : Path.GetFileName(remoteFilePath);
+                            var displayName = settings.Verbose ? remoteFilePath : Path.GetFileName(remoteFilePath);
                             var uploadTask = ctx.AddTask($"{status} {displayName}");
 
                             // Ensure remote directory exists
@@ -574,7 +575,7 @@ namespace ConsoleToolkit.Commands.Program
                             await semaphore.WaitAsync();
                             var task = Task.Run(async () =>
                             {
-                                bool success = await UploadFileWithRetry(fileChange.LocalPath, remoteFilePath, uploadTask);
+                                var success = await UploadFileWithRetry(fileChange.LocalPath, remoteFilePath, uploadTask);
                                 if (!success)
                                 {
                                     lock (failedUploads)
@@ -613,7 +614,7 @@ namespace ConsoleToolkit.Commands.Program
                 }
 
                 // Execute progres command
-                var progresSuccess = await CommandHandlers.RestartProgramAsync(shellStream, settings.Slot, cancellationToken);
+                var progresSuccess = await ConsoleCommands.RestartProgramAsync(shellStream, settings.Slot, cancellationToken);
 
                 if (progresSuccess)
                 {
@@ -689,7 +690,7 @@ namespace ConsoleToolkit.Commands.Program
                 {
                     var fileName = Path.GetFileName(settings.ProgramFile);
                     var remoteFilePath = $"{remotePath}/{fileName}";
-                    string displayName = settings.Verbose ? remoteFilePath : fileName;
+                    var displayName = settings.Verbose ? remoteFilePath : fileName;
                     var uploadTask = ctx.AddTask($"[green]Uploading to {displayName}[/]");
 
                     // Ensure remote directory exists
@@ -702,7 +703,7 @@ namespace ConsoleToolkit.Commands.Program
                     {
                         sftpClient.UploadFile(fileStream, remoteFilePath, uploaded =>
                         {
-                            var percentage = (((double)uploaded) / fileSize) * 100;
+                            var percentage = (double)uploaded / fileSize * 100;
                             uploadTask.Value = percentage;
                         });
                     });

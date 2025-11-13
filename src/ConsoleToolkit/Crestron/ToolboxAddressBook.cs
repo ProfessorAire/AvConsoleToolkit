@@ -1,10 +1,11 @@
-// <copyright file="Device.cs">
+// <copyright file="ToolboxAddressBook.cs">
+// The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
@@ -21,15 +22,15 @@ using Spectre.Console;
 namespace ConsoleToolkit.Crestron
 {
     /// <summary>
-    /// Utility for looking up Crestron device information from address books.
+    /// Utility for looking up Crestron device information from Toolbox address books.
     /// </summary>
-    public static class AddressBook
+    public static class ToolboxAddressBook
     {
         /// <summary>
         /// Looks up an address book entry by IP address or device name.
         /// </summary>
         /// <param name="ipAddressOrDeviceName">The IP address or device name to search for.</param>
-        /// <returns>The first matching address book entry, or null if not found.</returns>
+        /// <returns>The first matching address book entry, or <see langword="null"/> if not found.</returns>
         public static async Task<Entry?> LookupEntryAsync(string ipAddressOrDeviceName)
         {
             if (string.IsNullOrWhiteSpace(ipAddressOrDeviceName))
@@ -162,7 +163,7 @@ namespace ConsoleToolkit.Crestron
             }
             catch
             {
-                AnsiConsole.MarkupLineInterpolated($"[red]Error: Failed to parse address book file: {filePath}[/]");
+                AnsiConsole.MarkupLineInterpolated($"[red]Error: Failed to parse address book file: [/][fucshia]'{filePath}[/][red]'. The address book may be encrypted; encrypted address books are not supported.");
             }
 
             return null;
@@ -193,23 +194,35 @@ namespace ConsoleToolkit.Crestron
             }
             catch
             {
-                AnsiConsole.MarkupLineInterpolated($"[red]Error: Failed to parse address book file: {filePath}[/]");
+                AnsiConsole.MarkupLineInterpolated($"[red]Error: Failed to parse address book file: [/][fucshia]'{filePath}[/][red]'. The address book may be encrypted; encrypted address books are not supported.");
             }
 
             return null;
         }
 
         /// <summary>
-        /// Represents an address book entry with connection information.
+        /// Represents an address book entry with connection information for a Crestron device.
         /// </summary>
         public class Entry
         {
+            /// <summary>
+            /// Gets or sets the device name associated with this entry.
+            /// </summary>
             public string? DeviceName { get; set; }
 
+            /// <summary>
+            /// Gets or sets the host address (IP or hostname) for the device.
+            /// </summary>
             public string? HostAddress { get; set; }
 
+            /// <summary>
+            /// Gets or sets the password used to connect to the device.
+            /// </summary>
             public string? Password { get; set; }
 
+            /// <summary>
+            /// Gets or sets the username used to connect to the device.
+            /// </summary>
             public string? Username { get; set; }
         }
     }
