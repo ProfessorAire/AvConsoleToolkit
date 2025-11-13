@@ -15,13 +15,12 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using ConsoleToolkit.Configuration;
 using IniParser;
 using IniParser.Model;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands.Config
+namespace AvConsoleToolkit.Commands.Config
 {
     /// <summary>
     /// Command to set a configuration value in either the local or per-user configuration file.
@@ -50,7 +49,7 @@ namespace ConsoleToolkit.Commands.Config
 
             if (!string.IsNullOrWhiteSpace(sectionName))
             {
-                var settingsType = AppConfig.Settings.GetType();
+                var settingsType = Configuration.AppConfig.Settings.GetType();
                 var sectionProp = settingsType.GetProperty(sectionName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
                 if (sectionProp == null)
                 {
@@ -68,7 +67,7 @@ namespace ConsoleToolkit.Commands.Config
             }
             else
             {
-                var settingsType = AppConfig.Settings.GetType();
+                var settingsType = Configuration.AppConfig.Settings.GetType();
                 var keyProp = settingsType.GetProperty(keyName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
                 if (keyProp == null)
                 {

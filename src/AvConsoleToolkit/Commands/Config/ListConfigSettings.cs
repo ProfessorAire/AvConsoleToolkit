@@ -1,7 +1,7 @@
-Ôªø// <copyright file="IConnectionSettings.cs">
+// <copyright file="ListConfigSettings.cs">
 // The MIT License
-// Copyright ¬© Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ‚ÄúSoftware‚Äù),
+// Copyright © Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ìSoftwareî),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -10,20 +10,21 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Diagnostics.CodeAnalysis;
+using System.ComponentModel;
+using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Configuration
+namespace AvConsoleToolkit.Commands.Config
 {
     /// <summary>
-    /// Defines the application's connection settings.
+    /// Settings for the <see cref="ListConfigCommand"/> command.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface IConnectionSettings
+    public class ListConfigSettings : CommandSettings
     {
         /// <summary>
-        /// Gets or sets the location of the Crestron Address Books. Supports a semicolon-separated list of paths.C
-        /// Can be directories containing Toolbox <c>xadr</c> files, or individual Toolbox <c>xadr</c> files.
+        /// When specified, show the file paths of the configuration sources in order of precedence.
         /// </summary>
-        string AddressBooksLocation { get; set; }
+        [CommandOption("--show-sources")]
+        [Description("Show the file paths of the configuration sources")]
+        public bool ShowSources { get; set; }
     }
 }

@@ -15,11 +15,10 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
-using ConsoleToolkit.Configuration;
 using IniParser;
 using Spectre.Console;
 
-namespace ConsoleToolkit.Crestron
+namespace AvConsoleToolkit.Crestron
 {
     /// <summary>
     /// Utility for looking up Crestron device information from Toolbox address books.
@@ -45,7 +44,7 @@ namespace ConsoleToolkit.Crestron
                     bool isIpAddress = IPAddress.TryParse(ipAddressOrDeviceName, out _);
 
                     // Get address book locations from config
-                    var config = AppConfig.Settings;
+                    var config = Configuration.AppConfig.Settings;
                     var addressBookLocations = config.Connection.AddressBooksLocation;
 
                     if (string.IsNullOrWhiteSpace(addressBookLocations))
@@ -55,7 +54,7 @@ namespace ConsoleToolkit.Crestron
 
                     // Split multiple locations if needed (semicolon or comma separated)
                     var locations = addressBookLocations
-                        .Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Split([';', ','], StringSplitOptions.RemoveEmptyEntries)
                         .Select(loc => loc.Trim())
                         .Where(loc => !string.IsNullOrWhiteSpace(loc));
 

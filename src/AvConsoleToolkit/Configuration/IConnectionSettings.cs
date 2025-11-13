@@ -1,7 +1,7 @@
-// <copyright file="AddressBookLookupSettings.cs">
+Ôªø// <copyright file="IConnectionSettings.cs">
 // The MIT License
-// Copyright © Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ìSoftwareî),
+// Copyright ¬© Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ‚ÄúSoftware‚Äù),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -10,22 +10,20 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
-using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands.AddressBook
+namespace AvConsoleToolkit.Configuration
 {
     /// <summary>
-    /// Settings for <see cref="AddressBookLookupCommand"/>.
+    /// Defines the application's connection settings.
     /// </summary>
-    public class AddressBookLookupSettings : CommandSettings
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
+    public interface IConnectionSettings
     {
         /// <summary>
-        /// The IP address or device name to look up in the address book.
+        /// Gets or sets the location of the Crestron Address Books. Supports a semicolon-separated list of paths.C
+        /// Can be directories containing Toolbox <c>xadr</c> files, or individual Toolbox <c>xadr</c> files.
         /// </summary>
-        [CommandArgument(0, "<identifier>")]
-        [Description("The IP address or device name to look up.")]
-        public string Identifier { get; set; } = string.Empty;
+        string AddressBooksLocation { get; set; }
     }
 }

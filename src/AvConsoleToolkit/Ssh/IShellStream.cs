@@ -15,7 +15,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ConsoleToolkit.Ssh
+namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
     /// Interface for shell stream operations to enable testability.

@@ -10,10 +10,9 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Diagnostics.CodeAnalysis;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands.Crestron.Program
+namespace AvConsoleToolkit.Commands.Crestron.Program
 {
     /// <summary>
     /// Settings used to configure the <see cref="ProgramUploadCommand"/> behavior.

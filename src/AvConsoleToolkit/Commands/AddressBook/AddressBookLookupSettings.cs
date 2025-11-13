@@ -1,7 +1,7 @@
-Ôªø// <copyright file="UpdateSettings.cs">
+// <copyright file="AddressBookLookupSettings.cs">
 // The MIT License
-// Copyright ¬© Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ‚ÄúSoftware‚Äù),
+// Copyright © Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ìSoftwareî),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -11,28 +11,20 @@
 // </copyright>
 
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands
+namespace AvConsoleToolkit.Commands.AddressBook
 {
     /// <summary>
-    /// Settings for the update command, controlling confirmation and verbosity.
+    /// Settings for <see cref="AddressBookLookupCommand"/>.
     /// </summary>
-    public class UpdateSettings : CommandSettings
+    public class AddressBookLookupSettings : CommandSettings
     {
         /// <summary>
-        /// Automatically confirm all prompts during update.
+        /// The IP address or device name to look up in the address book.
         /// </summary>
-        [CommandOption("-y|--yes")]
-        [Description("Automatically confirm all prompts")]
-        public bool AutoConfirm { get; set; }
-
-        /// <summary>
-        /// Show detailed error information if an error occurs.
-        /// </summary>
-        [CommandOption("-v|--verbose")]
-        [Description("Show detailed error information")]
-        public bool Verbose { get; set; }
+        [CommandArgument(0, "<identifier>")]
+        [Description("The IP address or device name to look up.")]
+        public string Identifier { get; set; } = string.Empty;
     }
 }

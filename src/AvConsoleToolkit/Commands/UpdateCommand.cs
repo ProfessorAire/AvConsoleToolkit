@@ -17,14 +17,13 @@ using System.Net.Http.Headers;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using ConsoleToolkit.Configuration;
 using Onova;
 using Onova.Exceptions;
 using Onova.Services;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands
+namespace AvConsoleToolkit.Commands
 {
     /// <summary>
     /// Command to check for and apply updates to the ConsoleToolkit application.
@@ -66,7 +65,7 @@ namespace ConsoleToolkit.Commands
                 // Todo: Remove this before a v1.0 public release.
                 if (currentVersion.MajorRevision < 1)
                 {
-                    var token = AppConfig.Settings.GithubToken;
+                    var token = Configuration.AppConfig.Settings.GithubToken;
                     if (string.IsNullOrWhiteSpace(token))
                     {
                         token = AnsiConsole.Prompt(new TextPrompt<string>("Enter a GitHub access token with rights to view the ProfessorAire/ConsoleToolkit repo in order to check for pre-release updates from GitHub.\r\nLeave this blank to only check for updates from the program's 'versions' directory:")

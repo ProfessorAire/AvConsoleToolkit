@@ -11,13 +11,9 @@
 // </copyright>
 
 using System;
-using ConsoleToolkit.Commands;
-using ConsoleToolkit.Commands.AddressBook;
-using ConsoleToolkit.Commands.Config;
-using ConsoleToolkit.Commands.Crestron.Program;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit
+namespace AvConsoleToolkit
 {
     /// <summary>
     /// Entry point for the ConsoleToolkit application.
@@ -43,7 +39,7 @@ namespace ConsoleToolkit
 
                 if (OperatingSystem.IsWindows())
                 {
-                    config.AddCommand<UpdateCommand>("update")
+                    config.AddCommand<Commands.UpdateCommand>("update")
                         .WithDescription("Check for and install updates for this application")
                         .WithExample(["update"])
                         .WithExample(["update", "--yes"]);
@@ -55,7 +51,7 @@ namespace ConsoleToolkit
 
                     branch.AddBranch("program", program =>
                     {
-                        program.AddCommand<ProgramUploadCommand>("upload")
+                        program.AddCommand<Commands.Crestron.Program.ProgramUploadCommand>("upload")
                             .WithAlias("u")
                             .WithDescription("Upload a program to Crestron hardware")
                             .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "--address", "192.168.1.100", "-u", "admin", "-p", "password"])
@@ -69,19 +65,19 @@ namespace ConsoleToolkit
                 {
                     cfg.SetDescription("Configuration management, such as setting or reading configuration values.");
 
-                    cfg.AddCommand<ListConfigCommand>("list")
+                    cfg.AddCommand<Commands.Config.ListConfigCommand>("list")
                         .WithAlias("l")
                         .WithDescription("Lists all configuration keys and values from merged configuration.")
                         .WithExample(["config", "list"])
                         .WithExample(["config", "l", "--show-sources"]);
 
-                    cfg.AddCommand<SetConfigCommand>("set")
+                    cfg.AddCommand<Commands.Config.SetConfigCommand>("set")
                         .WithAlias("s")
                         .WithDescription("Sets a single configuration key.")
                         .WithExample(["config", "set", "-s", "Connection", "AddressBooksLocation", "C:/addressBooks"])
                         .WithExample(["config", "set", "--section", "Connection", "AddressBooksLocation", "C:/addressBooks", "--local"]);
 
-                    cfg.AddCommand<RemoveConfigCommand>("remove")
+                    cfg.AddCommand<Commands.Config.RemoveConfigCommand>("remove")
                         .WithAlias("r")
                         .WithDescription("Removes a single configuration key.")
                         .WithExample(["config", "remove", "Connection", "AddressBooksLocation"])
@@ -91,7 +87,7 @@ namespace ConsoleToolkit
                 config.AddBranch("addressbook", ab =>
                 {
                     ab.SetDescription("Utilities for looking up Crestron device information from address books.");
-                    ab.AddCommand<AddressBookLookupCommand>("lookup")
+                    ab.AddCommand<Commands.AddressBook.AddressBookLookupCommand>("lookup")
                         .WithAlias("l")
                         .WithExample("addressbook", "lookup", "SomeEntryName")
                         .WithExample("ab", "l", "10.10.120.12");

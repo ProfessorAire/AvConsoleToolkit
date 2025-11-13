@@ -15,7 +15,7 @@ using System.Collections.Generic;
 using System.IO;
 using Config.Net;
 
-namespace ConsoleToolkit.Configuration
+namespace AvConsoleToolkit.Configuration
 {
     /// <summary>
     /// Provides application-wide configuration management.

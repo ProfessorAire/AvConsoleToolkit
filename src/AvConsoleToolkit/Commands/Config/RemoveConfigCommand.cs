@@ -19,7 +19,7 @@ using IniParser.Model;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands.Config
+namespace AvConsoleToolkit.Commands.Config
 {
     /// <summary>
     /// Command to remove a configuration key from either the local or per-user configuration file.

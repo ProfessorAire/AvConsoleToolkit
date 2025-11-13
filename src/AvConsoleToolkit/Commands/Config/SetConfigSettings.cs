@@ -11,10 +11,9 @@
 // </copyright>
 
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands.Config
+namespace AvConsoleToolkit.Commands.Config
 {
     /// <summary>
     /// Settings for the <see cref="SetConfigCommand"/>.
@@ -22,19 +21,19 @@ namespace ConsoleToolkit.Commands.Config
     public class SetConfigSettings : CommandSettings
     {
         /// <summary>
+        /// The config key to set. For example: <c>Connection.AddressBooksLocation</c> or an INI key name when used with <see cref="Section"/>.
+        /// </summary>
+        [CommandArgument(0, "<key>")]
+        [Description("The config key to set")]
+        public string Key { get; set; } = string.Empty;
+
+        /// <summary>
         /// When specified, write to the local config located under the working directory.
         /// Otherwise the config in the current user's AppData folder is used.
         /// </summary>
         [CommandOption("--local|-l")]
         [Description("Write to the local config location in the working directory.")]
         public bool Local { get; set; }
-
-        /// <summary>
-        /// The config key to set. For example: <c>Connection.AddressBooksLocation</c> or an INI key name when used with <see cref="Section"/>.
-        /// </summary>
-        [CommandArgument(0, "<key>")]
-        [Description("The config key to set")]
-        public string Key { get; set; } = string.Empty;
 
         /// <summary>
         /// Optional INI section name where the key belongs. If omitted the key is written to the global section.

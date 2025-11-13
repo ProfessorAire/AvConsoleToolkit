@@ -11,10 +11,9 @@
 // </copyright>
 
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands.Config
+namespace AvConsoleToolkit.Commands.Config
 {
     /// <summary>
     /// Settings for the <see cref="RemoveConfigCommand"/>.

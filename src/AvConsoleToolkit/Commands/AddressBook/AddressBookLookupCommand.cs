@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands.AddressBook
+namespace AvConsoleToolkit.Commands.AddressBook
 {
     /// <summary>
     /// Command that looks up a Crestron address book entry by IP address or device name and displays the result.
@@ -33,7 +33,7 @@ namespace ConsoleToolkit.Commands.AddressBook
         /// <exception cref="System.IO.IOException">I/O errors that occur while reading address book files during lookup.</exception>
         public override async Task<int> ExecuteAsync(CommandContext context, AddressBookLookupSettings settings, CancellationToken cancellationToken)
         {
-            var entry = await ConsoleToolkit.Crestron.ToolboxAddressBook.LookupEntryAsync(settings.Identifier);
+            var entry = await AvConsoleToolkit.Crestron.ToolboxAddressBook.LookupEntryAsync(settings.Identifier);
 
             if (entry == null)
             {

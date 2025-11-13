@@ -20,14 +20,13 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
-using ConsoleToolkit.Crestron;
-using ConsoleToolkit.Ssh;
+using AvConsoleToolkit.Ssh;
 using Renci.SshNet;
 using Renci.SshNet.Sftp;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands.Crestron.Program
+namespace AvConsoleToolkit.Commands.Crestron.Program
 {
     /// <summary>
     /// Command that uploads Crestron program packages to a target device using SSH/SFTP.
@@ -40,7 +39,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
         /// <summary>
         /// The supported program package file extensions.
         /// </summary>
-        private static readonly string[] SupportedExtensions = { ".cpz", ".clz", ".lpz" };
+        private static readonly string[] SupportedExtensions = [".cpz", ".clz", ".lpz"];
 
         /// <summary>
         /// Executes the upload operation.
@@ -73,7 +72,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                     return 1;
                 }
 
-                if (settings.Slot < 1 || settings.Slot > 10)
+                if (settings.Slot is < 1 or > 10)
                 {
                     AnsiConsole.MarkupLine("[red]Error: Slot must be between 1 and 10.[/]");
                     return 1;
@@ -86,7 +85,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                         AnsiConsole.MarkupLine("[fuschia]No username/password provided, looking up values from address books.[/]");
                     }
 
-                    var entry = await ToolboxAddressBook.LookupEntryAsync(settings.Host);
+                    var entry = await AvConsoleToolkit.Crestron.ToolboxAddressBook.LookupEntryAsync(settings.Host);
                     if (entry is null)
                     {
                         if (settings.Verbose)
@@ -119,11 +118,11 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                 var result = -1;
                 if (settings.ChangedOnly)
                 {
-                    result = await this.UploadChangedFilesAsync(settings, remotePath, extension, cancellationToken);
+                    result = await UploadChangedFilesAsync(settings, remotePath, extension, cancellationToken);
                 }
                 else
                 {
-                    result = await this.UploadProgramFileAsync(settings, remotePath, cancellationToken);
+                    result = await UploadProgramFileAsync(settings, remotePath, cancellationToken);
                 }
 
                 if (result == 0)
@@ -150,7 +149,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
         /// </summary>
         /// <param name="sftpClient">Connected SFTP client.</param>
         /// <param name="remotePath">Remote directory path to ensure exists.</param>
-        private void EnsureRemoteDirectoryExists(ISftpClient sftpClient, string remotePath)
+        private static void EnsureRemoteDirectoryExists(ISftpClient sftpClient, string remotePath)
         {
             var parts = remotePath.Split('/');
             var currentPath = string.Empty;
@@ -172,13 +171,58 @@ namespace ConsoleToolkit.Commands.Crestron.Program
         }
 
         /// <summary>
+        /// Recursively enumerates remote files and populates the provided dictionary with relative paths.
+        /// </summary>
+        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="currentPath">Current directory being enumerated.</param>
+        /// <param name="basePath">Base path used to calculate relative paths.</param>
+        /// <param name="files">Dictionary to populate with relative path => file metadata.</param>
+        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
+        private static void GetRemoteFilesRecursive(
+            ISftpClient sftpClient,
+            string currentPath,
+            string basePath,
+            Dictionary<string, ISftpFile> files,
+            bool verbose = false)
+        {
+            var items = sftpClient.ListDirectory(currentPath);
+
+            foreach (var item in items)
+            {
+                if (item.Name is "." or "..")
+                {
+                    continue;
+                }
+
+                if (item.IsDirectory)
+                {
+                    GetRemoteFilesRecursive(sftpClient, item.FullName, basePath, files, verbose);
+                }
+                else
+                {
+                    // Calculate relative path correctly - ensure we handle the leading slash
+                    var fullPath = item.FullName;
+                    var relativeStart = basePath.StartsWith('/') ? basePath.Length : basePath.Length + 1;
+                    var relativePath = fullPath.Length > relativeStart ? fullPath[relativeStart..].TrimStart('/') : string.Empty;
+
+                    if (verbose)
+                    {
+                        AnsiConsole.MarkupLine($"[dim]Adding remote file: '{relativePath.EscapeMarkup()}' (full: '{item.FullName.EscapeMarkup()}', base: '{basePath.EscapeMarkup()}', startIndex: {relativeStart})[/]");
+                    }
+
+                    files[relativePath] = item;
+                }
+            }
+        }
+
+        /// <summary>
         /// Retrieves metadata for all remote files under the specified remote path.
         /// </summary>
         /// <param name="sftpClient">Connected SFTP client.</param>
         /// <param name="remotePath">Base remote path to enumerate.</param>
         /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
         /// <returns>A dictionary mapping relative remote paths to <see cref="ISftpFile"/> metadata.</returns>
-        private async Task<Dictionary<string, ISftpFile>> GetRemoteFileMetadataAsync(
+        private static async Task<Dictionary<string, ISftpFile>> GetRemoteFileMetadataAsync(
             ISftpClient sftpClient,
             string remotePath,
             bool verbose = false)
@@ -192,54 +236,9 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                            return files;
                        }
 
-                       this.GetRemoteFilesRecursive(sftpClient, remotePath, remotePath, files, verbose);
+                       GetRemoteFilesRecursive(sftpClient, remotePath, remotePath, files, verbose);
                        return files;
                    });
-        }
-
-        /// <summary>
-        /// Recursively enumerates remote files and populates the provided dictionary with relative paths.
-        /// </summary>
-        /// <param name="sftpClient">Connected SFTP client.</param>
-        /// <param name="currentPath">Current directory being enumerated.</param>
-        /// <param name="basePath">Base path used to calculate relative paths.</param>
-        /// <param name="files">Dictionary to populate with relative path => file metadata.</param>
-        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
-        private void GetRemoteFilesRecursive(
-            ISftpClient sftpClient,
-            string currentPath,
-            string basePath,
-            Dictionary<string, ISftpFile> files,
-            bool verbose = false)
-        {
-            var items = sftpClient.ListDirectory(currentPath);
-
-            foreach (var item in items)
-            {
-                if (item.Name == "." || item.Name == "..")
-                {
-                    continue;
-                }
-
-                if (item.IsDirectory)
-                {
-                    this.GetRemoteFilesRecursive(sftpClient, item.FullName, basePath, files, verbose);
-                }
-                else
-                {
-                    // Calculate relative path correctly - ensure we handle the leading slash
-                    var fullPath = item.FullName;
-                    var relativeStart = basePath.StartsWith('/') ? basePath.Length : basePath.Length + 1;
-                    var relativePath = fullPath.Length > relativeStart ? fullPath.Substring(relativeStart).TrimStart('/') : string.Empty;
-
-                    if (verbose)
-                    {
-                        AnsiConsole.MarkupLine($"[dim]Adding remote file: '{relativePath.EscapeMarkup()}' (full: '{item.FullName.EscapeMarkup()}', base: '{basePath.EscapeMarkup()}', startIndex: {relativeStart})[/]");
-                    }
-
-                    files[relativePath] = item;
-                }
-            }
         }
 
         /// <summary>
@@ -250,7 +249,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
         /// <param name="remoteFiles">Dictionary of remote file metadata keyed by relative path.</param>
         /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
         /// <returns>True when the file is new or its timestamp indicates it has changed relative to remote.</returns>
-        private bool IsFileChanged(
+        private static bool IsFileChanged(
             string localFile,
             string localBasePath,
             Dictionary<string, ISftpFile> remoteFiles,
@@ -299,25 +298,25 @@ namespace ConsoleToolkit.Commands.Crestron.Program
         /// <param name="tempDirectory">Temporary directory where package contents were extracted.</param>
         /// <param name="cancellationToken">Cancellation token to observe.</param>
         /// <returns>0 on success, non-zero on failure.</returns>
-        private async Task<int> RegisterProgram(IShellStream shellStream, int slot, string extension, string tempDirectory, CancellationToken cancellationToken)
+        private static async Task<int> RegisterProgram(Ssh.IShellStream shellStream, int slot, string extension, string tempDirectory, CancellationToken cancellationToken)
         {
             var success = false;
             if (extension == ".lpz")
             {
-                success = await ConsoleCommands.RegisterProgramAsync(shellStream, slot, cancellationToken);
+                success = await AvConsoleToolkit.Crestron.ConsoleCommands.RegisterProgramAsync(shellStream, slot, cancellationToken);
             }
             else if (extension == ".cpz")
             {
                 AnsiConsole.MarkupLine("[cyan]Registering .cpz program...[/]");
 
-                var result = await this.TryGetMainAssemblyNameAsync(tempDirectory);
-                if (!result.Success)
+                var (success2, mainAssemblyName) = await TryGetMainAssemblyNameAsync(tempDirectory);
+                if (!success2)
                 {
                     AnsiConsole.MarkupLine("[red]Error: Could not determine main assembly name from manifest.info or ProgramInfo.config.[/]");
                     return 1;
                 }
 
-                success = await ConsoleCommands.RegisterProgramAsync(shellStream, slot, result.MainAssemblyName, cancellationToken);
+                success = await AvConsoleToolkit.Crestron.ConsoleCommands.RegisterProgramAsync(shellStream, slot, mainAssemblyName, cancellationToken);
             }
 
             return success ? 0 : 1;
@@ -329,7 +328,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
         /// </summary>
         /// <param name="tempDirectory">Temporary directory where package contents are extracted.</param>
         /// <returns>A tuple indicating success and the discovered main assembly name (or null if not found).</returns>
-        private async Task<(bool Success, string? MainAssemblyName)> TryGetMainAssemblyNameAsync(string tempDirectory)
+        private static async Task<(bool Success, string? MainAssemblyName)> TryGetMainAssemblyNameAsync(string tempDirectory)
         {
             var manifestPath = Path.Combine(tempDirectory, "manifest.info");
             string? mainAssemblyName = null;
@@ -344,11 +343,11 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                         var colonIndex = assemblyPart.IndexOf(':');
                         if (colonIndex > 0)
                         {
-                            assemblyPart = assemblyPart.Substring(0, colonIndex);
+                            assemblyPart = assemblyPart[..colonIndex];
                         }
                         if (assemblyPart.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
                         {
-                            mainAssemblyName = assemblyPart.Substring(0, assemblyPart.Length - 4);
+                            mainAssemblyName = assemblyPart[..(assemblyPart.Length - 4)];
                         }
                         else
                         {
@@ -397,7 +396,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
         /// <param name="extension">Program package extension.</param>
         /// <param name="cancellationToken">Cancellation token to observe during network and file operations.</param>
         /// <returns>Exit code 0 on success; non-zero on failure.</returns>
-        private async Task<int> UploadChangedFilesAsync(
+        private static async Task<int> UploadChangedFilesAsync(
             ProgramUploadSettings settings,
             string remotePath,
             string extension,
@@ -459,7 +458,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                         analysisTask.Value = 50;
 
                         // Get remote file metadata
-                        var remoteFiles = await this.GetRemoteFileMetadataAsync(sftpClient, remotePath, settings.Verbose);
+                        var remoteFiles = await GetRemoteFileMetadataAsync(sftpClient, remotePath, settings.Verbose);
                         analysisTask.Value = 75;
 
                         // Compare files and determine which are new vs updated
@@ -482,13 +481,13 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                                    AnsiConsole.MarkupLine($"[dim]New file: {relativePath.EscapeMarkup()}[/]");
 
                                    // Show what keys are available in remoteFiles
-                                   if (remoteFiles.Count > 0 && remoteFiles.Count < 10)
+                                   if (remoteFiles.Count is > 0 and < 10)
                                    {
                                        AnsiConsole.MarkupLine($"[dim]  Remote keys: {string.Join(", ", remoteFiles.Keys.Select(k => k.EscapeMarkup()))}[/]");
                                    }
                                }
 
-                               var isChanged = !isNew && this.IsFileChanged(localFile, tempDir, remoteFiles, settings.Verbose);
+                               var isChanged = !isNew && IsFileChanged(localFile, tempDir, remoteFiles, settings.Verbose);
                                return new
                                {
                                    LocalPath = localFile,
@@ -540,7 +539,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                              ctx.Status("SSH Connected");
                          });
 
-                using var shellStream = new ShellStreamWrapper(sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024));
+                using var shellStream = new Ssh.ShellStreamWrapper(sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024));
 
                 // Stop or kill program based on flag
                 string stopCommand;
@@ -574,7 +573,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                 AnsiConsole.MarkupLine($"[green]Program {(settings.KillProgram ? "killed" : "stopped")} successfully.[/]");
 
                 // Wait 2 seconds before starting uploads
-                await Task.Delay(2000);
+                await Task.Delay(2000, cancellationToken);
 
                 // Upload changed files with individual progress indicators
                 await AnsiConsole.Progress()
@@ -648,7 +647,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                             var remoteDir = Path.GetDirectoryName(remoteFilePath)?.Replace('\\', '/');
                             if (!string.IsNullOrEmpty(remoteDir))
                             {
-                                this.EnsureRemoteDirectoryExists(sftpClient, remoteDir);
+                                EnsureRemoteDirectoryExists(sftpClient, remoteDir);
                             }
 
                             await semaphore.WaitAsync();
@@ -682,9 +681,9 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                         }
                     });
 
-                if (extension == ".lpz" || extension == ".cpz")
+                if (extension is ".lpz" or ".cpz")
                 {
-                    var registrationResult = await this.RegisterProgram(shellStream, settings.Slot, extension, tempDirectory, cancellationToken);
+                    var registrationResult = await RegisterProgram(shellStream, settings.Slot, extension, tempDirectory, cancellationToken);
                     if (registrationResult != 0)
                     {
                         AnsiConsole.MarkupLine("[red]Program upload failed due to registration error.[/]");
@@ -693,7 +692,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                 }
 
                 // Execute progres command
-                var progresSuccess = await ConsoleCommands.RestartProgramAsync(shellStream, settings.Slot, cancellationToken);
+                var progresSuccess = await AvConsoleToolkit.Crestron.ConsoleCommands.RestartProgramAsync(shellStream, settings.Slot, cancellationToken);
 
                 if (progresSuccess)
                 {
@@ -723,7 +722,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
         /// <param name="remotePath">Remote program directory path on the device.</param>
         /// <param name="cancellationToken">Cancellation token to observe during network and file operations.</param>
         /// <returns>Exit code 0 on success; non-zero on failure.</returns>
-        private async Task<int> UploadProgramFileAsync(
+        private static async Task<int> UploadProgramFileAsync(
             ProgramUploadSettings settings,
             string remotePath,
             CancellationToken cancellationToken)
@@ -732,16 +731,16 @@ namespace ConsoleToolkit.Commands.Crestron.Program
             using var sftpClient = new SftpClient(settings.Host, settings.Username, settings.Password);
 
             await AnsiConsole.Status()
-       .StartAsync("Connecting to device...", async ctx =>
-       {
-           ctx.Status("Connecting to SSH client.");
-           await sshClient.ConnectAsync(cancellationToken);
-           ctx.Status("Connecting to SFTP client.");
-           await sftpClient.ConnectAsync(cancellationToken);
-           ctx.Status("Connected");
-       });
+               .StartAsync("Connecting to device...", async ctx =>
+               {
+                   ctx.Status("Connecting to SSH client.");
+                   await sshClient.ConnectAsync(cancellationToken);
+                   ctx.Status("Connecting to SFTP client.");
+                   await sftpClient.ConnectAsync(cancellationToken);
+                   ctx.Status("Connected");
+               });
 
-            using var shellStream = sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024);
+            using var shellStream = new Ssh.ShellStreamWrapper(sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024));
 
             // Kill program if requested
             if (settings.KillProgram)
@@ -752,22 +751,18 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                 shellStream.WriteLine(killCommand);
                 AnsiConsole.MarkupLine("[cyan]Waiting for program to be killed...[/]");
 
-                var (killSuccess, _) = await this.WaitForCommandCompletionAsync(
-           shellStream,
-      [$"Specified program {settings.Slot} successfully deleted"],
-    [], 10000
-      );
+                var killSuccess = await shellStream.WaitForCommandCompletionAsync([$"Specified program {settings.Slot} successfully deleted"], [], cancellationToken, 10000);
 
                 if (!killSuccess)
                 {
-                    AnsiConsole.MarkupLine("[red]Error:[/] Failed to kill program before uploading.");
+                    AnsiConsole.MarkupLine("[red]Error: Failed to kill program before uploading.[/]");
                     return 1;
                 }
 
                 AnsiConsole.MarkupLine("[green]Program killed successfully.[/]");
 
                 // Wait 2 seconds before uploading
-                await Task.Delay(2000);
+                await Task.Delay(2000, cancellationToken);
             }
 
             var result = await AnsiConsole.Progress()
@@ -780,7 +775,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                     var uploadTask = ctx.AddTask($"[green]Uploading to {displayName}[/]");
 
                     // Ensure remote directory exists
-                    this.EnsureRemoteDirectoryExists(sftpClient, remotePath);
+                    EnsureRemoteDirectoryExists(sftpClient, remotePath);
 
                     using var fileStream = File.OpenRead(settings.ProgramFile);
                     var fileSize = fileStream.Length;
@@ -800,15 +795,21 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                     return 0;
                 });
 
+
             // Output after progress indicators are complete
             AnsiConsole.MarkupLine("[green]Upload complete![/]");
 
-            // Execute progload command
-            var progloadCommand = $"progload -p:{settings.Slot}";
-            AnsiConsole.MarkupLine($"[yellow]Executing:[/] {progloadCommand}");
+            result = await AnsiConsole.Status().Spinner(Spinner.Known.BouncingBall).Start("Loading program...", async ctx =>
+            {
+                // Execute progload command.
+                if (!await AvConsoleToolkit.Crestron.ConsoleCommands.ProgramLoadAsync(shellStream, settings.Slot, cancellationToken))
+                {
+                    AnsiConsole.MarkupLine("[red]Error: Failed to load program after upload.[/]");
+                    return 1;
+                }
 
-            shellStream.WriteLine(progloadCommand);
-            var (_, _) = await this.WaitForCommandCompletionAsync(shellStream, ["Program Start successfully sent for App"], null);
+                return 0;
+            });
 
             return result;
         }
@@ -822,8 +823,8 @@ namespace ConsoleToolkit.Commands.Crestron.Program
         /// <param name="failurePatterns">Patterns that indicate failure.</param>
         /// <param name="timeoutMs">Timeout in milliseconds to wait for a matching pattern. Defaults to 30000ms.</param>
         /// <returns>A tuple containing a boolean success flag and the captured output string.</returns>
-        private async Task<(bool Success, string Output)> WaitForCommandCompletionAsync(
-            ShellStream shellStream,
+        private static async Task<(bool Success, string Output)> WaitForCommandCompletionAsync(
+            ShellStreamWrapper shellStream,
             IEnumerable<string>? successPatterns,
             IEnumerable<string>? failurePatterns,
             int timeoutMs = 30000)

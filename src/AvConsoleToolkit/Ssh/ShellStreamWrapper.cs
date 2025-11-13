@@ -18,7 +18,7 @@ using System.Threading.Tasks;
 using Renci.SshNet;
 using Spectre.Console;
 
-namespace ConsoleToolkit.Ssh
+namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
     /// Provides a wrapper for <see cref="ShellStream"/> to implement <see cref="IShellStream"/> for testability and abstraction.

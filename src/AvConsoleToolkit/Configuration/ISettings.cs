@@ -13,7 +13,7 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 
-namespace ConsoleToolkit.Configuration
+namespace AvConsoleToolkit.Configuration
 {
     /// <summary>
     /// Defines the application's settings.

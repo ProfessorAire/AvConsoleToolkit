@@ -17,11 +17,10 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
-using ConsoleToolkit.Configuration;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands.Config
+namespace AvConsoleToolkit.Commands.Config
 {
     /// <summary>
     /// Command to list merged application configuration values.
@@ -43,7 +42,7 @@ namespace ConsoleToolkit.Commands.Config
         /// <exception cref="UnauthorizedAccessException">Insufficient permissions while accessing configuration file locations.</exception>
         public override int Execute(CommandContext context, ListConfigSettings settings, CancellationToken cancellationToken)
         {
-            var config = AppConfig.Settings;
+            var config = Configuration.AppConfig.Settings;
             var output = new StringBuilder();
             var globalProperties = new List<(string Name, string Value)>();
             var sections = new Dictionary<string, List<(string Name, string Value)>>();

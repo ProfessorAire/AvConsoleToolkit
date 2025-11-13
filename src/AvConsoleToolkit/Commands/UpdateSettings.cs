@@ -1,7 +1,7 @@
-// <copyright file="ListConfigSettings.cs">
+Ôªø// <copyright file="UpdateSettings.cs">
 // The MIT License
-// Copyright © Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ìSoftwareî),
+// Copyright ¬© Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ‚ÄúSoftware‚Äù),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -11,21 +11,27 @@
 // </copyright>
 
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 using Spectre.Console.Cli;
 
-namespace ConsoleToolkit.Commands.Config
+namespace AvConsoleToolkit.Commands
 {
     /// <summary>
-    /// Settings for the <see cref="ListConfigCommand"/> command.
+    /// Settings for the update command, controlling confirmation and verbosity.
     /// </summary>
-    public class ListConfigSettings : CommandSettings
+    public class UpdateSettings : CommandSettings
     {
         /// <summary>
-        /// When specified, show the file paths of the configuration sources in order of precedence.
+        /// Automatically confirm all prompts during update.
         /// </summary>
-        [CommandOption("--show-sources")]
-        [Description("Show the file paths of the configuration sources")]
-        public bool ShowSources { get; set; }
+        [CommandOption("-y|--yes")]
+        [Description("Automatically confirm all prompts")]
+        public bool AutoConfirm { get; set; }
+
+        /// <summary>
+        /// Show detailed error information if an error occurs.
+        /// </summary>
+        [CommandOption("-v|--verbose")]
+        [Description("Show detailed error information")]
+        public bool Verbose { get; set; }
     }
 }
