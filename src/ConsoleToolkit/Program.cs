@@ -85,7 +85,7 @@ namespace ConsoleToolkit
                         .WithAlias("r")
                         .WithDescription("Removes a single configuration key.")
                         .WithExample(["config", "remove", "Connection", "AddressBooksLocation"])
-                        .WithExample(["config", "r", "Connection", "AddressBooksLocation", "--global"]);
+                        .WithExample(["config", "r", "Connection", "AddressBooksLocation", "--local"]);
                 });
 
                 config.AddBranch("addressbook", ab =>

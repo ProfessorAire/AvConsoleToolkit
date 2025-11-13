@@ -7,8 +7,8 @@
     <AssemblyName>ct</AssemblyName>
     <OutputType>exe</OutputType>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <!--<PublishSingleFile>true</PublishSingleFile>-->
-    <!--<SelfContained>true</SelfContained>-->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
     <PublishTrimmed>false</PublishTrimmed>
     <FileVersion>0.1.0.0</FileVersion>
     <VersionPrefix>0.1.0</VersionPrefix>

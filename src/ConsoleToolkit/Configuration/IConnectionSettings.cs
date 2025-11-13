@@ -10,8 +10,14 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace ConsoleToolkit.Configuration
 {
+    /// <summary>
+    /// Defines the application's connection settings.
+    /// </summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
     public interface IConnectionSettings
     {
         /// <summary>

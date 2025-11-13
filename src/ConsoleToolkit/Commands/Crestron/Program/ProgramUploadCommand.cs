@@ -1,16 +1,18 @@
-// <copyright file="Device.cs">
+// <copyright file="ProgramUploadCommand.cs">
+// The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -27,10 +29,32 @@ using Spectre.Console.Cli;
 
 namespace ConsoleToolkit.Commands.Crestron.Program
 {
+    /// <summary>
+    /// Command that uploads Crestron program packages to a target device using SSH/SFTP.
+    /// Supports uploading full program package files or only changed files (delta upload),
+    /// preserving timestamps, registering the program on the device, and restarting the program.
+    /// </summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
     public sealed class ProgramUploadCommand : AsyncCommand<ProgramUploadSettings>
     {
+        /// <summary>
+        /// The supported program package file extensions.
+        /// </summary>
         private static readonly string[] SupportedExtensions = { ".cpz", ".clz", ".lpz" };
 
+        /// <summary>
+        /// Executes the upload operation.
+        /// Validates inputs, optionally looks up credentials from address books, connects to the device via SSH/SFTP,
+        /// uploads files (either entire package or changed files only), registers the program if required, and restarts it.
+        /// </summary>
+        /// <param name="context">The command execution context provided by Spectre.Console.Cli.</param>
+        /// <param name="settings">Options controlling upload behavior such as host, credentials, slot, and flags.</param>
+        /// <param name="cancellationToken">Token to observe for cancellation requests.</param>
+        /// <returns>Exit code indicating success (0) or failure (non-zero).</returns>
+        /// <exception cref="System.IO.FileNotFoundException">When the specified program file does not exist.</exception>
+        /// <exception cref="ArgumentException">When invalid arguments are provided (for example unsupported extension or invalid slot).</exception>
+        /// <exception cref="System.IO.IOException">I/O errors during file extraction or file system operations.</exception>
+        /// <exception cref="Renci.SshNet.Common.SshException">SSH/SFTP connection or operation failures.</exception>
         public override async Task<int> ExecuteAsync(CommandContext context, ProgramUploadSettings settings, CancellationToken cancellationToken)
         {
             try
@@ -62,7 +86,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                         AnsiConsole.MarkupLine("[fuschia]No username/password provided, looking up values from address books.[/]");
                     }
 
-                    var entry = await ConsoleToolkit.Crestron.ToolboxAddressBook.LookupEntryAsync(settings.Host);
+                    var entry = await ToolboxAddressBook.LookupEntryAsync(settings.Host);
                     if (entry is null)
                     {
                         if (settings.Verbose)
@@ -120,6 +144,12 @@ namespace ConsoleToolkit.Commands.Crestron.Program
             }
         }
 
+        /// <summary>
+        /// Ensures that the specified remote directory and its ancestors exist on the SFTP server.
+        /// Creates missing directories as needed.
+        /// </summary>
+        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="remotePath">Remote directory path to ensure exists.</param>
         private void EnsureRemoteDirectoryExists(ISftpClient sftpClient, string remotePath)
         {
             var parts = remotePath.Split('/');
@@ -141,6 +171,13 @@ namespace ConsoleToolkit.Commands.Crestron.Program
             }
         }
 
+        /// <summary>
+        /// Retrieves metadata for all remote files under the specified remote path.
+        /// </summary>
+        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="remotePath">Base remote path to enumerate.</param>
+        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
+        /// <returns>A dictionary mapping relative remote paths to <see cref="ISftpFile"/> metadata.</returns>
         private async Task<Dictionary<string, ISftpFile>> GetRemoteFileMetadataAsync(
             ISftpClient sftpClient,
             string remotePath,
@@ -160,6 +197,14 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                    });
         }
 
+        /// <summary>
+        /// Recursively enumerates remote files and populates the provided dictionary with relative paths.
+        /// </summary>
+        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="currentPath">Current directory being enumerated.</param>
+        /// <param name="basePath">Base path used to calculate relative paths.</param>
+        /// <param name="files">Dictionary to populate with relative path => file metadata.</param>
+        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
         private void GetRemoteFilesRecursive(
             ISftpClient sftpClient,
             string currentPath,
@@ -197,6 +242,14 @@ namespace ConsoleToolkit.Commands.Crestron.Program
             }
         }
 
+        /// <summary>
+        /// Determines whether a local file differs from the corresponding remote file based on last-write timestamps.
+        /// </summary>
+        /// <param name="localFile">Full path to the local file.</param>
+        /// <param name="localBasePath">Local base directory used to compute the relative path.</param>
+        /// <param name="remoteFiles">Dictionary of remote file metadata keyed by relative path.</param>
+        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
+        /// <returns>True when the file is new or its timestamp indicates it has changed relative to remote.</returns>
         private bool IsFileChanged(
             string localFile,
             string localBasePath,
@@ -236,6 +289,16 @@ namespace ConsoleToolkit.Commands.Crestron.Program
             return hasChanged;
         }
 
+        /// <summary>
+        /// Registers the uploaded program on the device using console commands.
+        /// Handles .lpz and .cpz package types and optionally extracts the main assembly name.
+        /// </summary>
+        /// <param name="shellStream">Shell stream to communicate with the device console.</param>
+        /// <param name="slot">Program slot number.</param>
+        /// <param name="extension">File extension of the program package (e.g., .cpz or .lpz).</param>
+        /// <param name="tempDirectory">Temporary directory where package contents were extracted.</param>
+        /// <param name="cancellationToken">Cancellation token to observe.</param>
+        /// <returns>0 on success, non-zero on failure.</returns>
         private async Task<int> RegisterProgram(IShellStream shellStream, int slot, string extension, string tempDirectory, CancellationToken cancellationToken)
         {
             var success = false;
@@ -260,6 +323,12 @@ namespace ConsoleToolkit.Commands.Crestron.Program
             return success ? 0 : 1;
         }
 
+        /// <summary>
+        /// Attempts to determine the main assembly name from package manifest files.
+        /// Looks for "manifest.info" and "ProgramInfo.config" within the extracted package directory.
+        /// </summary>
+        /// <param name="tempDirectory">Temporary directory where package contents are extracted.</param>
+        /// <returns>A tuple indicating success and the discovered main assembly name (or null if not found).</returns>
         private async Task<(bool Success, string? MainAssemblyName)> TryGetMainAssemblyNameAsync(string tempDirectory)
         {
             var manifestPath = Path.Combine(tempDirectory, "manifest.info");
@@ -318,6 +387,16 @@ namespace ConsoleToolkit.Commands.Crestron.Program
             return (!string.IsNullOrEmpty(mainAssemblyName), mainAssemblyName);
         }
 
+        /// <summary>
+        /// Performs an analysis of the package contents and uploads only changed files to the remote device via SFTP.
+        /// This method extracts the package to a temporary directory, compares timestamps against remote files, and
+        /// uploads changed/new files with per-file progress and retry logic.
+        /// </summary>
+        /// <param name="settings">Upload settings containing host, credentials, and flags.</param>
+        /// <param name="remotePath">Remote program directory path on the device.</param>
+        /// <param name="extension">Program package extension.</param>
+        /// <param name="cancellationToken">Cancellation token to observe during network and file operations.</param>
+        /// <returns>Exit code 0 on success; non-zero on failure.</returns>
         private async Task<int> UploadChangedFilesAsync(
             ProgramUploadSettings settings,
             string remotePath,
@@ -392,34 +471,34 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                         }
 
                         var fileChanges = localFiles
-           .Select(localFile =>
-           {
-               var relativePath = Path.GetRelativePath(tempDir, localFile).Replace('\\', '/');
-               var isNew = !remoteFiles.ContainsKey(relativePath);
+                           .Select(localFile =>
+                           {
+                               var relativePath = Path.GetRelativePath(tempDir, localFile).Replace('\\', '/');
+                               var isNew = !remoteFiles.ContainsKey(relativePath);
 
-               // Debug: Show path comparison
-               if (isNew && settings.Verbose)
-               {
-                   AnsiConsole.MarkupLine($"[dim]New file: {relativePath.EscapeMarkup()}[/]");
+                               // Debug: Show path comparison
+                               if (isNew && settings.Verbose)
+                               {
+                                   AnsiConsole.MarkupLine($"[dim]New file: {relativePath.EscapeMarkup()}[/]");
 
-                   // Show what keys are available in remoteFiles
-                   if (remoteFiles.Count > 0 && remoteFiles.Count < 10)
-                   {
-                       AnsiConsole.MarkupLine($"[dim]  Remote keys: {string.Join(", ", remoteFiles.Keys.Select(k => k.EscapeMarkup()))}[/]");
-                   }
-               }
+                                   // Show what keys are available in remoteFiles
+                                   if (remoteFiles.Count > 0 && remoteFiles.Count < 10)
+                                   {
+                                       AnsiConsole.MarkupLine($"[dim]  Remote keys: {string.Join(", ", remoteFiles.Keys.Select(k => k.EscapeMarkup()))}[/]");
+                                   }
+                               }
 
-               var isChanged = !isNew && this.IsFileChanged(localFile, tempDir, remoteFiles, settings.Verbose);
-               return new
-               {
-                   LocalPath = localFile,
-                   RelativePath = relativePath,
-                   IsNew = isNew,
-                   IsChanged = isChanged
-               };
-           })
-  .Where(f => f.IsNew || f.IsChanged)
-       .ToList();
+                               var isChanged = !isNew && this.IsFileChanged(localFile, tempDir, remoteFiles, settings.Verbose);
+                               return new
+                               {
+                                   LocalPath = localFile,
+                                   RelativePath = relativePath,
+                                   IsNew = isNew,
+                                   IsChanged = isChanged
+                               };
+                           })
+                          .Where(f => f.IsNew || f.IsChanged)
+                          .ToList();
 
                         analysisTask.Value = 100;
                         analysisTask.StopTask();
@@ -524,7 +603,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                                     {
                                         sftpClient.UploadFile(fileStream, remoteFilePath, true, uploaded =>
                                         {
-                                            var percentage = (double)uploaded / fileSize * 100;
+                                            var percentage = (((double)uploaded) / fileSize) * 100;
                                             uploadTask.Value = percentage;
                                         });
                                     });
@@ -637,6 +716,13 @@ namespace ConsoleToolkit.Commands.Crestron.Program
             }
         }
 
+        /// <summary>
+        /// Uploads a full program package file to the remote device and executes the necessary console commands to load it.
+        /// </summary>
+        /// <param name="settings">Upload settings containing host, credentials and flags.</param>
+        /// <param name="remotePath">Remote program directory path on the device.</param>
+        /// <param name="cancellationToken">Cancellation token to observe during network and file operations.</param>
+        /// <returns>Exit code 0 on success; non-zero on failure.</returns>
         private async Task<int> UploadProgramFileAsync(
             ProgramUploadSettings settings,
             string remotePath,
@@ -666,7 +752,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                 shellStream.WriteLine(killCommand);
                 AnsiConsole.MarkupLine("[cyan]Waiting for program to be killed...[/]");
 
-                var (killSuccess, killOutput) = await this.WaitForCommandCompletionAsync(
+                var (killSuccess, _) = await this.WaitForCommandCompletionAsync(
            shellStream,
       [$"Specified program {settings.Slot} successfully deleted"],
     [], 10000
@@ -703,7 +789,7 @@ namespace ConsoleToolkit.Commands.Crestron.Program
                     {
                         sftpClient.UploadFile(fileStream, remoteFilePath, uploaded =>
                         {
-                            var percentage = (double)uploaded / fileSize * 100;
+                            var percentage = (((double)uploaded) / fileSize) * 100;
                             uploadTask.Value = percentage;
                         });
                     });
@@ -722,11 +808,20 @@ namespace ConsoleToolkit.Commands.Crestron.Program
             AnsiConsole.MarkupLine($"[yellow]Executing:[/] {progloadCommand}");
 
             shellStream.WriteLine(progloadCommand);
-            var (success, output) = await this.WaitForCommandCompletionAsync(shellStream, ["Program Start successfully sent for App"], null);
+            var (_, _) = await this.WaitForCommandCompletionAsync(shellStream, ["Program Start successfully sent for App"], null);
 
             return result;
         }
 
+        /// <summary>
+        /// Waits for a console command to complete by reading output from the provided <see cref="ShellStream"/>.
+        /// Scans output for success or failure patterns and returns once one is matched or when the timeout elapses.
+        /// </summary>
+        /// <param name="shellStream">The shell stream used to read console output.</param>
+        /// <param name="successPatterns">Patterns that indicate success.</param>
+        /// <param name="failurePatterns">Patterns that indicate failure.</param>
+        /// <param name="timeoutMs">Timeout in milliseconds to wait for a matching pattern. Defaults to 30000ms.</param>
+        /// <returns>A tuple containing a boolean success flag and the captured output string.</returns>
         private async Task<(bool Success, string Output)> WaitForCommandCompletionAsync(
             ShellStream shellStream,
             IEnumerable<string>? successPatterns,
@@ -779,32 +874,5 @@ namespace ConsoleToolkit.Commands.Crestron.Program
             // Timeout - that's a failure
             return (false, output.ToString());
         }
-    }
-
-    public sealed class ProgramUploadSettings : CommandSettings
-    {
-        [CommandOption("-c|--changed-only")]
-        public bool ChangedOnly { get; set; }
-
-        [CommandOption("-a|--address", true)]
-        public string Host { get; set; } = string.Empty;
-
-        [CommandOption("-k|--kill")]
-        public bool KillProgram { get; set; }
-
-        [CommandOption("-p|--password", false)]
-        public string Password { get; set; } = string.Empty;
-
-        [CommandArgument(0, "<PROGRAM>")]
-        public string ProgramFile { get; set; } = string.Empty;
-
-        [CommandOption("-s|--slot")]
-        public int Slot { get; set; }
-
-        [CommandOption("-u|--username", false)]
-        public string Username { get; set; } = string.Empty;
-
-        [CommandOption("-v|--verbose")]
-        public bool Verbose { get; set; }
     }
 }

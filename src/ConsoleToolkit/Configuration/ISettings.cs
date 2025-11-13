@@ -11,17 +11,20 @@
 // </copyright>
 
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace ConsoleToolkit.Configuration
 {
     /// <summary>
     /// Defines the application's settings.
     /// </summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
     public interface ISettings
     {
         /// <summary>
         /// Gets the current connection settings used to configure connection related functionality.
         /// </summary>
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
         IConnectionSettings Connection { get; }
 
         /// <summary>

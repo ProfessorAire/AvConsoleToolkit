@@ -11,6 +11,7 @@
 // </copyright>
 
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using Spectre.Console.Cli;
 
 namespace ConsoleToolkit.Commands.Config
