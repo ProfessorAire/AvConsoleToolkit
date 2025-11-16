@@ -1,0 +1,82 @@
+name: Release-Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Allow creating the GitHub release (must be explicitly set to "true")'
+        required: false
+        default: 'false'
+      upload_asset:
+        description: 'Allow uploading the release asset (must be explicitly set to "true")'
+        required: false
+        default: 'false'
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./.github/workflows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore dotnet tools
+        run: dotnet tool restore
+        working-directory: ./
+
+      - name: Run Clean
+        uses: cake-build/cake-action@v3
+        with:
+          script-path: ./.github/workflows/Clean.cake
+          working-directory: ./.github/workflows
+
+      - name: Run DetermineVersion
+        uses: cake-build/cake-action@v3
+        with:
+          script-path: ./.github/workflows/DetermineVersion.cake
+          working-directory: ./.github/workflows
+
+      - name: Publish Program Win-x64 (single-file)
+        uses: cake-build/cake-action@v3
+        with:
+          script-path: ./.github/workflows/PublishProgram.cake
+          arguments: |
+            project=../../src/AvConsoleToolkit/AvConsoleToolkit.csproj
+            runtime=win-x64
+          working-directory: ./.github/workflows
+
+      - name: Package artifact
+        uses: cake-build/cake-action@v3
+        with:
+          script-path: ./.github/workflows/PackageAssets.cake
+          working-directory: ./.github/workflows
+
+      - name: Create release via Cake
+        if: ${{ github.event.inputs.create_release == 'true' }}
+        uses: cake-build/cake-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script-path: ./.github/workflows/CreateGitHubRelease.cake
+          working-directory: ./.github/workflows
+
+      - name: Upload asset via Cake
+        if: ${{ github.event.inputs.upload_asset == 'true' }}
+        uses: cake-build/cake-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script-path: ./.github/workflows/UploadGitHubAssets.cake
+          working-directory: ./.github/workflows
