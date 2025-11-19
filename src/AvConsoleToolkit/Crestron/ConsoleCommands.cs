@@ -175,24 +175,25 @@ namespace AvConsoleToolkit.Crestron
         /// </summary>
         /// <param name="stream">The shell stream to send commands through.</param>
         /// <param name="slot">The program slot to stop (1-10).</param>
+        /// <param name="doNotStart">A value indicating whether the program should not be started.</param>
         /// <param name="cancellationToken">Token to cancel the operation.</param>
         /// <returns><see langword="true"/> if the program was stopped or did not exist; <see langword="false"/> otherwise.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="slot"/> is less than 1 or greater than 10.</exception>
         /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is cancelled.</exception>
-        public static async Task<bool> ProgramLoadAsync(Ssh.IShellStream stream, int slot, CancellationToken cancellationToken)
+        public static async Task<bool> ProgramLoadAsync(Ssh.IShellStream stream, int slot, bool doNotStart, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(slot);
             ArgumentOutOfRangeException.ThrowIfGreaterThan(slot, 10);
 
-            var progLoadCommand = $"progload -p:{slot}";
+            var progLoadCommand = $"progload -p:{slot}{(doNotStart ? " -D" : string.Empty)}";
             AnsiConsole.MarkupLine($"[yellow]Executing:[/] {progLoadCommand}");
             stream.WriteLine(progLoadCommand);
             AnsiConsole.MarkupLine("[cyan]Waiting for program to load...[/]");
             cancellationToken.ThrowIfCancellationRequested();
 
-            IEnumerable<string> successPatterns = ["Program(s) Started...", "Program Start successfully sent for App"];
+            IEnumerable<string> successPatterns = doNotStart ? [$"Program Registered successfully for App {slot}"] : ["Program(s) Started...", "Program Start successfully sent for App"];
             return await stream.WaitForCommandCompletionAsync(successPatterns, ["ERROR:Invalid Program Identifier specified.", $"Specified program({slot}) not registered."], cancellationToken, 60000);
         }
     }

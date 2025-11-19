@@ -29,7 +29,7 @@ Task("Default")
         OutputDirectory = publishDir,
         EnableCompressionInSingleFile = true,
         PublishSingleFile = true,
-        ArgumentCustomization = args => args.Append($"/p:Version={derivedVersion}")
+        ArgumentCustomization = args => args.Append($"/p:VersionPrefix={derivedVersion}")
     };
 
     DotNetPublish(projectPath, publishSettings);

@@ -16,11 +16,13 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using AvConsoleToolkit.Ssh;
+using Castle.Components.DictionaryAdapter.Xml;
 using Renci.SshNet;
 using Renci.SshNet.Sftp;
 using Spectre.Console;
@@ -40,6 +42,11 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// The supported program package file extensions.
         /// </summary>
         private static readonly string[] SupportedExtensions = [".cpz", ".clz", ".lpz"];
+
+        /// <summary>
+        /// Name of the hash manifest file stored on the remote device.
+        /// </summary>
+        private const string HashManifestFileName = ".act.hash";
 
         /// <summary>
         /// Executes the upload operation.
@@ -82,7 +89,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 {
                     if (settings.Verbose)
                     {
-                        AnsiConsole.MarkupLine("[fuschia]No username/password provided, looking up values from address books.[/]");
+                        AnsiConsole.MarkupLine("[fuchsia]No username/password provided, looking up values from address books.[/]");
                     }
 
                     var entry = await AvConsoleToolkit.Crestron.ToolboxAddressBook.LookupEntryAsync(settings.Host);
@@ -194,6 +201,119 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         }
 
         /// <summary>
+        /// Computes the SHA256 hash of a file.
+        /// </summary>
+        /// <param name="filePath">Path to the file to hash.</param>
+        /// <returns>Hex-encoded SHA256 hash string.</returns>
+        private static async Task<string> ComputeFileHashAsync(string filePath)
+        {
+            using var sha256 = SHA256.Create();
+            using var fileStream = File.OpenRead(filePath);
+            var hashBytes = await sha256.ComputeHashAsync(fileStream);
+            return Convert.ToHexString(hashBytes);
+        }
+
+        /// <summary>
+        /// Downloads and parses the hash manifest file from the remote device.
+        /// </summary>
+        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="remotePath">Remote program directory path.</param>
+        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
+        /// <returns>Dictionary mapping relative file paths to their stored hashes, or null if manifest doesn't exist.</returns>
+        private static async Task<Dictionary<string, string>?> DownloadHashManifestAsync(
+            SftpClient sftpClient,
+            string remotePath,
+            bool verbose = false)
+        {
+            var remoteHashPath = $"{remotePath}/{HashManifestFileName}";
+
+            if (!sftpClient.Exists(remoteHashPath))
+            {
+                if (verbose)
+                {
+                    AnsiConsole.MarkupLine($"[dim]No hash manifest found at '{remoteHashPath.EscapeMarkup()}'[/]");
+                }
+                return null;
+            }
+
+            if (verbose)
+            {
+                AnsiConsole.MarkupLine($"[dim]Downloading hash manifest from '{remoteHashPath.EscapeMarkup()}'[/]");
+            }
+
+            return await Task.Run(() =>
+            {
+                using var memoryStream = new MemoryStream();
+                sftpClient.DownloadFile(remoteHashPath, memoryStream);
+                memoryStream.Position = 0;
+
+                var hashes = new Dictionary<string, string>();
+                using var reader = new StreamReader(memoryStream, Encoding.UTF8);
+
+                while (!reader.EndOfStream)
+                {
+                    var line = reader.ReadLine();
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    var parts = line.Split('=', 2);
+                    if (parts.Length == 2)
+                    {
+                        hashes[parts[0].Trim()] = parts[1].Trim();
+                    }
+                }
+
+                if (verbose)
+                {
+                    AnsiConsole.MarkupLine($"[dim]Loaded {hashes.Count} file hashes from manifest[/]");
+                }
+
+                return hashes;
+            });
+        }
+
+        /// <summary>
+        /// Uploads a hash manifest file to the remote device.
+        /// </summary>
+        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="remotePath">Remote program directory path.</param>
+        /// <param name="hashes">Dictionary of file path to hash mappings.</param>
+        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
+        private static async Task UploadHashManifestAsync(
+            SftpClient sftpClient,
+            string remotePath,
+            Dictionary<string, string> hashes,
+            bool verbose = false)
+        {
+            var remoteHashPath = $"{remotePath}/{HashManifestFileName}";
+
+            if (verbose)
+            {
+                AnsiConsole.MarkupLine($"[dim]Uploading hash manifest with {hashes.Count} entries to '{remoteHashPath.EscapeMarkup()}'[/]");
+            }
+
+            await Task.Run(() =>
+            {
+                using var memoryStream = new MemoryStream();
+                using (var writer = new StreamWriter(memoryStream, Encoding.UTF8, leaveOpen: true))
+                {
+                    foreach (var kvp in hashes.OrderBy(k => k.Key))
+                    {
+                        writer.WriteLine($"{kvp.Key}={kvp.Value}");
+                    }
+                    writer.Flush();
+                }
+
+                memoryStream.Position = 0;
+                sftpClient.UploadFile(memoryStream, remoteHashPath, true);
+            });
+
+            if (verbose)
+            {
+                AnsiConsole.MarkupLine($"[dim]Hash manifest uploaded successfully[/]");
+            }
+        }
+
+        /// <summary>
         /// Ensures that the specified remote directory and its ancestors exist on the SFTP server.
         /// Creates missing directories as needed.
         /// </summary>
@@ -292,50 +412,76 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         }
 
         /// <summary>
-        /// Determines whether a local file differs from the corresponding remote file based on last-write timestamps.
+        /// Determines whether a local file differs from the corresponding remote file.
+        /// Uses hash comparison when available, otherwise falls back to timestamp comparison.
         /// </summary>
         /// <param name="localFile">Full path to the local file.</param>
         /// <param name="localBasePath">Local base directory used to compute the relative path.</param>
         /// <param name="remoteFiles">Dictionary of remote file metadata keyed by relative path.</param>
+        /// <param name="remoteHashes">Optional dictionary of remote file hashes keyed by relative path.</param>
         /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
-        /// <returns>True when the file is new or its timestamp indicates it has changed relative to remote.</returns>
-        private static bool IsFileChanged(
+        /// <returns>True when the file is new or has changed relative to remote.</returns>
+        private static async Task<bool> IsFileChangedAsync(
             string localFile,
             string localBasePath,
             Dictionary<string, ISftpFile> remoteFiles,
+            Dictionary<string, string>? remoteHashes,
             bool verbose = false)
         {
             var relativePath = Path.GetRelativePath(localBasePath, localFile).Replace('\\', '/');
 
-            if (!remoteFiles.TryGetValue(relativePath, out var remoteFile))
+            // Check if file exists remotely
+            var fileExistsRemotely = remoteFiles.TryGetValue(relativePath, out var remoteFile);
+
+            if (!fileExistsRemotely)
             {
                 // File doesn't exist remotely, so it's new/changed
                 return true;
             }
 
+            // If we have a hash for this file, use hash comparison
+            if (remoteHashes != null && remoteHashes.TryGetValue(relativePath, out var remoteHash))
+            {
+                var localHash = await ComputeFileHashAsync(localFile);
+
+                if (verbose)
+                {
+                    AnsiConsole.MarkupLine($"[dim]Comparing hashes for {relativePath.EscapeMarkup()}:[/]");
+                    AnsiConsole.MarkupLine($"[dim]  Local:  {localHash}[/]");
+                    AnsiConsole.MarkupLine($"[dim]  Remote: {remoteHash}[/]");
+                }
+
+                var changed = !string.Equals(localHash, remoteHash, StringComparison.OrdinalIgnoreCase);
+
+                if (verbose)
+                {
+                    AnsiConsole.MarkupLine($"[dim]  Changed: {changed}[/]");
+                }
+
+                return changed;
+            }
+
+            // No hash available, fall back to timestamp comparison
             var localLastWriteTime = File.GetLastWriteTimeUtc(localFile);
             var remoteLastWriteTime = remoteFile.LastWriteTimeUtc;
-
             var timeDifference = Math.Abs((localLastWriteTime - remoteLastWriteTime).TotalSeconds);
 
             if (verbose)
             {
-                // Debug output
-                AnsiConsole.MarkupLine($"[dim]Comparing {relativePath.EscapeMarkup()}:[/]");
+                AnsiConsole.MarkupLine($"[dim]No hash available for {relativePath.EscapeMarkup()}, using timestamp comparison:[/]");
                 AnsiConsole.MarkupLine($"[dim]  Local:  {localLastWriteTime:yyyy-MM-dd HH:mm:ss.fff} UTC[/]");
                 AnsiConsole.MarkupLine($"[dim]  Remote: {remoteLastWriteTime:yyyy-MM-dd HH:mm:ss.fff} UTC[/]");
                 AnsiConsole.MarkupLine($"[dim]  Diff:   {timeDifference:F3} seconds[/]");
             }
 
-            // Compare timestamps (allowing for small differences due to file system precision)
-            var hasChanged = timeDifference > 2;
+            var timestampChanged = timeDifference > 2;
 
             if (verbose)
             {
-                AnsiConsole.MarkupLine($"[dim]  Changed: {hasChanged}[/]");
+                AnsiConsole.MarkupLine($"[dim]  Changed: {timestampChanged}[/]");
             }
 
-            return hasChanged;
+            return timestampChanged;
         }
 
         /// <summary>
@@ -456,28 +602,41 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             using var sftpClient = new SftpClient(settings.Host, settings.Username, settings.Password);
 
             await AnsiConsole.Status()
-       .StartAsync("Connecting to device...", async ctx =>
-       {
-           ctx.Status("Connecting to SFTP client for file analysis.");
-           await sftpClient.ConnectAsync(cancellationToken);
-           ctx.Status("Connected");
-       });
+               .StartAsync("Connecting to device...", async ctx =>
+               {
+                   ctx.Status("Connecting to SFTP client for file analysis.");
+                   await sftpClient.ConnectAsync(cancellationToken);
+                   ctx.Status("Connected");
+               });
 
             var analysisResult = await AnsiConsole.Progress()
                 .AutoClear(false)
+                .Columns([
+                    new TaskDescriptionColumn(),
+                    new SpinnerColumn { CompletedStyle = new Style(Color.Green), PendingStyle = new Style(Color.DarkSlateGray2), PendingText = "...", Spinner = Spinner.Known.Dots8Bit, CompletedText = "<completed>", Style = new Style(Color.Teal)},
+                    new ElapsedTimeColumn { Style = new Style(Color.Blue) },
+                    ])
+                .AutoRefresh(!settings.Verbose)
                 .StartAsync(async ctx =>
                 {
-                    var analysisTask = ctx.AddTask("[green]Analyzing files[/]");
+                    var extractTask = ctx.AddTask("[Yellow]Extract program archive[/]", autoStart: false);
+                    var remoteTask = ctx.AddTask("[Yellow]Retrieving remote file metadata[/]", autoStart: false);
+                    var analysisTask = ctx.AddTask("[Yellow]Analyze files[/]", autoStart: false);
 
                     // Extract zip to temporary location
+                    extractTask.StartTask();
                     var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
                     Directory.CreateDirectory(tempDir);
+                    var step = 0;
 
                     try
                     {
                         // Extract files manually to preserve timestamps
                         using (var archive = ZipFile.OpenRead(settings.ProgramFile))
                         {
+                            extractTask.Value = 1;
+                            var count = archive.Entries.Count;
+                            step = 99 / count;
                             foreach (var entry in archive.Entries)
                             {
                                 var destinationPath = Path.Combine(tempDir, entry.FullName);
@@ -502,15 +661,26 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                                     // Preserve the timestamp from the archive
                                     File.SetLastWriteTimeUtc(destinationPath, entry.LastWriteTime.UtcDateTime);
                                 }
+
+                                extractTask.Value += step;
                             }
                         }
 
-                        analysisTask.Value = 50;
+                        extractTask.Value = 100;
+                        extractTask.StopTask();
+
+                        remoteTask.StartTask();
 
                         // Get remote file metadata
                         var remoteFiles = await GetRemoteFileMetadataAsync(sftpClient, remotePath, settings.Verbose);
-                        analysisTask.Value = 75;
+                        remoteTask.Value = 50;
 
+                        // Download hash manifest if it exists
+                        var remoteHashes = await DownloadHashManifestAsync(sftpClient, remotePath, settings.Verbose);
+                        remoteTask.Value = 100;
+                        remoteTask.StopTask();
+
+                        analysisTask.StartTask();
                         // Compare files and determine which are new vs updated
                         var localFiles = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories);
 
@@ -519,38 +689,47 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                             AnsiConsole.MarkupLine($"[dim]Found {localFiles.Length} local files and {remoteFiles.Count} remote files[/]");
                         }
 
-                        var fileChanges = localFiles
-                           .Select(localFile =>
-                           {
-                               var relativePath = Path.GetRelativePath(tempDir, localFile).Replace('\\', '/');
-                               var isNew = !remoteFiles.ContainsKey(relativePath);
+                        step = 100 / localFiles.Length;
+                        var fileChanges = new List<dynamic>();
+                        foreach (var localFile in localFiles)
+                        {
+                            var relativePath = Path.GetRelativePath(tempDir, localFile).Replace('\\', '/');
+                            var isNew = !remoteFiles.ContainsKey(relativePath);
 
-                               // Debug: Show path comparison
-                               if (isNew && settings.Verbose)
-                               {
-                                   AnsiConsole.MarkupLine($"[dim]New file: {relativePath.EscapeMarkup()}[/]");
+                            // Debug: Show path comparison
+                            if (isNew && settings.Verbose)
+                            {
+                                AnsiConsole.MarkupLine($"[dim]New file: {relativePath.EscapeMarkup()}[/]");
 
-                                   // Show what keys are available in remoteFiles
-                                   if (remoteFiles.Count is > 0 and < 10)
-                                   {
-                                       AnsiConsole.MarkupLine($"[dim]  Remote keys: {string.Join(", ", remoteFiles.Keys.Select(k => k.EscapeMarkup()))}[/]");
-                                   }
-                               }
+                                // Show what keys are available in remoteFiles
+                                if (remoteFiles.Count is > 0)
+                                {
+                                    AnsiConsole.MarkupLine($"[dim]  Remote keys: {string.Join(", ", remoteFiles.Keys.Select(k => k.EscapeMarkup()))}[/]");
+                                }
+                            }
 
-                               var isChanged = !isNew && IsFileChanged(localFile, tempDir, remoteFiles, settings.Verbose);
-                               return new
-                               {
-                                   LocalPath = localFile,
-                                   RelativePath = relativePath,
-                                   IsNew = isNew,
-                                   IsChanged = isChanged
-                               };
-                           })
-                          .Where(f => f.IsNew || f.IsChanged)
-                          .ToList();
+                            var isChanged = !isNew && await IsFileChangedAsync(localFile, tempDir, remoteFiles, remoteHashes, settings.Verbose);
+
+                            if (isNew || isChanged)
+                            {
+                                fileChanges.Add(new
+                                {
+                                    LocalPath = localFile,
+                                    RelativePath = relativePath,
+                                    IsNew = isNew,
+                                    IsChanged = isChanged
+                                });
+                            }
+
+                            analysisTask.Value += step;
+                        }
 
                         analysisTask.Value = 100;
                         analysisTask.StopTask();
+                        if (settings.Verbose)
+                        {
+                            ctx.Refresh();
+                        }
 
                         return (tempDir, fileChanges);
                     }
@@ -731,6 +910,24 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                         }
                     });
 
+                // Compute and upload hash manifest for all files
+                if (settings.Verbose)
+                {
+                    AnsiConsole.MarkupLine("[dim]Computing file hashes for manifest...[/]");
+                }
+
+                var allLocalFiles = Directory.GetFiles(tempDirectory, "*", SearchOption.AllDirectories);
+                var newHashes = new Dictionary<string, string>();
+
+                foreach (var file in allLocalFiles)
+                {
+                    var relativePath = Path.GetRelativePath(tempDirectory, file).Replace('\\', '/');
+                    var hash = await ComputeFileHashAsync(file);
+                    newHashes[relativePath] = hash;
+                }
+
+                await UploadHashManifestAsync(sftpClient, remotePath, newHashes, settings.Verbose);
+
                 if (extension is ".lpz" or ".cpz")
                 {
                     var registrationResult = await RegisterProgram(shellStream, settings.Slot, extension, tempDirectory, cancellationToken);
@@ -792,19 +989,24 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     }
                 }
 
-                // Execute progres command
-                var progresSuccess = await AvConsoleToolkit.Crestron.ConsoleCommands.RestartProgramAsync(shellStream, settings.Slot, cancellationToken);
+                if (!settings.DoNotStart)
+                {
+                    // Execute progres command
+                    var progresSuccess = await AvConsoleToolkit.Crestron.ConsoleCommands.RestartProgramAsync(shellStream, settings.Slot, cancellationToken);
 
-                if (progresSuccess)
-                {
-                    AnsiConsole.MarkupLine("[green]Program updated successfully.[/]");
-                    return 0;
+                    if (progresSuccess)
+                    {
+                        AnsiConsole.MarkupLine("[green]Program updated successfully.[/]");
+                        return 0;
+                    }
+                    else
+                    {
+                        AnsiConsole.MarkupLine("[red]Program failed to restart.");
+                        return 1;
+                    }
                 }
-                else
-                {
-                    AnsiConsole.MarkupLine("[red]Program failed to restart.");
-                    return 1;
-                }
+
+                return 0;
             }
             finally
             {
@@ -937,7 +1139,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 result = await AnsiConsole.Status().Spinner(Spinner.Known.BouncingBall).Start("Loading program...", async ctx =>
                 {
                     // Execute progload command.
-                    if (!await AvConsoleToolkit.Crestron.ConsoleCommands.ProgramLoadAsync(shellStream, settings.Slot, cancellationToken))
+                    if (!await AvConsoleToolkit.Crestron.ConsoleCommands.ProgramLoadAsync(shellStream, settings.Slot, settings.DoNotStart, cancellationToken))
                     {
                         AnsiConsole.MarkupLine("[red]Error: Failed to load program after upload.[/]");
                         return 1;
@@ -963,68 +1165,6 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     }
                 }
             }
-        }
-
-        /// <summary>
-        /// Waits for a console command to complete by reading output from the provided <see cref="ShellStream"/>.
-        /// Scans output for success or failure patterns and returns once one is matched or when the timeout elapses.
-        /// </summary>
-        /// <param name="shellStream">The shell stream used to read console output.</param>
-        /// <param name="successPatterns">Patterns that indicate success.</param>
-        /// <param name="failurePatterns">Patterns that indicate failure.</param>
-        /// <param name="timeoutMs">Timeout in milliseconds to wait for a matching pattern. Defaults to 30000ms.</param>
-        /// <returns>A tuple containing a boolean success flag and the captured output string.</returns>
-        private static async Task<(bool Success, string Output)> WaitForCommandCompletionAsync(
-            ShellStreamWrapper shellStream,
-            IEnumerable<string>? successPatterns,
-            IEnumerable<string>? failurePatterns,
-            int timeoutMs = 30000)
-        {
-            var output = new StringBuilder();
-            var startTime = DateTime.UtcNow;
-
-            while ((DateTime.UtcNow - startTime).TotalMilliseconds < timeoutMs)
-            {
-                if (shellStream.DataAvailable)
-                {
-                    var data = shellStream.Read();
-                    output.Append(data);
-
-                    // Print output as it's received
-                    AnsiConsole.Write(data);
-
-                    var currentOutput = output.ToString();
-
-                    // Check for failure patterns first
-                    if (failurePatterns != null)
-                    {
-                        foreach (var pattern in failurePatterns)
-                        {
-                            if (currentOutput.Contains(pattern, StringComparison.OrdinalIgnoreCase))
-                            {
-                                return (false, currentOutput);
-                            }
-                        }
-                    }
-
-                    // Check for success patterns
-                    if (successPatterns != null)
-                    {
-                        foreach (var pattern in successPatterns)
-                        {
-                            if (currentOutput.Contains(pattern, StringComparison.OrdinalIgnoreCase))
-                            {
-                                return (true, currentOutput);
-                            }
-                        }
-                    }
-                }
-
-                await Task.Delay(100);
-            }
-
-            // Timeout - that's a failure
-            return (false, output.ToString());
         }
     }
 }

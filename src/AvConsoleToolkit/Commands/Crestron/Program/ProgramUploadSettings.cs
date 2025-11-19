@@ -11,6 +11,7 @@
 // </copyright>
 
 using System.ComponentModel;
+using System.IO;
 using Spectre.Console.Cli;
 
 namespace AvConsoleToolkit.Commands.Crestron.Program
@@ -26,6 +27,13 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         [CommandOption("-c|--changed-only")]
         [Description("Upload only changed files instead of the full package")]
         public bool ChangedOnly { get; set; }
+
+        /// <summary>
+        /// When specified, indicates not to restart the program.
+        /// </summary>
+        [CommandOption("-d|--doNotStart")]
+        [Description("Do not start the program after upload")]
+        public bool DoNotStart { get; set; }
 
         /// <summary>
         /// Target device address or hostname.

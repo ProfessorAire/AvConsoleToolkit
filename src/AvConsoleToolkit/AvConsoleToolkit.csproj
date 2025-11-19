@@ -9,9 +9,10 @@
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <PublishTrimmed>false</PublishTrimmed>
-    <FileVersion>0.1.0.0</FileVersion>
-    <VersionPrefix>0.1.0</VersionPrefix>
-    <VersionSuffix>beta.1</VersionSuffix>
+    <ProductName>AvConsoleToolkit</ProductName>
+    <Copyright>Elegant Video &amp; Soundworks and Christopher McNeely</Copyright>
+    <Company>Elegant Video and Soundworks</Company>
+    <AssemblyTitle>Application for performing Audio/Visual tasks from the console.</AssemblyTitle>
   </PropertyGroup>
 
   <ItemGroup>
