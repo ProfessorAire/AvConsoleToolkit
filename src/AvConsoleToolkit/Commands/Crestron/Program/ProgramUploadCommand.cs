@@ -144,6 +144,56 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         }
 
         /// <summary>
+        /// Creates a .zig file from a .sig file by wrapping it in a zip archive.
+        /// </summary>
+        /// <param name="sigFilePath">Path to the .sig file.</param>
+        /// <param name="outputZigPath">Path where the .zig file should be created.</param>
+        private static void CreateZigFromSig(string sigFilePath, string outputZigPath)
+        {
+            using var archive = ZipFile.Open(outputZigPath, ZipArchiveMode.Create);
+            archive.CreateEntryFromFile(sigFilePath, Path.GetFileName(sigFilePath));
+        }
+
+        /// <summary>
+        /// Checks for a .sig file alongside the .lpz program file and creates a .zig file if found.
+        /// </summary>
+        /// <param name="lpzFilePath">Path to the .lpz program file.</param>
+        /// <param name="settings">Upload settings to check the NoZig flag.</param>
+        /// <returns>Path to the created .zig file, or null if no .sig file exists or NoZig is set.</returns>
+        private static string? PrepareSignatureFile(string lpzFilePath, ProgramUploadSettings settings)
+        {
+            if (settings.NoZig)
+            {
+                if (settings.Verbose)
+                {
+                    AnsiConsole.MarkupLine("[dim]--nozig flag set, skipping signature file upload.[/]");
+                }
+                return null;
+            }
+
+            var sigFilePath = Path.ChangeExtension(lpzFilePath, ".sig");
+            if (!File.Exists(sigFilePath))
+            {
+                if (settings.Verbose)
+                {
+                    AnsiConsole.MarkupLine($"[dim]No signature file found at '{sigFilePath.EscapeMarkup()}'[/]");
+                }
+                return null;
+            }
+
+            var zigFileName = Path.ChangeExtension(Path.GetFileName(lpzFilePath), ".zig");
+            var zigFilePath = Path.Combine(Path.GetTempPath(), zigFileName);
+
+            if (settings.Verbose)
+            {
+                AnsiConsole.MarkupLine($"[cyan]Creating .zig file from signature: '{Path.GetFileName(sigFilePath).EscapeMarkup()}'[/]");
+            }
+
+            CreateZigFromSig(sigFilePath, zigFilePath);
+            return zigFilePath;
+        }
+
+        /// <summary>
         /// Ensures that the specified remote directory and its ancestors exist on the SFTP server.
         /// Creates missing directories as needed.
         /// </summary>
@@ -691,6 +741,57 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     }
                 }
 
+                // Upload .zig file if this is an .lpz program and a .sig file exists
+                if (extension == ".lpz")
+                {
+                    var zigFilePath = PrepareSignatureFile(settings.ProgramFile, settings);
+                    if (zigFilePath != null)
+                    {
+                        try
+                        {
+                            await AnsiConsole.Progress()
+                                .AutoClear(false)
+                                .StartAsync(async ctx =>
+                                {
+                                    var zigFileName = Path.GetFileName(zigFilePath);
+                                    var remoteZigPath = $"{remotePath}/{zigFileName}";
+                                    var zigDisplayName = settings.Verbose ? remoteZigPath : zigFileName;
+                                    var zigUploadTask = ctx.AddTask($"[blue]Uploading signature to {zigDisplayName}[/]");
+
+                                    using var zigFileStream = File.OpenRead(zigFilePath);
+                                    var zigFileSize = zigFileStream.Length;
+
+                                    await Task.Run(() =>
+                                    {
+                                        sftpClient.UploadFile(zigFileStream, remoteZigPath, uploaded =>
+                                        {
+                                            var percentage = (((double)uploaded) / zigFileSize) * 100;
+                                            zigUploadTask.Value = percentage;
+                                        });
+                                    });
+
+                                    zigUploadTask.Value = 100;
+                                    zigUploadTask.StopTask();
+                                });
+                        }
+                        finally
+                        {
+                            // Clean up temporary .zig file
+                            if (File.Exists(zigFilePath))
+                            {
+                                try
+                                {
+                                    File.Delete(zigFilePath);
+                                }
+                                catch
+                                {
+                                    // Ignore cleanup errors
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Execute progres command
                 var progresSuccess = await AvConsoleToolkit.Crestron.ConsoleCommands.RestartProgramAsync(shellStream, settings.Slot, cancellationToken);
 
@@ -765,53 +866,103 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 await Task.Delay(2000, cancellationToken);
             }
 
-            var result = await AnsiConsole.Progress()
-                .AutoClear(false)
-                .StartAsync(async ctx =>
-                {
-                    var fileName = Path.GetFileName(settings.ProgramFile);
-                    var remoteFilePath = $"{remotePath}/{fileName}";
-                    var displayName = settings.Verbose ? remoteFilePath : fileName;
-                    var uploadTask = ctx.AddTask($"[green]Uploading to {displayName}[/]");
+            // Check for signature file if this is an .lpz program
+            string? zigFilePath = null;
+            var extension = Path.GetExtension(settings.ProgramFile).ToLowerInvariant();
+            if (extension == ".lpz")
+            {
+                zigFilePath = PrepareSignatureFile(settings.ProgramFile, settings);
+            }
 
-                    // Ensure remote directory exists
-                    EnsureRemoteDirectoryExists(sftpClient, remotePath);
-
-                    using var fileStream = File.OpenRead(settings.ProgramFile);
-                    var fileSize = fileStream.Length;
-
-                    await Task.Run(() =>
+            try
+            {
+                var result = await AnsiConsole.Progress()
+                    .AutoClear(false)
+                    .StartAsync(async ctx =>
                     {
-                        sftpClient.UploadFile(fileStream, remoteFilePath, uploaded =>
+                        var fileName = Path.GetFileName(settings.ProgramFile);
+                        var remoteFilePath = $"{remotePath}/{fileName}";
+                        var displayName = settings.Verbose ? remoteFilePath : fileName;
+                        var uploadTask = ctx.AddTask($"[green]Uploading to {displayName}[/]");
+
+                        // Ensure remote directory exists
+                        EnsureRemoteDirectoryExists(sftpClient, remotePath);
+
+                        using var fileStream = File.OpenRead(settings.ProgramFile);
+                        var fileSize = fileStream.Length;
+
+                        await Task.Run(() =>
                         {
-                            var percentage = (((double)uploaded) / fileSize) * 100;
-                            uploadTask.Value = percentage;
+                            sftpClient.UploadFile(fileStream, remoteFilePath, uploaded =>
+                            {
+                                var percentage = (((double)uploaded) / fileSize) * 100;
+                                uploadTask.Value = percentage;
+                            });
                         });
+
+                        uploadTask.Value = 100;
+                        uploadTask.StopTask();
+
+                        // Upload .zig file if it was created
+                        if (zigFilePath != null)
+                        {
+                            var zigFileName = Path.GetFileName(zigFilePath);
+                            var remoteZigPath = $"{remotePath}/{zigFileName}";
+                            var zigDisplayName = settings.Verbose ? remoteZigPath : zigFileName;
+                            var zigUploadTask = ctx.AddTask($"[blue]Uploading signature to {zigDisplayName}[/]");
+
+                            using var zigFileStream = File.OpenRead(zigFilePath);
+                            var zigFileSize = zigFileStream.Length;
+
+                            await Task.Run(() =>
+                            {
+                                sftpClient.UploadFile(zigFileStream, remoteZigPath, uploaded =>
+                                {
+                                    var percentage = (((double)uploaded) / zigFileSize) * 100;
+                                    zigUploadTask.Value = percentage;
+                                });
+                            });
+
+                            zigUploadTask.Value = 100;
+                            zigUploadTask.StopTask();
+                        }
+
+                        return 0;
                     });
 
-                    uploadTask.Value = 100;
-                    uploadTask.StopTask();
+
+                // Output after progress indicators are complete
+                AnsiConsole.MarkupLine("[green]Upload complete![/]");
+
+                result = await AnsiConsole.Status().Spinner(Spinner.Known.BouncingBall).Start("Loading program...", async ctx =>
+                {
+                    // Execute progload command.
+                    if (!await AvConsoleToolkit.Crestron.ConsoleCommands.ProgramLoadAsync(shellStream, settings.Slot, cancellationToken))
+                    {
+                        AnsiConsole.MarkupLine("[red]Error: Failed to load program after upload.[/]");
+                        return 1;
+                    }
 
                     return 0;
                 });
 
-
-            // Output after progress indicators are complete
-            AnsiConsole.MarkupLine("[green]Upload complete![/]");
-
-            result = await AnsiConsole.Status().Spinner(Spinner.Known.BouncingBall).Start("Loading program...", async ctx =>
+                return result;
+            }
+            finally
             {
-                // Execute progload command.
-                if (!await AvConsoleToolkit.Crestron.ConsoleCommands.ProgramLoadAsync(shellStream, settings.Slot, cancellationToken))
+                // Clean up temporary .zig file
+                if (zigFilePath != null && File.Exists(zigFilePath))
                 {
-                    AnsiConsole.MarkupLine("[red]Error: Failed to load program after upload.[/]");
-                    return 1;
+                    try
+                    {
+                        File.Delete(zigFilePath);
+                    }
+                    catch
+                    {
+                        // Ignore cleanup errors
+                    }
                 }
-
-                return 0;
-            });
-
-            return result;
+            }
         }
 
         /// <summary>

@@ -50,7 +50,7 @@ namespace AvConsoleToolkit.Commands.AddressBook
             table.AddRow("Device Name", !string.IsNullOrWhiteSpace(entry.DeviceName) ? entry.DeviceName.EscapeMarkup() : string.Empty);
             table.AddRow("IP Address", !string.IsNullOrWhiteSpace(entry.HostAddress) ? entry.HostAddress : string.Empty);
             table.AddRow("Username", !string.IsNullOrEmpty(entry.Username) ? entry.Username.EscapeMarkup() : string.Empty);
-            table.AddRow("Password", !string.IsNullOrEmpty(entry.Password) ? "[dim]***hidden***[/]" : "[dim]<NOT PRESENT>[/]");
+            table.AddRow("Password", !string.IsNullOrEmpty(entry.Password) ? "[dim]***hidden***[/]" : "[dim]<none>[/]");
 
             AnsiConsole.Write(table);
 

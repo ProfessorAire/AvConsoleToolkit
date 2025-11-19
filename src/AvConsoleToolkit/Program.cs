@@ -53,6 +53,8 @@ namespace AvConsoleToolkit
                     {
                         program.AddCommand<Commands.Crestron.Program.ProgramUploadCommand>("upload")
                             .WithAlias("u")
+                            .WithAlias("load")
+                            .WithAlias("l")
                             .WithDescription("Upload a program to Crestron hardware")
                             .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "--address", "192.168.1.100", "-u", "admin", "-p", "password"])
                             .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "-a", "192.168.1.100", "-u", "admin", "-p", "password", "-c"]);
@@ -87,10 +89,18 @@ namespace AvConsoleToolkit
                 config.AddBranch("addressbook", ab =>
                 {
                     ab.SetDescription("Utilities for looking up Crestron device information from address books.");
+                    
+                    ab.AddCommand<Commands.AddressBook.AddressBookListCommand>("list")
+                        .WithAlias("ls")
+                        .WithDescription("List all entries from configured address books")
+                        .WithExample(["addressbook", "list"])
+                        .WithExample(["ab", "ls", "--detailed"]);
+                    
                     ab.AddCommand<Commands.AddressBook.AddressBookLookupCommand>("lookup")
                         .WithAlias("l")
-                        .WithExample("addressbook", "lookup", "SomeEntryName")
-                        .WithExample("ab", "l", "10.10.120.12");
+                        .WithDescription("Look up a specific address book entry by name or IP address")
+                        .WithExample(["addressbook", "lookup", "SomeEntryName"])
+                        .WithExample(["ab", "l", "10.10.120.12"]);
                 })
                 .WithAlias("ab");
             });

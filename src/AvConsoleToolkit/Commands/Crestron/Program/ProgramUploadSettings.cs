@@ -38,6 +38,12 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         public bool KillProgram { get; set; }
 
         /// <summary>
+        /// When true, skip uploading the signature file (.sig) as a .zig file alongside .lpz programs.
+        /// </summary>
+        [CommandOption("--nozig")]
+        public bool NoZig { get; set; }
+
+        /// <summary>
         /// Password to use for SSH/SFTP authentication.
         /// </summary>
         [CommandOption("-p|--password", false)]

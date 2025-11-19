@@ -3,4 +3,7 @@
     <File Path=".editorconfig" />
   </Folder>
   <Project Path="AvConsoleToolkit/AvConsoleToolkit.csproj" />
+  <Properties Name="ExtensibilityGlobals" Scope="PostLoad">
+    <Property Name="FileExplorer" Value="..\" />
+  </Properties>
 </Solution>
