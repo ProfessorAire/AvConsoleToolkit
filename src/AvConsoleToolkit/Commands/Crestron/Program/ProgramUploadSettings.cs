@@ -10,6 +10,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
+using System.ComponentModel;
 using Spectre.Console.Cli;
 
 namespace AvConsoleToolkit.Commands.Crestron.Program
@@ -23,54 +24,63 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// When specified, only changed files are uploaded instead of the full package.
         /// </summary>
         [CommandOption("-c|--changed-only")]
+        [Description("Upload only changed files instead of the full package")]
         public bool ChangedOnly { get; set; }
 
         /// <summary>
         /// Target device address or hostname.
         /// </summary>
         [CommandOption("-a|--address", true)]
+        [Description("Target device IP address, hostname, or address book device name.")]
         public string Host { get; set; } = string.Empty;
 
         /// <summary>
         /// When true, kill the program on the device prior to uploading.
         /// </summary>
         [CommandOption("-k|--kill")]
+        [Description("Kill the program on the device before uploading")]
         public bool KillProgram { get; set; }
 
         /// <summary>
         /// When true, skip uploading the signature file (.sig) as a .zig file alongside .lpz programs.
         /// </summary>
         [CommandOption("--nozig")]
+        [Description("Skip uploading signature file (.sig) as .zig alongside .lpz programs")]
         public bool NoZig { get; set; }
 
         /// <summary>
         /// Password to use for SSH/SFTP authentication.
         /// </summary>
         [CommandOption("-p|--password", false)]
+        [Description("Password for SSH/SFTP authentication")]
         public string Password { get; set; } = string.Empty;
 
         /// <summary>
         /// Program package file to upload.
         /// </summary>
         [CommandArgument(0, "<PROGRAM>")]
+        [Description("Path to the program package file (.cpz, .clz, or .lpz)")]
         public string ProgramFile { get; set; } = string.Empty;
 
         /// <summary>
         /// Program slot number on the device.
         /// </summary>
         [CommandOption("-s|--slot")]
+        [Description("Program slot number on the device (1-10)")]
         public int Slot { get; set; }
 
         /// <summary>
         /// Username to use for SSH/SFTP authentication.
         /// </summary>
         [CommandOption("-u|--username", false)]
+        [Description("Username for SSH/SFTP authentication")]
         public string Username { get; set; } = string.Empty;
 
         /// <summary>
         /// Emit verbose diagnostic output.
         /// </summary>
         [CommandOption("-v|--verbose")]
+        [Description("Show detailed diagnostic output")]
         public bool Verbose { get; set; }
     }
 }

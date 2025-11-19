@@ -44,13 +44,17 @@ namespace AvConsoleToolkit.Commands.AddressBook
             // Display the entry information
             var table = new Table();
             table.Border(TableBorder.Rounded);
-            table.AddColumn("[yellow]Property[/]");
-            table.AddColumn("[green]Value[/]");
+            table.AddColumn("[yellow]Device Name[/]");
+            table.AddColumn("[green]Host Address[/]");
+            table.AddColumn("[cyan]Username[/]");
+            table.AddColumn("[blue]Password[/]");
 
-            table.AddRow("Device Name", !string.IsNullOrWhiteSpace(entry.DeviceName) ? entry.DeviceName.EscapeMarkup() : string.Empty);
-            table.AddRow("IP Address", !string.IsNullOrWhiteSpace(entry.HostAddress) ? entry.HostAddress : string.Empty);
-            table.AddRow("Username", !string.IsNullOrEmpty(entry.Username) ? entry.Username.EscapeMarkup() : string.Empty);
-            table.AddRow("Password", !string.IsNullOrEmpty(entry.Password) ? "[dim]***hidden***[/]" : "[dim]<none>[/]");
+            var deviceName = !string.IsNullOrWhiteSpace(entry.DeviceName) ? entry.DeviceName.EscapeMarkup() : string.Empty;
+            var host = !string.IsNullOrWhiteSpace(entry.HostAddress) ? entry.HostAddress : string.Empty;
+            var user = !string.IsNullOrEmpty(entry.Username) ? entry.Username.EscapeMarkup() : string.Empty;
+            var pass = !string.IsNullOrEmpty(entry.Password) ? "[dim]***hidden***[/]" : "[dim]<none>[/]";
+
+            table.AddRow(deviceName, host, user, pass);
 
             AnsiConsole.Write(table);
 

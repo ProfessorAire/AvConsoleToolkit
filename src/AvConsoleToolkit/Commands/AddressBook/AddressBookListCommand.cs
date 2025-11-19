@@ -86,7 +86,7 @@ namespace AvConsoleToolkit.Commands.AddressBook
                 var table = new Table();
                 table.Border(TableBorder.Rounded);
                 table.AddColumn("[yellow]Device Name[/]");
-                table.AddColumn("[green]IP Address[/]");
+                table.AddColumn("[green]Host Address[/]");
                 table.AddColumn("[cyan]Username[/]");
                 table.AddColumn("[blue]Password[/]");
 
