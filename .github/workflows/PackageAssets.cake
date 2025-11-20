@@ -14,6 +14,17 @@ Task("Default")
     if (!exeFiles.Any()) exeFiles = GetFiles(System.IO.Path.Combine(publishDir, "**", "*.exe"));
     if (!exeFiles.Any()) throw new InvalidOperationException("Published executable not found in publish directory.");
 
+    var mdFiles = GetFiles(System.IO.Path.Combine(artifactsDir, "*.md"));
+    if (!mdFiles.Any(f => f.GetFilename().ToString().Equals("changelog.md", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("changelog.md not found in artifacts directory.");
+    }
+
+    if (!mdFiles.Any(f => f.GetFilename().ToString().Equals("THIRD_PARTY_LICENSES.md", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("THIRD_PARTY_LICENSES.md not found in artifacts directory.");
+    }
+
     var tmpFolder = System.IO.Path.Combine(artifactsDir, $"AvConsoleToolkit-{derivedVersion}");
     if (DirectoryExists(tmpFolder)) DeleteDirectory(tmpFolder, new DeleteDirectorySettings { Recursive = true, Force = true });
     CreateDirectory(tmpFolder);
@@ -21,6 +32,7 @@ Task("Default")
     foreach (var f in exeFiles) CopyFileToDirectory(f, tmpFolder);
 
     CopyFile(System.IO.Path.Combine(artifactsDir, "changelog.md"), System.IO.Path.Combine(tmpFolder, "changelog.md"));
+    CopyFile(System.IO.Path.Combine(artifactsDir, "THIRD_PARTY_LICENSES.md"), System.IO.Path.Combine(tmpFolder, "THIRD_PARTY_LICENSES.md"));
 
     var zipName = $"AvConsoleToolkit-v{derivedVersion}.zip";
     var zipPath = System.IO.Path.Combine(artifactsDir, zipName);

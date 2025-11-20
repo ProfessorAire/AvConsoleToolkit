@@ -45,6 +45,12 @@ namespace AvConsoleToolkit
                         .WithExample(["update", "--yes"]);
                 }
 
+                config.AddCommand<Commands.AboutCommand>("about")
+                    .WithDescription("Display information about the application")
+                    .WithExample(["about"])
+                    .WithExample(["about", "--license"])
+                    .WithExample(["about", "--licenses"]);
+
                 config.AddBranch("crestron", branch =>
                 {
                     branch.SetDescription("Commands for Crestron hardware management");

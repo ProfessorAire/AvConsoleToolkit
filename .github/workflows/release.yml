@@ -42,6 +42,12 @@ jobs:
           script-path: ./.github/workflows/Clean.cake
           working-directory: ./.github/workflows
 
+      - name: Run ParseDependencyLicenses
+        uses: cake-build/cake-action@v3
+        with:
+          script-path: ./.github/workflows/ParseDependencyLicenses.cake
+          working-directory: ./.github/workflows
+
       - name: Run DetermineVersion
         uses: cake-build/cake-action@v3
         with:
@@ -57,7 +63,7 @@ jobs:
             runtime=win-x64
           working-directory: ./.github/workflows
 
-      - name: Package artifact
+      - name: Package assets
         uses: cake-build/cake-action@v3
         with:
           script-path: ./.github/workflows/PackageAssets.cake

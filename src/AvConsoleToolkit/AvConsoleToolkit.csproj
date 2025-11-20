@@ -10,10 +10,18 @@
     <SelfContained>true</SelfContained>
     <PublishTrimmed>false</PublishTrimmed>
     <ProductName>AvConsoleToolkit</ProductName>
-    <Copyright>Elegant Video &amp; Soundworks and Christopher McNeely</Copyright>
-    <Company>Elegant Video and Soundworks</Company>
-    <AssemblyTitle>Application for performing Audio/Visual tasks from the console.</AssemblyTitle>
+    <Description>Application for performing Audio/Visual tasks from the console.</Description>
+    <Copyright>Christopher McNeely</Copyright>
+    <Company>Christopher McNeely</Company>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0</FileVersion>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <GenerateAssemblyDescriptionAttribute>true</GenerateAssemblyDescriptionAttribute>
   </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="AvConsoleToolkit.LICENSE" />
+  </ItemGroup>
 
   <ItemGroup>
     <SupportedPlatform Include="Windows;Linux" />
