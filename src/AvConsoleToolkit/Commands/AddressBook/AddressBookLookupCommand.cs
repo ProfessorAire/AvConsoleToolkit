@@ -52,7 +52,7 @@ namespace AvConsoleToolkit.Commands.AddressBook
             var deviceName = !string.IsNullOrWhiteSpace(entry.DeviceName) ? entry.DeviceName.EscapeMarkup() : string.Empty;
             var host = !string.IsNullOrWhiteSpace(entry.HostAddress) ? entry.HostAddress : string.Empty;
             var user = !string.IsNullOrEmpty(entry.Username) ? entry.Username.EscapeMarkup() : string.Empty;
-            var pass = !string.IsNullOrEmpty(entry.Password) ? "[dim]***hidden***[/]" : "[dim]<none>[/]";
+            var pass = !string.IsNullOrEmpty(entry.Password) ? "[dim]******[/]" : "[dim]<none>[/]";
 
             table.AddRow(deviceName, host, user, pass);
 

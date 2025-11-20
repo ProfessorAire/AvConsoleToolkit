@@ -100,7 +100,7 @@ namespace AvConsoleToolkit.Commands.AddressBook
                     var deviceName = !string.IsNullOrWhiteSpace(entry.DeviceName) ? entry.DeviceName.EscapeMarkup() : "[dim]<unknown>[/]";
                     var ipAddress = !string.IsNullOrWhiteSpace(entry.HostAddress) ? entry.HostAddress : "[dim]<none>[/]";
                     var username = !string.IsNullOrEmpty(entry.Username) ? entry.Username.EscapeMarkup() : "[dim]<none>[/]";
-                    var password = !string.IsNullOrEmpty(entry.Password) ? "[dim]***hidden***[/]" : "[dim]<none>[/]";
+                    var password = !string.IsNullOrEmpty(entry.Password) ? "[dim]******[/]" : "[dim]<none>[/]";
 
                     if (settings.Detailed)
                     {
