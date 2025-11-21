@@ -24,6 +24,26 @@ string? GetLatestSemVerTag()
     return first;
 }
 
+int GetLatestBetaNumber(string baseVersionString)
+{
+    // Get all tags matching the base version with beta suffix
+    var outStr = RunGit($"tag --list \"v{baseVersionString}-beta.*\" --sort=-v:refname");
+    if (string.IsNullOrWhiteSpace(outStr)) return 0;
+    
+    var tags = outStr.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+    foreach (var tag in tags)
+    {
+        // Extract beta number from tag like "v1.0.0-beta.5"
+        var match = Regex.Match(tag, @"-beta\.(\d+)$");
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var betaNum))
+        {
+            return betaNum;
+        }
+    }
+    
+    return 0;
+}
+
 IList<(string Sha, string Header, string Body)> GetCommitsSince(string? fromTag)
 {
     string range = string.IsNullOrWhiteSpace(fromTag) ? "HEAD" : $"{fromTag}..HEAD";
@@ -85,6 +105,20 @@ Task("Default")
 {
     if (!DirectoryExists(artifactsDir)) CreateDirectory(artifactsDir);
 
+    // Get current branch name
+    var currentBranch = RunGit("rev-parse --abbrev-ref HEAD").Trim();
+    var isMainBranch = currentBranch == "main" || currentBranch == "master";
+    
+    // Check for GITHUB_REF environment variable (GitHub Actions)
+    var githubRef = EnvironmentVariable("GITHUB_REF");
+    if (!string.IsNullOrEmpty(githubRef))
+    {
+        isMainBranch = githubRef == "refs/heads/main" || githubRef == "refs/heads/master";
+        currentBranch = githubRef.Replace("refs/heads/", "");
+    }
+    
+    Information($"Current branch: {currentBranch}, Is main: {isMainBranch}");
+
     var latestTag = GetLatestSemVerTag();
     Information($"Latest tag: {latestTag ?? "(none)"}");
     SemanticVersion baseVersion = latestTag is null ? new SemanticVersion(1, 0, 0) : ParseSemVerTag(latestTag);
@@ -127,6 +161,7 @@ Task("Default")
     }
 
     SemanticVersion newVersion;
+    
     if (latestTag is null)
     {
         Information("No existing version tag found. Assuming base version {0}.", baseVersion);
@@ -138,9 +173,27 @@ Task("Default")
         newVersion = Bump(baseVersion, level);
         Information($"New version: {newVersion} (level: {level})");
     }
+    
+    // Add pre-release suffix if not on main branch
+    string versionString;
+    if (!isMainBranch)
+    {
+        // Get the latest beta number for this version and increment it
+        var latestBetaNumber = GetLatestBetaNumber(newVersion.ToString());
+        var betaNumber = latestBetaNumber + 1;
+        
+        versionString = $"{newVersion}-beta.{betaNumber}";
+        Information($"Pre-release version: {versionString}");
+        SetEnvironmentVariable("IS_PRERELEASE", "true");
+    }
+    else
+    {
+        versionString = newVersion.ToString();
+        SetEnvironmentVariable("IS_PRERELEASE", "false");
+    }
 
     var changelog = new System.Text.StringBuilder();
-    changelog.AppendLine($"# Release v{newVersion} - {DateTime.UtcNow:yyyy-MM-dd}");
+    changelog.AppendLine($"# Release v{versionString} - {DateTime.UtcNow:yyyy-MM-dd}");
     changelog.AppendLine();
 
     // Breaking Changes section (if any)
@@ -190,9 +243,9 @@ Task("Default")
         throw new Exception("No commits found for changelog. Please ensure commits follow Conventional Commits specification.");
     }
 
-    SetEnvironmentVariable("RELEASE_VERSION", newVersion.ToString());
+    SetEnvironmentVariable("RELEASE_VERSION", versionString);
     System.IO.File.WriteAllText(System.IO.Path.Combine(artifactsDir, "changelog.md"), changelog.ToString());
-    Information("Wrote artifacts/version.txt and artifacts/changelog.md");
+    Information($"Wrote RELEASE_VERSION={versionString} and changelog.md");
 });
 
 RunTarget(Argument("target", "Default"));

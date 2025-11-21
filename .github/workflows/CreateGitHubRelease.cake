@@ -45,6 +45,9 @@ Task("Default")
     {
         throw new InvalidOperationException("RELEASE_VERSION environment variable not found. Run DetermineVersion task first.");
     }
+    
+    var isPrerelease = GetEnvironmentVariable("IS_PRERELEASE") == "true";
+    Information($"Creating release v{version} (prerelease: {isPrerelease})");
 
     var changelog = ReadArtifactFile("changelog.md");
     var targetCommitish = Argument("targetCommitish", EnvironmentVariable("GITHUB_SHA") ?? "main");
@@ -54,7 +57,7 @@ Task("Default")
         name = $"v{version}",
         body = changelog,
         draft = true,
-        prerelease = false,
+        prerelease = isPrerelease,
         target_commitish = targetCommitish
     };
 
