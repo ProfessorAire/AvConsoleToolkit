@@ -878,7 +878,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     .AutoClear(false)
                     .StartAsync(async ctx =>
                     {
-                        var initialMaxConcurrency = 4; // You can choose a reasonable default
+                        var initialMaxConcurrency = 8; // You can choose a reasonable default
                         var sessionMaxConcurrency = initialMaxConcurrency;
                         var semaphore = new SemaphoreSlim(initialMaxConcurrency, initialMaxConcurrency);
                         var activeUploads = 0;
@@ -1216,13 +1216,90 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 zigFilePath = PrepareSignatureFile(settings.ProgramFile, settings);
             }
 
+            // Embed hash manifest directly into the archive
+            try
+            {
+                if (settings.Verbose)
+                {
+                    AnsiConsole.MarkupLine("[dim]Computing file hashes and embedding manifest in archive...[/]");
+                }
+
+                // Compute hashes directly from archive entries
+                var fileHashes = new Dictionary<string, string>();
+
+                using (var archive = ZipFile.Open(settings.ProgramFile, ZipArchiveMode.Update))
+                {
+                    using var sha256 = SHA256.Create();
+
+                    foreach (var entry in archive.Entries)
+                    {
+                        // Skip directory entries
+                        if (string.IsNullOrEmpty(entry.Name))
+                        {
+                            continue;
+                        }
+
+                        // Compute hash from stream
+                        using var entryStream = entry.Open();
+                        var hashBytes = await sha256.ComputeHashAsync(entryStream, cancellationToken);
+                        var hash = Convert.ToHexString(hashBytes);
+
+                        var relativePath = entry.FullName.Replace('\\', '/');
+                        fileHashes[relativePath] = hash;
+                    }
+
+                    if (settings.Verbose)
+                    {
+                        AnsiConsole.MarkupLine($"[dim]Computed hashes for {fileHashes.Count} files[/]");
+                    }
+
+                    // Add hash manifest directly to the existing archive
+                    // Remove existing hash manifest if present
+                    var existingManifest = archive.GetEntry(HashManifestFileName);
+                    if (existingManifest == null)
+                    {
+                        // Add new hash manifest
+                        var hashManifestEntry = archive.CreateEntry(HashManifestFileName, CompressionLevel.Optimal);
+                        hashManifestEntry.ExternalAttributes = 0;
+                        using (var manifestStream = hashManifestEntry.Open())
+                        using (var writer = new StreamWriter(manifestStream, Encoding.UTF8))
+                        {
+                            foreach (var kvp in fileHashes.OrderBy(k => k.Key))
+                            {
+                                if (settings.Verbose)
+                                {
+                                    AnsiConsole.MarkupLine($"[dim]Manifest entry: {kvp.Key.EscapeMarkup()} = {kvp.Value.EscapeMarkup()}[/]");
+                                }
+
+                                await writer.WriteLineAsync($"{kvp.Key}={kvp.Value}");
+                            }
+
+                            // Ensure the stream is flushed and has content
+                            await writer.FlushAsync();
+                        }
+
+                        hashManifestEntry.LastWriteTime = DateTimeOffset.UtcNow;
+                    }
+
+                    if (settings.Verbose)
+                    {
+                        AnsiConsole.MarkupLine($"[dim]Embedded hash manifest in archive[/]");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[yellow]Warning: Failed to embed hash manifest in archive: {ex.Message.EscapeMarkup()}[/]");
+                AnsiConsole.MarkupLine("[yellow]Continuing with upload...[/]");
+            }
+
             // Read DIP file for IP table configuration if this is an LPZ
             List<IpTable.Entry>? ipTableEntries = null;
             if (!settings.NoIpTable && extension == ".lpz")
             {
                 try
                 {
-                    // Read DIP file directly from the archive without extracting
+                    // Read DIP file directly from the archive
                     using (var archive = ZipFile.OpenRead(settings.ProgramFile))
                     {
                         var dipName = $"{Path.GetFileNameWithoutExtension(settings.ProgramFile)}.dip";
