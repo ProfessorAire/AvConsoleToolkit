@@ -22,9 +22,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using AvConsoleToolkit.Crestron;
-using AvConsoleToolkit.Ssh;
-using Castle.Components.DictionaryAdapter.Xml;
-using Castle.DynamicProxy.Generators;
 using Renci.SshNet;
 using Renci.SshNet.Sftp;
 using Spectre.Console;
@@ -41,14 +38,14 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
     public sealed class ProgramUploadCommand : AsyncCommand<ProgramUploadSettings>
     {
         /// <summary>
-        /// The supported program package file extensions.
-        /// </summary>
-        private static readonly string[] SupportedExtensions = [".cpz", ".clz", ".lpz"];
-
-        /// <summary>
         /// Name of the hash manifest file stored on the remote device.
         /// </summary>
         private const string HashManifestFileName = ".act.hash";
+
+        /// <summary>
+        /// The supported program package file extensions.
+        /// </summary>
+        private static readonly string[] SupportedExtensions = [".cpz", ".clz", ".lpz"];
 
         /// <summary>
         /// Executes the upload operation.
@@ -94,12 +91,12 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                         AnsiConsole.MarkupLine("[fuchsia]No username/password provided, looking up values from address books.[/]");
                     }
 
-                    var entry = await AvConsoleToolkit.Crestron.ToolboxAddressBook.LookupEntryAsync(settings.Host);
+                    var entry = await ToolboxAddressBook.LookupEntryAsync(settings.Host);
                     if (entry is null)
                     {
                         if (settings.Verbose)
                         {
-                            AnsiConsole.MarkupLine("[red]Error: Could not find device in address books and no username/password provided.[/]");
+                            AnsiConsole.MarkupLine("[red]Could not find device in address books and no username/password provided.[/]");
                         }
 
                         return 101;
@@ -109,7 +106,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     {
                         if (settings.Verbose)
                         {
-                            AnsiConsole.MarkupLine("[red]Error: Address book entry is missing username or password.[/]");
+                            AnsiConsole.MarkupLine("[red]Address book entry is missing username or password.[/]");
                         }
 
                         return 102;
@@ -118,7 +115,6 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     settings.Username = entry.Username;
                     settings.Password = entry.Password;
                 }
-                ;
 
                 var remotePath = $"program{settings.Slot:D2}";
 
@@ -147,59 +143,17 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             }
             catch (Exception ex)
             {
-                AnsiConsole.MarkupLine($"\r\n[red]Error: {ex.Message}[/]");
+                if (!settings.Verbose)
+                {
+                    AnsiConsole.MarkupLine($"\r\n[red]Error: {ex.Message}[/]");
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine($"\r\n[red]Error:\r\n{ex}[/]");
+                }
+
                 return 1;
             }
-        }
-
-        /// <summary>
-        /// Creates a .zig file from a .sig file by wrapping it in a zip archive.
-        /// </summary>
-        /// <param name="sigFilePath">Path to the .sig file.</param>
-        /// <param name="outputZigPath">Path where the .zig file should be created.</param>
-        private static void CreateZigFromSig(string sigFilePath, string outputZigPath)
-        {
-            using var archive = ZipFile.Open(outputZigPath, ZipArchiveMode.Create);
-            archive.CreateEntryFromFile(sigFilePath, Path.GetFileName(sigFilePath));
-        }
-
-        /// <summary>
-        /// Checks for a .sig file alongside the .lpz program file and creates a .zig file if found.
-        /// </summary>
-        /// <param name="lpzFilePath">Path to the .lpz program file.</param>
-        /// <param name="settings">Upload settings to check the NoZig flag.</param>
-        /// <returns>Path to the created .zig file, or null if no .sig file exists or NoZig is set.</returns>
-        private static string? PrepareSignatureFile(string lpzFilePath, ProgramUploadSettings settings)
-        {
-            if (settings.NoZig)
-            {
-                if (settings.Verbose)
-                {
-                    AnsiConsole.MarkupLine("[dim]--nozig flag set, skipping signature file upload.[/]");
-                }
-                return null;
-            }
-
-            var sigFilePath = Path.ChangeExtension(lpzFilePath, ".sig");
-            if (!File.Exists(sigFilePath))
-            {
-                if (settings.Verbose)
-                {
-                    AnsiConsole.MarkupLine($"[dim]No signature file found at '{sigFilePath.EscapeMarkup()}'[/]");
-                }
-                return null;
-            }
-
-            var zigFileName = Path.ChangeExtension(Path.GetFileName(lpzFilePath), ".zig");
-            var zigFilePath = Path.Combine(Path.GetTempPath(), zigFileName);
-
-            if (settings.Verbose)
-            {
-                AnsiConsole.MarkupLine($"[cyan]Creating .zig file from signature: '{Path.GetFileName(sigFilePath).EscapeMarkup()}'[/]");
-            }
-
-            CreateZigFromSig(sigFilePath, zigFilePath);
-            return zigFilePath;
         }
 
         /// <summary>
@@ -213,6 +167,80 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             using var fileStream = File.OpenRead(filePath);
             var hashBytes = await sha256.ComputeHashAsync(fileStream);
             return Convert.ToHexString(hashBytes);
+        }
+
+        /// <summary>
+        /// Configures the IP table from the provided IP table entries.
+        /// </summary>
+        /// <param name="shellStream">Shell stream to communicate with the device.</param>
+        /// <param name="entries">List of IP table entries to configure.</param>
+        /// <param name="slot">Program slot number.</param>
+        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>True if IP table was configured successfully; false on error.</returns>
+        private static async Task<bool> ConfigureIpTableAsync(
+            Ssh.IShellStream shellStream,
+            List<IpTable.Entry> entries,
+            int slot,
+            bool verbose,
+            CancellationToken cancellationToken)
+        {
+            if (entries.Count == 0)
+            {
+                if (verbose)
+                {
+                    AnsiConsole.MarkupLine("[dim]No IP table entries to configure.[/]");
+                }
+                return true;
+            }
+
+            AnsiConsole.MarkupLine($"[cyan]Configuring IP table with {entries.Count} entries...[/]");
+
+            // Clear existing IP table
+            var clearResult = await ConsoleCommands.ClearIpTableAsync(shellStream, slot, cancellationToken);
+            if (!clearResult)
+            {
+                AnsiConsole.MarkupLine("[yellow]Warning: Failed to clear IP table, continuing anyway...[/]");
+            }
+
+            // Add each entry
+            var successCount = 0;
+            foreach (var entry in entries)
+            {
+                if (verbose)
+                {
+                    AnsiConsole.MarkupLine($"[dim]Adding IP table entry: IPID={entry.IpId}, Address={entry.Address.EscapeMarkup()}[/]");
+                }
+
+                var addResult = await ConsoleCommands.AddIpTableEntryAsync(
+                    shellStream,
+                    slot,
+                    entry,
+                    cancellationToken);
+
+                if (addResult)
+                {
+                    successCount++;
+                }
+                else if (verbose)
+                {
+                    AnsiConsole.MarkupLine($"[yellow]Warning: Failed to add IP table entry for IPID {entry.IpId}[/]");
+                }
+            }
+
+            AnsiConsole.MarkupLine($"[green]IP table configured: {successCount} of {entries.Count} entries added successfully.[/]");
+            return successCount > 0;
+        }
+
+        /// <summary>
+        /// Creates a .zig file from a .sig file by wrapping it in a zip archive.
+        /// </summary>
+        /// <param name="sigFilePath">Path to the .sig file.</param>
+        /// <param name="outputZigPath">Path where the .zig file should be created.</param>
+        private static void CreateZigFromSig(string sigFilePath, string outputZigPath)
+        {
+            using var archive = ZipFile.Open(outputZigPath, ZipArchiveMode.Create);
+            archive.CreateEntryFromFile(sigFilePath, Path.GetFileName(sigFilePath));
         }
 
         /// <summary>
@@ -244,75 +272,36 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             }
 
             return await Task.Run(() =>
-            {
-                using var memoryStream = new MemoryStream();
-                sftpClient.DownloadFile(remoteHashPath, memoryStream);
-                memoryStream.Position = 0;
+                   {
+                       using var memoryStream = new MemoryStream();
+                       sftpClient.DownloadFile(remoteHashPath, memoryStream);
+                       memoryStream.Position = 0;
 
-                var hashes = new Dictionary<string, string>();
-                using var reader = new StreamReader(memoryStream, Encoding.UTF8);
+                       var hashes = new Dictionary<string, string>();
+                       using var reader = new StreamReader(memoryStream, Encoding.UTF8);
 
-                while (!reader.EndOfStream)
-                {
-                    var line = reader.ReadLine();
-                    if (string.IsNullOrWhiteSpace(line)) continue;
+                       while (!reader.EndOfStream)
+                       {
+                           var line = reader.ReadLine();
+                           if (string.IsNullOrWhiteSpace(line))
+                           {
+                               continue;
+                           }
 
-                    var parts = line.Split('=', 2);
-                    if (parts.Length == 2)
-                    {
-                        hashes[parts[0].Trim()] = parts[1].Trim();
-                    }
-                }
+                           var parts = line.Split('=', 2);
+                           if (parts.Length == 2)
+                           {
+                               hashes[parts[0].Trim()] = parts[1].Trim();
+                           }
+                       }
 
-                if (verbose)
-                {
-                    AnsiConsole.MarkupLine($"[dim]Loaded {hashes.Count} file hashes from manifest[/]");
-                }
+                       if (verbose)
+                       {
+                           AnsiConsole.MarkupLine($"[dim]Loaded {hashes.Count} file hashes from manifest[/]");
+                       }
 
-                return hashes;
-            });
-        }
-
-        /// <summary>
-        /// Uploads a hash manifest file to the remote device.
-        /// </summary>
-        /// <param name="sftpClient">Connected SFTP client.</param>
-        /// <param name="remotePath">Remote program directory path.</param>
-        /// <param name="hashes">Dictionary of file path to hash mappings.</param>
-        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
-        private static async Task UploadHashManifestAsync(
-            SftpClient sftpClient,
-            string remotePath,
-            Dictionary<string, string> hashes,
-            bool verbose = false)
-        {
-            var remoteHashPath = $"{remotePath}/{HashManifestFileName}";
-
-            if (verbose)
-            {
-                AnsiConsole.MarkupLine($"[dim]Uploading hash manifest with {hashes.Count} entries to '{remoteHashPath.EscapeMarkup()}'[/]");
-            }
-
-            await Task.Run(() =>
-            {
-                using var memoryStream = new MemoryStream();
-                using (var writer = new StreamWriter(memoryStream, Encoding.UTF8, leaveOpen: true))
-                {
-                    foreach (var kvp in hashes.OrderBy(k => k.Key))
-                    {
-                        writer.WriteLine($"{kvp.Key}={kvp.Value}");
-                    }
-                    writer.Flush();
-                }
-
-                memoryStream.Position = 0;
-                sftpClient.UploadFile(memoryStream, remoteHashPath, true);
-            });
-
-            if (verbose)
-            {
-                AnsiConsole.MarkupLine($"[dim]Hash manifest uploaded successfully[/]");
-            }
+                       return hashes;
+                   });
         }
 
         /// <summary>
@@ -340,6 +329,32 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     sftpClient.CreateDirectory(currentPath);
                 }
             }
+        }
+
+        /// <summary>
+        /// Retrieves metadata for all remote files under the specified remote path.
+        /// </summary>
+        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="remotePath">Base remote path to enumerate.</param>
+        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
+        /// <returns>A dictionary mapping relative remote paths to <see cref="ISftpFile"/> metadata.</returns>
+        private static async Task<Dictionary<string, ISftpFile>> GetRemoteFileMetadataAsync(
+            ISftpClient sftpClient,
+            string remotePath,
+            bool verbose = false)
+        {
+            return await Task.Run(() =>
+                   {
+                       var files = new Dictionary<string, ISftpFile>();
+
+                       if (!sftpClient.Exists(remotePath))
+                       {
+                           return files;
+                       }
+
+                       GetRemoteFilesRecursive(sftpClient, remotePath, remotePath, files, verbose);
+                       return files;
+                   });
         }
 
         /// <summary>
@@ -385,32 +400,6 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     files[relativePath] = item;
                 }
             }
-        }
-
-        /// <summary>
-        /// Retrieves metadata for all remote files under the specified remote path.
-        /// </summary>
-        /// <param name="sftpClient">Connected SFTP client.</param>
-        /// <param name="remotePath">Base remote path to enumerate.</param>
-        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
-        /// <returns>A dictionary mapping relative remote paths to <see cref="ISftpFile"/> metadata.</returns>
-        private static async Task<Dictionary<string, ISftpFile>> GetRemoteFileMetadataAsync(
-            ISftpClient sftpClient,
-            string remotePath,
-            bool verbose = false)
-        {
-            return await Task.Run(() =>
-                   {
-                       var files = new Dictionary<string, ISftpFile>();
-
-                       if (!sftpClient.Exists(remotePath))
-                       {
-                           return files;
-                       }
-
-                       GetRemoteFilesRecursive(sftpClient, remotePath, remotePath, files, verbose);
-                       return files;
-                   });
         }
 
         /// <summary>
@@ -487,6 +476,45 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         }
 
         /// <summary>
+        /// Checks for a .sig file alongside the .lpz program file and creates a .zig file if found.
+        /// </summary>
+        /// <param name="lpzFilePath">Path to the .lpz program file.</param>
+        /// <param name="settings">Upload settings to check the NoZig flag.</param>
+        /// <returns>Path to the created .zig file, or null if no .sig file exists or NoZig is set.</returns>
+        private static string? PrepareSignatureFile(string lpzFilePath, ProgramUploadSettings settings)
+        {
+            if (settings.NoZig)
+            {
+                if (settings.Verbose)
+                {
+                    AnsiConsole.MarkupLine("[dim]--nozig flag set, skipping signature file upload.[/]");
+                }
+                return null;
+            }
+
+            var sigFilePath = Path.ChangeExtension(lpzFilePath, ".sig");
+            if (!File.Exists(sigFilePath))
+            {
+                if (settings.Verbose)
+                {
+                    AnsiConsole.MarkupLine($"[dim]No signature file found at '{sigFilePath.EscapeMarkup()}'[/]");
+                }
+                return null;
+            }
+
+            var zigFileName = Path.ChangeExtension(Path.GetFileName(lpzFilePath), ".zig");
+            var zigFilePath = Path.Combine(Path.GetTempPath(), zigFileName);
+
+            if (settings.Verbose)
+            {
+                AnsiConsole.MarkupLine($"[cyan]Creating .zig file from signature: '{Path.GetFileName(sigFilePath).EscapeMarkup()}'[/]");
+            }
+
+            CreateZigFromSig(sigFilePath, zigFilePath);
+            return zigFilePath;
+        }
+
+        /// <summary>
         /// Registers the uploaded program on the device using console commands.
         /// Handles .lpz and .cpz package types and optionally extracts the main assembly name.
         /// </summary>
@@ -501,7 +529,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             var success = false;
             if (extension == ".lpz")
             {
-                success = await AvConsoleToolkit.Crestron.ConsoleCommands.RegisterProgramAsync(shellStream, slot, cancellationToken);
+                success = await ConsoleCommands.RegisterProgramAsync(shellStream, slot, cancellationToken);
             }
             else if (extension == ".cpz")
             {
@@ -514,7 +542,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     return 1;
                 }
 
-                success = await AvConsoleToolkit.Crestron.ConsoleCommands.RegisterProgramAsync(shellStream, slot, mainAssemblyName, cancellationToken);
+                success = await ConsoleCommands.RegisterProgramAsync(shellStream, slot, mainAssemblyName, cancellationToken);
             }
 
             return success ? 0 : 1;
@@ -585,69 +613,6 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         }
 
         /// <summary>
-        /// Configures the IP table from the provided IP table entries.
-        /// </summary>
-        /// <param name="shellStream">Shell stream to communicate with the device.</param>
-        /// <param name="entries">List of IP table entries to configure.</param>
-        /// <param name="slot">Program slot number.</param>
-        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>True if IP table was configured successfully; false on error.</returns>
-        private static async Task<bool> ConfigureIpTableAsync(
-            Ssh.IShellStream shellStream,
-            List<IpTable.Entry> entries,
-            int slot,
-            bool verbose,
-            CancellationToken cancellationToken)
-        {
-            if (entries.Count == 0)
-            {
-                if (verbose)
-                {
-                    AnsiConsole.MarkupLine("[dim]No IP table entries to configure.[/]");
-                }
-                return true;
-            }
-
-            AnsiConsole.MarkupLine($"[cyan]Configuring IP table with {entries.Count} entries...[/]");
-
-            // Clear existing IP table
-            var clearResult = await ConsoleCommands.ClearIpTableAsync(shellStream, slot, cancellationToken);
-            if (!clearResult)
-            {
-                AnsiConsole.MarkupLine("[yellow]Warning: Failed to clear IP table, continuing anyway...[/]");
-            }
-
-            // Add each entry
-            var successCount = 0;
-            foreach (var entry in entries)
-            {
-                if (verbose)
-                {
-                    AnsiConsole.MarkupLine($"[dim]Adding IP table entry: IPID={entry.IpId}, Address={entry.Address.EscapeMarkup()}[/]");
-                }
-
-                var addResult = await ConsoleCommands.AddIpTableEntryAsync(
-                    shellStream,
-                    slot,
-                    entry,
-                    cancellationToken);
-
-                if (addResult)
-                {
-                    successCount++;
-                }
-                else if (verbose)
-                {
-                    AnsiConsole.MarkupLine($"[yellow]Warning: Failed to add IP table entry for IPID {entry.IpId}[/]");
-                }
-            }
-
-            AnsiConsole.MarkupLine($"[green]IP table configured: {successCount} of {entries.Count} entries added successfully.[/]");
-            return successCount > 0;
-        }
-
-        /// <summary>
         /// Performs an analysis of the package contents and uploads only changed files to the remote device via SFTP.
         /// This method extracts the package to a temporary directory, compares timestamps against remote files, and
         /// uploads changed/new files with per-file progress and retry logic.
@@ -678,7 +643,15 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 .AutoClear(false)
                 .Columns([
                     new TaskDescriptionColumn(),
-                    new SpinnerColumn { CompletedStyle = new Style(Color.Green), PendingStyle = new Style(Color.DarkSlateGray2), PendingText = "...", Spinner = Spinner.Known.Dots8Bit, CompletedText = "<completed>", Style = new Style(Color.Teal)},
+                    new SpinnerColumn
+                {
+                    CompletedStyle = new Style(Color.Green),
+                    PendingStyle = new Style(Color.DarkSlateGray2),
+                    PendingText = "...",
+                    Spinner = Spinner.Known.Dots8Bit,
+                    CompletedText = "<completed>",
+                    Style = new Style(Color.Teal)
+                },
                     new ElapsedTimeColumn { Style = new Style(Color.Blue) },
                     ])
                 .AutoRefresh(!settings.Verbose)
@@ -734,63 +707,102 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                         extractTask.Value = 100;
                         extractTask.StopTask();
 
-                        remoteTask.StartTask();
+                        List<dynamic> fileChanges;
 
-                        // Get remote file metadata
-                        var remoteFiles = await GetRemoteFileMetadataAsync(sftpClient, remotePath, settings.Verbose);
-                        remoteTask.Value = 50;
-
-                        // Download hash manifest if it exists
-                        var remoteHashes = await DownloadHashManifestAsync(sftpClient, remotePath, settings.Verbose);
-                        remoteTask.Value = 100;
-                        remoteTask.StopTask();
-
-                        analysisTask.StartTask();
-                        // Compare files and determine which are new vs updated
-                        var localFiles = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories);
-
-                        if (settings.Verbose)
+                        // If KillProgram is set, skip file comparison and upload everything
+                        if (settings.KillProgram)
                         {
-                            AnsiConsole.MarkupLine($"[dim]Found {localFiles.Length} local files and {remoteFiles.Count} remote files[/]");
-                        }
-
-                        step = 100 / localFiles.Length;
-                        var fileChanges = new List<dynamic>();
-                        foreach (var localFile in localFiles)
-                        {
-                            var relativePath = Path.GetRelativePath(tempDir, localFile).Replace('\\', '/');
-                            var isNew = !remoteFiles.ContainsKey(relativePath);
-
-                            // Debug: Show path comparison
-                            if (isNew && settings.Verbose)
+                            if (settings.Verbose)
                             {
-                                AnsiConsole.MarkupLine($"[dim]New file: {relativePath.EscapeMarkup()}[/]");
+                                AnsiConsole.MarkupLine("[dim]Kill program flag set, skipping file comparison - uploading all files.[/]");
+                            }
 
-                                // Show what keys are available in remoteFiles
-                                if (remoteFiles.Count is > 0)
+                            analysisTask.StartTask();
+                            analysisTask.Description = "[Yellow]Preparing all files for upload[/]";
+
+                            var localFiles = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories);
+
+                            fileChanges = localFiles
+                                .Select(localFile =>
                                 {
-                                    AnsiConsole.MarkupLine($"[dim]  Remote keys: {string.Join(", ", remoteFiles.Keys.Select(k => k.EscapeMarkup()))}[/]");
+                                    var relativePath = Path.GetRelativePath(tempDir, localFile).Replace('\\', '/');
+                                    return new
+                                    {
+                                        LocalPath = localFile,
+                                        RelativePath = relativePath,
+                                        IsNew = true, // Treat all as new for display purposes
+                                        IsChanged = false
+                                    };
+                                })
+                                .Cast<dynamic>()
+                                .ToList();
+
+                            analysisTask.Value = 100;
+                            analysisTask.StopTask();
+                        }
+                        else
+                        {
+                            // Normal file comparison logic
+                            remoteTask.StartTask();
+
+                            // Get remote file metadata
+                            var remoteFiles = await GetRemoteFileMetadataAsync(sftpClient, remotePath, settings.Verbose);
+                            remoteTask.Value = 50;
+
+                            // Download hash manifest if it exists
+                            var remoteHashes = await DownloadHashManifestAsync(sftpClient, remotePath, settings.Verbose);
+                            remoteTask.Value = 100;
+                            remoteTask.StopTask();
+
+                            analysisTask.StartTask();
+
+                            // Compare files and determine which are new vs updated
+                            var localFiles = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories);
+
+                            if (settings.Verbose)
+                            {
+                                AnsiConsole.MarkupLine($"[dim]Found {localFiles.Length} local files and {remoteFiles.Count} remote files[/]");
+                            }
+
+                            step = 100 / localFiles.Length;
+                            fileChanges = new List<dynamic>();
+                            foreach (var localFile in localFiles)
+                            {
+                                var relativePath = Path.GetRelativePath(tempDir, localFile).Replace('\\', '/');
+                                var isNew = !remoteFiles.ContainsKey(relativePath);
+
+                                // Debug: Show path comparison
+                                if (isNew && settings.Verbose)
+                                {
+                                    AnsiConsole.MarkupLine($"[dim]New file: {relativePath.EscapeMarkup()}[/]");
+
+                                    // Show what keys are available in remoteFiles
+                                    if (remoteFiles.Count is > 0)
+                                    {
+                                        AnsiConsole.MarkupLine($"[dim]  Remote keys: {string.Join(", ", remoteFiles.Keys.Select(k => k.EscapeMarkup()))}[/]");
+                                    }
                                 }
-                            }
 
-                            var isChanged = !isNew && await IsFileChangedAsync(localFile, tempDir, remoteFiles, remoteHashes, settings.Verbose);
+                                var isChanged = !isNew && await IsFileChangedAsync(localFile, tempDir, remoteFiles, remoteHashes, settings.Verbose);
 
-                            if (isNew || isChanged)
-                            {
-                                fileChanges.Add(new
+                                if (isNew || isChanged)
                                 {
-                                    LocalPath = localFile,
-                                    RelativePath = relativePath,
-                                    IsNew = isNew,
-                                    IsChanged = isChanged
-                                });
+                                    fileChanges.Add(new
+                                    {
+                                        LocalPath = localFile,
+                                        RelativePath = relativePath,
+                                        IsNew = isNew,
+                                        IsChanged = isChanged
+                                    });
+                                }
+
+                                analysisTask.Value += step;
                             }
 
-                            analysisTask.Value += step;
+                            analysisTask.Value = 100;
+                            analysisTask.StopTask();
                         }
 
-                        analysisTask.Value = 100;
-                        analysisTask.StopTask();
                         if (settings.Verbose)
                         {
                             ctx.Refresh();
@@ -813,14 +825,14 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
             try
             {
-                if (changes.Count == 0)
+                if (changes.Count == 0 && !settings.KillProgram)
                 {
                     AnsiConsole.MarkupLine("[green]No files have changed. Upload skipped.[/]");
                     sftpClient.Disconnect();
                     return 0;
                 }
 
-                AnsiConsole.MarkupLine($"[yellow]{changes.Count} file(s) have changed.[/]");
+                AnsiConsole.MarkupLine($"[yellow]{changes.Count} file(s) {(settings.KillProgram ? "to upload" : "have changed")}.[/]");
 
                 // Now we know we need to upload, establish SSH connection
                 using var sshClient = new SshClient(settings.Host, settings.Username, settings.Password);
@@ -835,36 +847,28 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
                 using var shellStream = new Ssh.ShellStreamWrapper(sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024));
 
-                // Stop or kill program based on flag
-                string stopCommand;
-                string[] successPatterns;
-
                 if (settings.KillProgram)
                 {
-                    stopCommand = $"killprog -P:{settings.Slot}";
-                    successPatterns = [$"Specified program {settings.Slot} successfully deleted"];
-                    AnsiConsole.MarkupLine($"[yellow]Executing:[/] {stopCommand}");
-                    shellStream.WriteLine(stopCommand);
-                    AnsiConsole.MarkupLine("[cyan]Waiting for program to be killed...[/]");
+                    // Kill program if requested
+                    if (!await ConsoleCommands.KillProgramAsync(shellStream, settings.Slot, cancellationToken))
+                    {
+                        AnsiConsole.MarkupLine("[red]Failed to kill program before uploading files.[/]");
+                        return 1;
+                    }
+
+                    AnsiConsole.MarkupLine("[green]Program killed successfully.[/]");
                 }
                 else
                 {
-                    stopCommand = $"stopprog -p:{settings.Slot}";
-                    successPatterns = ["Program Stopped", "** Specified App does not exist **"];
-                    AnsiConsole.MarkupLine($"[yellow]Executing:[/] {stopCommand}");
-                    shellStream.WriteLine(stopCommand);
-                    AnsiConsole.MarkupLine("[cyan]Waiting for program to stop...[/]");
+                    // Stop program
+                    if (!await ConsoleCommands.StopProgramAsync(shellStream, settings.Slot, cancellationToken))
+                    {
+                        AnsiConsole.MarkupLine("[red]Failed to stop program before uploading files.[/]");
+                        return 1;
+                    }
+
+                    AnsiConsole.MarkupLine("[green]Program stopped successfully.[/]");
                 }
-
-                var success = await shellStream.WaitForCommandCompletionAsync(successPatterns, [], cancellationToken);
-
-                if (!success)
-                {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Failed to {(settings.KillProgram ? "kill" : "stop")} program before uploading files.");
-                    return 1;
-                }
-
-                AnsiConsole.MarkupLine($"[green]Program {(settings.KillProgram ? "killed" : "stopped")} successfully.[/]");
 
                 // Wait 2 seconds before starting uploads
                 await Task.Delay(2000, cancellationToken);
@@ -1012,7 +1016,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                         }
                         catch (Exception ex)
                         {
-                            AnsiConsole.MarkupLine($"[yellow]Warning: Failed to parse DIP file: {ex.Message.EscapeMarkup()}[/]");
+                            AnsiConsole.MarkupLine($"[yellow]Failed to parse DIP file: {ex.Message.EscapeMarkup()}[/]");
                         }
                     }
                     else if (settings.Verbose)
@@ -1025,7 +1029,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                         var ipTableResult = await ConfigureIpTableAsync(shellStream, ipTableEntries, settings.Slot, settings.Verbose, cancellationToken);
                         if (!ipTableResult)
                         {
-                            AnsiConsole.MarkupLine("[yellow]Warning: IP table configuration had errors, but continuing...[/]");
+                            AnsiConsole.MarkupLine("[yellow]IP table configuration had errors, but continuing...[/]");
                         }
                     }
                 }
@@ -1094,7 +1098,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 if (!settings.DoNotStart)
                 {
                     // Execute progres command
-                    var progresSuccess = await AvConsoleToolkit.Crestron.ConsoleCommands.RestartProgramAsync(shellStream, settings.Slot, cancellationToken);
+                    var progresSuccess = await ConsoleCommands.RestartProgramAsync(shellStream, settings.Slot, cancellationToken);
 
                     if (progresSuccess)
                     {
@@ -1103,7 +1107,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     }
                     else
                     {
-                        AnsiConsole.MarkupLine("[red]Program failed to restart.");
+                        AnsiConsole.MarkupLine("[red]Program failed to restart.[/]");
                         return 1;
                     }
                 }
@@ -1117,6 +1121,48 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 {
                     Directory.Delete(tempDirectory, true);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Uploads a hash manifest file to the remote device.
+        /// </summary>
+        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="remotePath">Remote program directory path.</param>
+        /// <param name="hashes">Dictionary of file path to hash mappings.</param>
+        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
+        private static async Task UploadHashManifestAsync(
+            SftpClient sftpClient,
+            string remotePath,
+            Dictionary<string, string> hashes,
+            bool verbose = false)
+        {
+            var remoteHashPath = $"{remotePath}/{HashManifestFileName}";
+
+            if (verbose)
+            {
+                AnsiConsole.MarkupLine($"[dim]Uploading hash manifest with {hashes.Count} entries to '{remoteHashPath.EscapeMarkup()}'[/]");
+            }
+
+            await Task.Run(() =>
+            {
+                using var memoryStream = new MemoryStream();
+                using (var writer = new StreamWriter(memoryStream, Encoding.UTF8, leaveOpen: true))
+                {
+                    foreach (var kvp in hashes.OrderBy(k => k.Key))
+                    {
+                        writer.WriteLine($"{kvp.Key}={kvp.Value}");
+                    }
+                    writer.Flush();
+                }
+
+                memoryStream.Position = 0;
+                sftpClient.UploadFile(memoryStream, remoteHashPath, true);
+            });
+
+            if (verbose)
+            {
+                AnsiConsole.MarkupLine($"[dim]Hash manifest uploaded successfully[/]");
             }
         }
 
@@ -1150,15 +1196,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             // Kill program if requested
             if (settings.KillProgram)
             {
-                var killCommand = $"killprog -P:{settings.Slot}";
-                AnsiConsole.MarkupLine($"[yellow]Executing:[/] {killCommand}");
-
-                shellStream.WriteLine(killCommand);
-                AnsiConsole.MarkupLine("[cyan]Waiting for program to be killed...[/]");
-
-                var killSuccess = await shellStream.WaitForCommandCompletionAsync([$"Specified program {settings.Slot} successfully deleted"], [], cancellationToken, 10000);
-
-                if (!killSuccess)
+                if (!await ConsoleCommands.KillProgramAsync(shellStream, settings.Slot, cancellationToken))
                 {
                     AnsiConsole.MarkupLine("[red]Error: Failed to kill program before uploading.[/]");
                     return 1;
@@ -1187,7 +1225,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     // Read DIP file directly from the archive without extracting
                     using (var archive = ZipFile.OpenRead(settings.ProgramFile))
                     {
-                        var dipName = Path.GetFileNameWithoutExtension(settings.ProgramFile) + ".dip";
+                        var dipName = $"{Path.GetFileNameWithoutExtension(settings.ProgramFile)}.dip";
                         var dipEntry = archive.Entries.FirstOrDefault(e => e.Name.Equals(dipName, StringComparison.OrdinalIgnoreCase));
 
                         if (dipEntry != null)
@@ -1208,7 +1246,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[yellow]Warning: Failed to read/parse DIP file from archive: {ex.Message.EscapeMarkup()}[/]");
+                    AnsiConsole.MarkupLine($"[yellow]Failed to read/parse DIP file from archive: {ex.Message.EscapeMarkup()}[/]");
                 }
             }
 
@@ -1268,7 +1306,6 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                         return 0;
                     });
 
-
                 // Output after progress indicators are complete
                 AnsiConsole.MarkupLine("[green]Upload complete![/]");
 
@@ -1285,7 +1322,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 result = await AnsiConsole.Status().Spinner(Spinner.Known.BouncingBall).Start("Loading program...", async ctx =>
                 {
                     // Execute progload command.
-                    if (!await AvConsoleToolkit.Crestron.ConsoleCommands.ProgramLoadAsync(shellStream, settings.Slot, settings.DoNotStart, cancellationToken))
+                    if (!await ConsoleCommands.ProgramLoadAsync(shellStream, settings.Slot, settings.DoNotStart, cancellationToken))
                     {
                         AnsiConsole.MarkupLine("[red]Error: Failed to load program after upload.[/]");
                         return 1;

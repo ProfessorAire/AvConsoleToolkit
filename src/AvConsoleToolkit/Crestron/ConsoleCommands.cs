@@ -139,9 +139,9 @@ namespace AvConsoleToolkit.Crestron
             stream.WriteLine(killCommand);
             cancellationToken.ThrowIfCancellationRequested();
 
-            AnsiConsole.MarkupLine("[cyan]Waiting for killprog to complete.");
+            AnsiConsole.MarkupLine("[cyan]Waiting for killprog to complete.[/]");
 
-            IEnumerable<string> successPatterns = ["Program Stopped", "** Specified App does not exist **"];
+            IEnumerable<string> successPatterns = ["Program Stopped", "** Specified App does not exist **", $"Specified program {1} successfully deleted"];
             return await stream.WaitForCommandCompletionAsync(successPatterns, [], cancellationToken, 30000);
         }
 
