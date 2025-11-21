@@ -21,8 +21,10 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
+using AvConsoleToolkit.Crestron;
 using AvConsoleToolkit.Ssh;
 using Castle.Components.DictionaryAdapter.Xml;
+using Castle.DynamicProxy.Generators;
 using Renci.SshNet;
 using Renci.SshNet.Sftp;
 using Spectre.Console;
@@ -463,7 +465,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
             // No hash available, fall back to timestamp comparison
             var localLastWriteTime = File.GetLastWriteTimeUtc(localFile);
-            var remoteLastWriteTime = remoteFile.LastWriteTimeUtc;
+            var remoteLastWriteTime = remoteFile!.LastWriteTimeUtc;
             var timeDifference = Math.Abs((localLastWriteTime - remoteLastWriteTime).TotalSeconds);
 
             if (verbose)
@@ -580,6 +582,69 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             }
 
             return (!string.IsNullOrEmpty(mainAssemblyName), mainAssemblyName);
+        }
+
+        /// <summary>
+        /// Configures the IP table from the provided IP table entries.
+        /// </summary>
+        /// <param name="shellStream">Shell stream to communicate with the device.</param>
+        /// <param name="entries">List of IP table entries to configure.</param>
+        /// <param name="slot">Program slot number.</param>
+        /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>True if IP table was configured successfully; false on error.</returns>
+        private static async Task<bool> ConfigureIpTableAsync(
+            Ssh.IShellStream shellStream,
+            List<IpTable.Entry> entries,
+            int slot,
+            bool verbose,
+            CancellationToken cancellationToken)
+        {
+            if (entries.Count == 0)
+            {
+                if (verbose)
+                {
+                    AnsiConsole.MarkupLine("[dim]No IP table entries to configure.[/]");
+                }
+                return true;
+            }
+
+            AnsiConsole.MarkupLine($"[cyan]Configuring IP table with {entries.Count} entries...[/]");
+
+            // Clear existing IP table
+            var clearResult = await ConsoleCommands.ClearIpTableAsync(shellStream, slot, cancellationToken);
+            if (!clearResult)
+            {
+                AnsiConsole.MarkupLine("[yellow]Warning: Failed to clear IP table, continuing anyway...[/]");
+            }
+
+            // Add each entry
+            var successCount = 0;
+            foreach (var entry in entries)
+            {
+                if (verbose)
+                {
+                    AnsiConsole.MarkupLine($"[dim]Adding IP table entry: IPID={entry.IpId}, Address={entry.Address.EscapeMarkup()}[/]");
+                }
+
+                var addResult = await ConsoleCommands.AddIpTableEntryAsync(
+                    shellStream,
+                    slot,
+                    entry,
+                    cancellationToken);
+
+                if (addResult)
+                {
+                    successCount++;
+                }
+                else if (verbose)
+                {
+                    AnsiConsole.MarkupLine($"[yellow]Warning: Failed to add IP table entry for IPID {entry.IpId}[/]");
+                }
+            }
+
+            AnsiConsole.MarkupLine($"[green]IP table configured: {successCount} of {entries.Count} entries added successfully.[/]");
+            return successCount > 0;
         }
 
         /// <summary>
@@ -928,6 +993,43 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
                 await UploadHashManifestAsync(sftpClient, remotePath, newHashes, settings.Verbose);
 
+                // Configure IP table BEFORE program registration if not disabled and this is an LPZ program
+                List<IpTable.Entry>? ipTableEntries = null;
+                if (!settings.NoIpTable && extension == ".lpz")
+                {
+                    // Look for .dip file in extracted directory
+                    var dipFiles = Directory.GetFiles(tempDirectory, "*.dip", SearchOption.TopDirectoryOnly);
+                    if (dipFiles.Length > 0)
+                    {
+                        try
+                        {
+                            if (settings.Verbose)
+                            {
+                                AnsiConsole.MarkupLine($"[dim]Found DIP file: {Path.GetFileName(dipFiles[0]).EscapeMarkup()}[/]");
+                            }
+
+                            ipTableEntries = IpTable.ParseDipFile(dipFiles[0]);
+                        }
+                        catch (Exception ex)
+                        {
+                            AnsiConsole.MarkupLine($"[yellow]Warning: Failed to parse DIP file: {ex.Message.EscapeMarkup()}[/]");
+                        }
+                    }
+                    else if (settings.Verbose)
+                    {
+                        AnsiConsole.MarkupLine("[dim]No .dip file found in extracted program.[/]");
+                    }
+
+                    if (ipTableEntries != null && ipTableEntries.Count > 0)
+                    {
+                        var ipTableResult = await ConfigureIpTableAsync(shellStream, ipTableEntries, settings.Slot, settings.Verbose, cancellationToken);
+                        if (!ipTableResult)
+                        {
+                            AnsiConsole.MarkupLine("[yellow]Warning: IP table configuration had errors, but continuing...[/]");
+                        }
+                    }
+                }
+
                 if (extension is ".lpz" or ".cpz")
                 {
                     var registrationResult = await RegisterProgram(shellStream, settings.Slot, extension, tempDirectory, cancellationToken);
@@ -1076,6 +1178,40 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 zigFilePath = PrepareSignatureFile(settings.ProgramFile, settings);
             }
 
+            // Read DIP file for IP table configuration if this is an LPZ
+            List<IpTable.Entry>? ipTableEntries = null;
+            if (!settings.NoIpTable && extension == ".lpz")
+            {
+                try
+                {
+                    // Read DIP file directly from the archive without extracting
+                    using (var archive = ZipFile.OpenRead(settings.ProgramFile))
+                    {
+                        var dipName = Path.GetFileNameWithoutExtension(settings.ProgramFile) + ".dip";
+                        var dipEntry = archive.Entries.FirstOrDefault(e => e.Name.Equals(dipName, StringComparison.OrdinalIgnoreCase));
+
+                        if (dipEntry != null)
+                        {
+                            if (settings.Verbose)
+                            {
+                                AnsiConsole.MarkupLine($"[dim]Found DIP file in archive: {dipEntry.Name.EscapeMarkup()}[/]");
+                            }
+
+                            using var dipStream = dipEntry.Open();
+                            ipTableEntries = IpTable.ParseDipStream(dipStream);
+                        }
+                        else if (settings.Verbose)
+                        {
+                            AnsiConsole.MarkupLine("[dim]No .dip file found in program archive.[/]");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AnsiConsole.MarkupLine($"[yellow]Warning: Failed to read/parse DIP file from archive: {ex.Message.EscapeMarkup()}[/]");
+                }
+            }
+
             try
             {
                 var result = await AnsiConsole.Progress()
@@ -1135,6 +1271,16 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
                 // Output after progress indicators are complete
                 AnsiConsole.MarkupLine("[green]Upload complete![/]");
+
+                // Configure IP table BEFORE loading the program
+                if (!settings.NoIpTable && ipTableEntries != null && ipTableEntries.Count > 0 && extension == ".lpz")
+                {
+                    var ipTableResult = await ConfigureIpTableAsync(shellStream, ipTableEntries, settings.Slot, settings.Verbose, cancellationToken);
+                    if (!ipTableResult && settings.Verbose)
+                    {
+                        AnsiConsole.MarkupLine("[yellow]Warning: IP table configuration had errors, but continuing...[/]");
+                    }
+                }
 
                 result = await AnsiConsole.Status().Spinner(Spinner.Known.BouncingBall).Start("Loading program...", async ctx =>
                 {

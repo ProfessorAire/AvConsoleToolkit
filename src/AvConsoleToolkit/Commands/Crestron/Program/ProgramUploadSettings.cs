@@ -50,6 +50,13 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         public bool KillProgram { get; set; }
 
         /// <summary>
+        /// When true, skip configuring the IP table from the .dip file.
+        /// </summary>
+        [CommandOption("--nodip")]
+        [Description("Skip configuring the IP table from the program's .dip file")]
+        public bool NoIpTable { get; set; }
+
+        /// <summary>
         /// When true, skip uploading the signature file (.sig) as a .zig file alongside .lpz programs.
         /// </summary>
         [CommandOption("--nozig")]
