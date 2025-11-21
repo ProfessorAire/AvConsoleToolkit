@@ -40,19 +40,16 @@ jobs:
         uses: cake-build/cake-action@v3
         with:
           script-path: ./.github/workflows/Clean.cake
-          working-directory: ./.github/workflows
 
       - name: Run ParseDependencyLicenses
         uses: cake-build/cake-action@v3
         with:
           script-path: ./.github/workflows/ParseDependencyLicenses.cake
-          working-directory: ./.github/workflows
 
       - name: Run DetermineVersion
         uses: cake-build/cake-action@v3
         with:
           script-path: ./.github/workflows/DetermineVersion.cake
-          working-directory: ./.github/workflows
 
       - name: Publish Program Win-x64 (single-file)
         uses: cake-build/cake-action@v3
@@ -61,13 +58,11 @@ jobs:
           arguments: |
             project=../../src/AvConsoleToolkit/AvConsoleToolkit.csproj
             runtime=win-x64
-          working-directory: ./.github/workflows
 
       - name: Package assets
         uses: cake-build/cake-action@v3
         with:
           script-path: ./.github/workflows/PackageAssets.cake
-          working-directory: ./.github/workflows
 
       - name: Create release via Cake
         if: ${{ github.event.inputs.create_release == 'true' }}
@@ -76,7 +71,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script-path: ./.github/workflows/CreateGitHubRelease.cake
-          working-directory: ./.github/workflows
 
       - name: Upload asset via Cake
         if: ${{ github.event.inputs.upload_asset == 'true' }}
@@ -85,4 +79,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script-path: ./.github/workflows/UploadGitHubAssets.cake
-          working-directory: ./.github/workflows

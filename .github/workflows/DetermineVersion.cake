@@ -93,7 +93,6 @@ Task("Default")
     if (commits.Count == 0)
     {
         throw new Exception("No changes to release. If you need to republish a version, please delete the previous tag and rerun the workflow.");
-        return;
     }
 
     bool anyBreaking = false;

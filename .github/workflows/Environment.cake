@@ -37,6 +37,7 @@ Dictionary<string, string> LoadEnvironmentVariables()
     _environmentVariables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     var path = GetWorkingPath();
     
+    // On GitHub Actions, check if the file exists and load it
     if (System.IO.File.Exists(path))
     {
         foreach (var line in System.IO.File.ReadAllLines(path))
@@ -83,6 +84,11 @@ void SetEnvironmentVariable<T>(string name, T value)
 // Get a string environment variable
 string? GetEnvironmentVariable(string name)
 {
+    // On GitHub Actions, check system environment first (from previous steps)
+    var systemValue = Environment.GetEnvironmentVariable(name);
+    if (!string.IsNullOrEmpty(systemValue)) return systemValue;
+    
+    // Fall back to our cached file values
     var vars = LoadEnvironmentVariables();
     return vars.TryGetValue(name, out var value) ? value : null;
 }
