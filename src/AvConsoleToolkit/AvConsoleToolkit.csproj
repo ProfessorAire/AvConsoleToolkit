@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>act</AssemblyName>
+    <OutputType>exe</OutputType>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>false</PublishTrimmed>
+    <ProductName>AvConsoleToolkit</ProductName>
+    <Description>Application for performing Audio/Visual tasks from the console.</Description>
+    <Copyright>Christopher McNeely</Copyright>
+    <Company>Christopher McNeely</Company>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0</FileVersion>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <GenerateAssemblyDescriptionAttribute>true</GenerateAssemblyDescriptionAttribute>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="AvConsoleToolkit.LICENSE" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <SupportedPlatform Include="Windows;Linux" />
+    <PackageReference Include="Config.Net" Version="5.2.1" />
+    <PackageReference Include="ini-parser" Version="2.5.2" NoWarn="NU1701" />
+    <PackageReference Include="Onova" Version="2.6.13" />
+    <PackageReference Include="Spectre.Console.Analyzer" Version="1.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Spectre.Console.Cli" Version="0.53.0" />
+    <PackageReference Include="Spectre.Console.Testing" Version="0.53.0" />
+    <PackageReference Include="SSH.NET" Version="2025.1.0" />
+  </ItemGroup>
+
+</Project>
