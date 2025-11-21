@@ -1,19 +1,19 @@
 name: Release-Workflow
 
 on:
-  workflow_dispatch:
-    inputs:
-      create_release:
-        description: 'Allow creating the GitHub release (must be explicitly set to "true")'
-        required: false
-        default: 'false'
-      upload_asset:
-        description: 'Allow uploading the release asset (must be explicitly set to "true")'
-        required: false
-        default: 'false'
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create the GitHub release (automatic on main push, manual on other branches for pre-release)'
+        required: false
+        default: 'false'
+      upload_asset:
+        description: 'Upload the release asset'
+        required: false
+        default: 'false'
 
 jobs:
   release:
@@ -65,7 +65,7 @@ jobs:
           script-path: ./.github/workflows/PackageAssets.cake
 
       - name: Create release via Cake
-        if: ${{ github.event.inputs.create_release == 'true' }}
+        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true') }}
         uses: cake-build/cake-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -73,7 +73,7 @@ jobs:
           script-path: ./.github/workflows/CreateGitHubRelease.cake
 
       - name: Upload asset via Cake
-        if: ${{ github.event.inputs.upload_asset == 'true' }}
+        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload_asset == 'true') }}
         uses: cake-build/cake-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
