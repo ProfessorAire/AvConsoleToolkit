@@ -118,10 +118,14 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
                 var remotePath = $"program{settings.Slot:D2}";
 
-                AnsiConsole.MarkupLineInterpolated($"[teal]Uploading program to slot {settings.Slot} on device '{settings.Host}'...[/]");
+                AnsiConsole.MarkupLineInterpolated($"[teal]Uploading {Path.GetFileName(settings.ProgramFile)} to slot {settings.Slot} on device '{settings.Host}'...[/]");
 
+                // .clz files must always be extracted and uploaded as individual files
+                // because they are not full program packages that can be loaded directly
+                var isClz = extension == ".clz";
+                
                 var result = -1;
-                if (settings.ChangedOnly)
+                if (settings.ChangedOnly || isClz)
                 {
                     result = await UploadChangedFilesAsync(settings, remotePath, extension, cancellationToken);
                 }
@@ -709,12 +713,19 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
                         List<dynamic> fileChanges;
 
-                        // If KillProgram is set, skip file comparison and upload everything
-                        if (settings.KillProgram)
+                        // Library packages (.clz) must always have all files uploaded unless -c flag is explicitly set
+                        // Also, if KillProgram is set, skip file comparison and upload everything
+                        var isLibraryPackage = extension == ".clz";
+                        var uploadAllFiles = settings.KillProgram || (isLibraryPackage && !settings.ChangedOnly);
+                        
+                        if (uploadAllFiles)
                         {
                             if (settings.Verbose)
                             {
-                                AnsiConsole.MarkupLine("[dim]Kill program flag set, skipping file comparison - uploading all files.[/]");
+                                var reason = settings.KillProgram 
+                                    ? "Kill program flag set" 
+                                    : "File is a [cyan].clz[/][dim] without --changed-only flag";
+                                AnsiConsole.MarkupLine($"[dim]{reason}, skipping file comparison - uploading all files.[/]");
                             }
 
                             analysisTask.StartTask();
@@ -832,7 +843,9 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     return 0;
                 }
 
-                AnsiConsole.MarkupLine($"[yellow]{changes.Count} file(s) {(settings.KillProgram ? "to upload" : "have changed")}.[/]");
+                var isClz = extension == ".clz";
+                var uploadAllFiles = settings.KillProgram || (isClz && !settings.ChangedOnly);
+                AnsiConsole.MarkupLine($"[yellow]{changes.Count} file(s) {(uploadAllFiles ? "to upload" : "have changed")}.[/]");
 
                 // Now we know we need to upload, establish SSH connection
                 using var sshClient = new SshClient(settings.Host, settings.Username, settings.Password);
