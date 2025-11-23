@@ -118,7 +118,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
                 var remotePath = $"program{settings.Slot:D2}";
 
-                AnsiConsole.MarkupLineInterpolated($"[teal]Uploading {settings.ProgramFile} to slot {settings.Slot} on device '{settings.Host}'...[/]");
+                AnsiConsole.MarkupLineInterpolated($"[teal]Uploading {Path.GetFileName(settings.ProgramFile)} to slot {settings.Slot} on device '{settings.Host}'...[/]");
 
                 // .clz files must always be extracted and uploaded as individual files
                 // because they are not full program packages that can be loaded directly
