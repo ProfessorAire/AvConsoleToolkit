@@ -1,7 +1,7 @@
 // <copyright file="AddressBookLookupCommand.cs">
 // The MIT License
-// Copyright © Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
+// Copyright ï¿½ Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ï¿½Softwareï¿½),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -48,13 +48,15 @@ namespace AvConsoleToolkit.Commands.AddressBook
             table.AddColumn("[green]Host Address[/]");
             table.AddColumn("[cyan]Username[/]");
             table.AddColumn("[blue]Password[/]");
+            table.AddColumn("[magenta]Comment[/]");
 
             var deviceName = !string.IsNullOrWhiteSpace(entry.DeviceName) ? entry.DeviceName.EscapeMarkup() : string.Empty;
             var host = !string.IsNullOrWhiteSpace(entry.HostAddress) ? entry.HostAddress : string.Empty;
             var user = !string.IsNullOrEmpty(entry.Username) ? entry.Username.EscapeMarkup() : string.Empty;
             var pass = !string.IsNullOrEmpty(entry.Password) ? "[dim]******[/]" : "[dim]<none>[/]";
+            var comment = !string.IsNullOrEmpty(entry.Comment) ? entry.Comment.EscapeMarkup() : "[dim]<none>[/]";
 
-            table.AddRow(deviceName, host, user, pass);
+            table.AddRow(deviceName, host, user, pass, comment);
 
             AnsiConsole.Write(table);
 

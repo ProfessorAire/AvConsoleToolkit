@@ -1,7 +1,7 @@
 // <copyright file="ToolboxAddressBook.cs">
 // The MIT License
-// Copyright © Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
+// Copyright ï¿½ Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ï¿½Softwareï¿½),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -156,6 +156,12 @@ namespace AvConsoleToolkit.Crestron
                     var parsed = ParseComSpecEntry(entry.KeyName, entry.Value);
                     if (parsed != null && string.Equals(parsed.HostAddress, ipAddress, StringComparison.OrdinalIgnoreCase))
                     {
+                        // Try to get the comment from the Notes section
+                        if (data.Sections.ContainsSection("Notes") && parsed.DeviceName != null)
+                        {
+                            parsed.Comment = data["Notes"][parsed.DeviceName];
+                        }
+
                         return parsed;
                     }
                 }
@@ -187,7 +193,15 @@ namespace AvConsoleToolkit.Crestron
                 {
                     if (string.Equals(entry.KeyName, deviceName, StringComparison.OrdinalIgnoreCase))
                     {
-                        return ParseComSpecEntry(entry.KeyName, entry.Value);
+                        var parsed = ParseComSpecEntry(entry.KeyName, entry.Value);
+                        
+                        // Try to get the comment from the Notes section
+                        if (parsed != null && data.Sections.ContainsSection("Notes"))
+                        {
+                            parsed.Comment = data["Notes"][entry.KeyName];
+                        }
+
+                        return parsed;
                     }
                 }
             }
@@ -223,6 +237,11 @@ namespace AvConsoleToolkit.Crestron
             /// Gets or sets the username used to connect to the device.
             /// </summary>
             public string? Username { get; set; }
+
+            /// <summary>
+            /// Gets or sets the comment or note associated with this entry.
+            /// </summary>
+            public string? Comment { get; set; }
         }
     }
 }
