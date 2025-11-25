@@ -1,7 +1,7 @@
 // <copyright file="ProgramUploadCommand.cs">
 // The MIT License
 // Copyright © Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -123,7 +123,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 // .clz files must always be extracted and uploaded as individual files
                 // because they are not full program packages that can be loaded directly
                 var isClz = extension == ".clz";
-                
+
                 var result = -1;
                 if (settings.ChangedOnly || isClz)
                 {
@@ -154,6 +154,81 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 else
                 {
                     AnsiConsole.MarkupLine($"\r\n[red]Error:\r\n{ex}[/]");
+                }
+
+                return 1;
+            }
+        }
+
+        /// <summary>
+        /// Executes the upload operation using an existing SSH connection (for nested command execution).
+        /// </summary>
+        /// <param name="settings">Options controlling upload behavior.</param>
+        /// <param name="sshClient">Existing SSH client connection.</param>
+        /// <param name="shellStream">Existing shell stream.</param>
+        /// <param name="cancellationToken">Token to observe for cancellation requests.</param>
+        /// <returns>Exit code indicating success (0) or failure (non-zero).</returns>
+        internal async Task<int> ExecuteWithConnectionAsync(
+            ProgramUploadSettings settings,
+            SshClient sshClient,
+            Ssh.IShellStream shellStream,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                // Validate inputs (same as normal ExecuteAsync)
+                if (!File.Exists(settings.ProgramFile))
+                {
+                    AnsiConsole.MarkupLine("[red]Error:[/] Program file not found.");
+                    return 1;
+                }
+
+                var extension = Path.GetExtension(settings.ProgramFile).ToLowerInvariant();
+                if (!SupportedExtensions.Contains(extension))
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: Unsupported file extension. Supported: {string.Join(", ", SupportedExtensions)}[/]");
+                    return 1;
+                }
+
+                if (settings.Slot is < 1 or > 10)
+                {
+                    AnsiConsole.MarkupLine("[red]Error: Slot must be between 1 and 10.[/]");
+                    return 1;
+                }
+
+                var remotePath = $"program{settings.Slot:D2}";
+
+                AnsiConsole.MarkupLineInterpolated($"[teal]Uploading {Path.GetFileName(settings.ProgramFile)} to slot {settings.Slot}...[/]");
+
+                // For nested commands, we always use changed files approach since we need to extract
+                var result = await UploadChangedFilesWithConnectionAsync(
+                    settings,
+                    sshClient,
+                    shellStream,
+                    remotePath,
+                    extension,
+                    cancellationToken);
+
+                if (result == 0)
+                {
+                    AnsiConsole.MarkupLine("[green]Program upload completed.[/]");
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine("[red]Program upload failed.[/]");
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                if (!settings.Verbose)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine($"[red]Error:\r\n{ex}[/]");
                 }
 
                 return 1;
@@ -577,7 +652,8 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                         }
                         if (assemblyPart.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
                         {
-                            mainAssemblyName = assemblyPart[..(assemblyPart.Length - 4)];
+                            var count = assemblyPart.Length - 4;
+                            mainAssemblyName = assemblyPart[..count];
                         }
                         else
                         {
@@ -716,8 +792,8 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                         // Library packages (.clz) must always have all files uploaded unless -c flag is explicitly set
                         // Also, if KillProgram is set, skip file comparison and upload everything
                         var isLibraryPackage = extension == ".clz";
-                        var uploadAllFiles = settings.KillProgram || (isLibraryPackage && !settings.ChangedOnly);
-                        
+                        var uploadAllFiles = settings.KillProgram || isLibraryPackage && !settings.ChangedOnly;
+
                         if (uploadAllFiles)
                         {
                             if (settings.Verbose)
@@ -844,7 +920,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 }
 
                 var isClz = extension == ".clz";
-                var uploadAllFiles = settings.KillProgram || (isClz && !settings.ChangedOnly);
+                var uploadAllFiles = settings.KillProgram || isClz && !settings.ChangedOnly;
                 AnsiConsole.MarkupLine($"[yellow]{changes.Count} file(s) {(uploadAllFiles ? "to upload" : "have changed")}.[/]");
 
                 // Now we know we need to upload, establish SSH connection
@@ -1138,6 +1214,136 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         }
 
         /// <summary>
+        /// Similar to UploadChangedFilesAsync but uses existing SSH/SFTP connections for nested command execution.
+        /// </summary>
+        private static async Task<int> UploadChangedFilesWithConnectionAsync(
+            ProgramUploadSettings settings,
+            SshClient sshClient,
+            Ssh.IShellStream existingShellStream,
+            string remotePath,
+            string extension,
+            CancellationToken cancellationToken)
+        {
+            // Create new SFTP client using same credentials
+            using var sftpClient = new SftpClient(settings.Host, settings.Username, settings.Password);
+
+            await sftpClient.ConnectAsync(cancellationToken);
+
+            // Extract and analyze files (similar to UploadChangedFilesAsync but simplified)
+            var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempDir);
+
+            try
+            {
+                // Extract files
+                AnsiConsole.MarkupLine("[yellow]Extracting program archive...[/]");
+                using (var archive = ZipFile.OpenRead(settings.ProgramFile))
+                {
+                    foreach (var entry in archive.Entries)
+                    {
+                        var destinationPath = Path.Combine(tempDir, entry.FullName);
+
+                        if (string.IsNullOrEmpty(entry.Name))
+                        {
+                            Directory.CreateDirectory(destinationPath);
+                        }
+                        else
+                        {
+                            var dirPath = Path.GetDirectoryName(destinationPath);
+                            if (!string.IsNullOrEmpty(dirPath))
+                            {
+                                Directory.CreateDirectory(dirPath);
+                            }
+
+                            entry.ExtractToFile(destinationPath, overwrite: true);
+                            File.SetLastWriteTimeUtc(destinationPath, entry.LastWriteTime.UtcDateTime);
+                        }
+                    }
+                }
+
+                // Get list of files to upload (all files for nested commands)
+                var localFiles = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories);
+                var fileChanges = localFiles.Select(localFile => new
+                {
+                    LocalPath = localFile,
+                    RelativePath = Path.GetRelativePath(tempDir, localFile).Replace('\\', '/')
+                }).ToList();
+
+                AnsiConsole.MarkupLine($"[yellow]Uploading {fileChanges.Count} file(s)...[/]");
+
+                // Stop program using existing shell stream
+                if (!await ConsoleCommands.StopProgramAsync(existingShellStream, settings.Slot, cancellationToken))
+                {
+                    AnsiConsole.MarkupLine("[yellow]Warning: Failed to stop program, continuing...[/]");
+                }
+
+                await Task.Delay(1000, cancellationToken);
+
+                // Upload files
+                foreach (var fileChange in fileChanges)
+                {
+                    var remoteFilePath = $"{remotePath}/{fileChange.RelativePath}";
+                    var remoteDir = Path.GetDirectoryName(remoteFilePath)?.Replace('\\', '/');
+
+                    if (!string.IsNullOrEmpty(remoteDir))
+                    {
+                        EnsureRemoteDirectoryExists(sftpClient, remoteDir);
+                    }
+
+                    using var fileStream = File.OpenRead(fileChange.LocalPath);
+                    sftpClient.UploadFile(fileStream, remoteFilePath, true);
+                    sftpClient.SetLastWriteTimeUtc(remoteFilePath, File.GetLastWriteTimeUtc(fileChange.LocalPath));
+                }
+
+                // Compute and upload hash manifest
+                var allLocalFiles = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories);
+                var newHashes = new Dictionary<string, string>();
+
+                foreach (var file in allLocalFiles)
+                {
+                    var relativePath = Path.GetRelativePath(tempDir, file).Replace('\\', '/');
+                    var hash = await ComputeFileHashAsync(file);
+                    newHashes[relativePath] = hash;
+                }
+
+                await UploadHashManifestAsync(sftpClient, remotePath, newHashes, settings.Verbose);
+
+                // Register program if needed
+                if (extension is ".lpz" or ".cpz")
+                {
+                    var registrationResult = await RegisterProgram(existingShellStream, settings.Slot, extension, tempDir, cancellationToken);
+                    if (registrationResult != 0)
+                    {
+                        return 1;
+                    }
+                }
+
+                // Restart program unless DoNotStart is set
+                if (!settings.DoNotStart)
+                {
+                    if (await ConsoleCommands.RestartProgramAsync(existingShellStream, settings.Slot, cancellationToken))
+                    {
+                        return 0;
+                    }
+                    else
+                    {
+                        AnsiConsole.MarkupLine("[red]Failed to restart program.[/]");
+                        return 1;
+                    }
+                }
+
+                return 0;
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+        }
+
+        /// <summary>
         /// Uploads a hash manifest file to the remote device.
         /// </summary>
         /// <param name="sftpClient">Connected SFTP client.</param>
@@ -1275,20 +1481,22 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                         var hashManifestEntry = archive.CreateEntry(HashManifestFileName, CompressionLevel.Optimal);
                         hashManifestEntry.ExternalAttributes = 0;
                         using (var manifestStream = hashManifestEntry.Open())
-                        using (var writer = new StreamWriter(manifestStream, Encoding.UTF8))
                         {
-                            foreach (var kvp in fileHashes.OrderBy(k => k.Key))
+                            using (var writer = new StreamWriter(manifestStream, Encoding.UTF8))
                             {
-                                if (settings.Verbose)
+                                foreach (var kvp in fileHashes.OrderBy(k => k.Key))
                                 {
-                                    AnsiConsole.MarkupLine($"[dim]Manifest entry: {kvp.Key.EscapeMarkup()} = {kvp.Value.EscapeMarkup()}[/]");
+                                    if (settings.Verbose)
+                                    {
+                                        AnsiConsole.MarkupLine($"[dim]Manifest entry: {kvp.Key.EscapeMarkup()} = {kvp.Value.EscapeMarkup()}[/]");
+                                    }
+
+                                    await writer.WriteLineAsync($"{kvp.Key}={kvp.Value}");
                                 }
 
-                                await writer.WriteLineAsync($"{kvp.Key}={kvp.Value}");
+                                // Ensure the stream is flushed and has content
+                                await writer.FlushAsync();
                             }
-
-                            // Ensure the stream is flushed and has content
-                            await writer.FlushAsync();
                         }
 
                         hashManifestEntry.LastWriteTime = DateTimeOffset.UtcNow;
