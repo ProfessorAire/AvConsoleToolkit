@@ -55,6 +55,13 @@ namespace AvConsoleToolkit
                 {
                     branch.SetDescription("Commands for Crestron hardware management");
 
+                    branch.AddCommand<Commands.Crestron.CrestronPassThroughCommand>("connect")
+                        .WithAlias("c")
+                        .WithDescription("Connect to a Crestron device via interactive SSH session")
+                        .WithExample(["crestron", "connect", "192.168.1.100"])
+                        .WithExample(["crestron", "connect", "192.168.1.100", "-u", "admin", "-p", "password"])
+                        .WithExample(["crestron", "c", "192.168.1.100", "-v"]);
+
                     branch.AddBranch("program", program =>
                     {
                         program.AddCommand<Commands.Crestron.Program.ProgramUploadCommand>("upload")
