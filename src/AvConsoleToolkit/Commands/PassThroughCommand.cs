@@ -1,0 +1,570 @@
+// <copyright file="PassThroughCommand.cs">
+// The MIT License
+// Copyright © Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+// </copyright>
+
+using System;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Renci.SshNet;
+using Spectre.Console;
+using Spectre.Console.Cli;
+using Spectre.Console.Rendering;
+
+namespace AvConsoleToolkit.Commands
+{
+    /// <summary>
+    /// Abstract base class for interactive SSH pass-through commands.
+    /// Handles SSH connection management, command history, line buffering, and basic I/O.
+    /// </summary>
+    /// <typeparam name="TSettings">The settings type for the command.</typeparam>
+    public abstract class PassThroughCommand<TSettings> : AsyncCommand<TSettings>
+        where TSettings : PassThroughSettings
+    {
+        private readonly StringBuilder outputBuffer = new();
+
+        private CommandHistory? commandHistory;
+
+        private string currentLine = string.Empty;
+
+        private bool isExecutingNestedCommand;
+
+        private CancellationTokenSource? sessionCancellation;
+
+        private Ssh.IShellStream? shellStream;
+
+        private SshClient? sshClient;
+
+        /// <summary>
+        /// Gets the current shell stream.
+        /// This allows derived classes to share the shell stream with nested commands.
+        /// </summary>
+        internal Ssh.IShellStream? ShellStream => this.shellStream;
+
+        /// <summary>
+        /// Gets the current settings for the pass-through command.
+        /// This allows derived classes to access connection parameters.
+        /// </summary>
+        protected TSettings? CurrentSettings { get; private set; }
+
+        /// <summary>
+        /// Gets the command to send to the remote device to exit the session.
+        /// Override this in derived classes to specify device-specific exit commands.
+        /// </summary>
+        protected abstract string ExitCommand { get; }
+
+        /// <summary>
+        /// Gets the current SSH client connection.
+        /// This allows derived classes to share the connection with nested commands.
+        /// </summary>
+        protected SshClient? SshClient => this.sshClient;
+
+        /// <summary>
+        /// Executes the pass-through command, establishing an SSH connection and entering interactive mode.
+        /// </summary>
+        /// <param name="context">The command context.</param>
+        /// <param name="settings">The command settings.</param>
+        /// <param name="cancellationToken">Token to cancel the operation.</param>
+        /// <returns>Exit code: 0 for success, non-zero for failure.</returns>
+        public override async Task<int> ExecuteAsync(CommandContext context, TSettings settings, CancellationToken cancellationToken)
+        {
+            try
+            {
+                // Store settings for nested command access
+                this.CurrentSettings = settings;
+
+                // Resolve host address
+                var host = settings.Address;
+                if (string.IsNullOrEmpty(host))
+                {
+                    AnsiConsole.MarkupLine("[red]Error:[/] Host address is required.");
+                    return 1;
+                }
+
+                // Resolve credentials
+                if (string.IsNullOrEmpty(settings.Username) || string.IsNullOrEmpty(settings.Password))
+                {
+                    if (settings.Verbose)
+                    {
+                        AnsiConsole.MarkupLine("[dim]No username/password provided, looking up values from address books.[/]");
+                    }
+
+                    var entry = await AvConsoleToolkit.Crestron.ToolboxAddressBook.LookupEntryAsync(host);
+                    if (entry == null)
+                    {
+                        AnsiConsole.MarkupLine("[red]Error:[/] Could not find device in address books and no username/password provided.");
+                        AnsiConsole.MarkupLine("[yellow]Provide credentials with -u and -p flags.[/]");
+                        return 1;
+                    }
+
+                    if (entry.Username == null || entry.Password == null)
+                    {
+                        AnsiConsole.MarkupLine("[red]Error:[/] Address book entry is missing username or password.");
+                        return 1;
+                    }
+
+                    settings.Username = entry.Username;
+                    settings.Password = entry.Password;
+                }
+
+                // Initialize command history
+                this.commandHistory = new CommandHistory(host, this.GetMaxHistorySize());
+                await this.commandHistory.LoadAsync();
+
+                // Connect to device
+                if (!await this.ConnectAsync(host, settings.Username, settings.Password, cancellationToken))
+                {
+                    return 1;
+                }
+
+                AnsiConsole.MarkupLine($"[green]Connected to {host.EscapeMarkup()}[/]");
+                AnsiConsole.MarkupLine("[dim]Press Ctrl+X to exit[/]");
+                AnsiConsole.WriteLine();
+
+                // Enter interactive mode
+                await this.RunInteractiveSessionAsync(cancellationToken);
+
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                if (settings.Verbose)
+                {
+                    AnsiConsole.WriteException(ex);
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message.EscapeMarkup()}");
+                }
+
+                return 1;
+            }
+            finally
+            {
+                await this.CleanupAsync();
+            }
+        }
+
+        /// <summary>
+        /// Gets the maximum number of commands to keep in history.
+        /// Override this to customize history size per device type.
+        /// </summary>
+        /// <returns>Maximum history size (default: 50).</returns>
+        protected virtual int GetMaxHistorySize() => 50;
+
+        /// <summary>
+        /// Handles a nested command (prefixed with ':').
+        /// Override this to implement device-specific nested command routing.
+        /// </summary>
+        /// <param name="command">The nested command without the ':' prefix.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>True if the command was handled, false otherwise.</returns>
+        protected virtual Task<bool> HandleNestedCommandAsync(string command, CancellationToken cancellationToken)
+        {
+            AnsiConsole.MarkupLine($"[yellow]Nested commands not yet implemented in base class.[/]");
+            return Task.FromResult(false);
+        }
+
+        /// <summary>
+        /// Handles special key sequences like tab completion.
+        /// Override this to implement device-specific behavior.
+        /// </summary>
+        /// <param name="keyInfo">The console key information.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>True if the key was handled, false to use default behavior.</returns>
+        protected virtual Task<bool> HandleSpecialKeyAsync(ConsoleKeyInfo keyInfo, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(false);
+        }
+
+        /// <summary>
+        /// Called when the SSH connection is established and ready.
+        /// Override this to perform device-specific initialization.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        protected virtual Task OnConnectedAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        private async Task CleanupAsync()
+        {
+            // Cancel session if still running
+            this.sessionCancellation?.Cancel();
+
+            // Save history
+            if (this.commandHistory != null)
+            {
+                await this.commandHistory.SaveAsync();
+            }
+
+            // Disconnect SSH
+            try
+            {
+                this.shellStream?.Dispose();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+
+            try
+            {
+                if (this.sshClient?.IsConnected == true)
+                {
+                    this.sshClient.Disconnect();
+                }
+                this.sshClient?.Dispose();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+
+            this.sessionCancellation?.Dispose();
+        }
+
+        private async Task<bool> ConnectAsync(string host, string username, string password, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await AnsiConsole.Status()
+                    .StartAsync("Connecting to device...", async ctx =>
+                    {
+                        this.sshClient = new SshClient(host, username, password);
+                        await this.sshClient.ConnectAsync(cancellationToken);
+
+                        this.shellStream = new Ssh.ShellStreamWrapper(
+                            this.sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024));
+
+                        await this.OnConnectedAsync(cancellationToken);
+                    });
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[red]Connection failed:[/] {ex.Message.EscapeMarkup()}");
+                return false;
+            }
+        }
+
+        private async Task ExitSessionAsync()
+        {
+            if (this.shellStream != null && this.sshClient != null && this.sshClient.IsConnected)
+            {
+                try
+                {
+                    AnsiConsole.WriteLine($"> {this.ExitCommand}");
+                    AnsiConsole.MarkupLine("[yellow]Disconnecting...[/]");
+                    this.shellStream.WriteLine(this.ExitCommand);
+                    await Task.Delay(500); // Give device time to process exit command
+                }
+                catch
+                {
+                    // Ignore errors during exit
+                }
+            }
+
+            // Cancel the session
+            this.sessionCancellation?.Cancel();
+        }
+
+        private void HandleBackspace()
+        {
+            if (this.currentLine.Length > 0)
+            {
+                this.currentLine = this.currentLine[..^1];
+            }
+        }
+
+        private void HandleDownArrow()
+        {
+            if (this.commandHistory == null)
+            {
+                return;
+            }
+
+            var command = this.commandHistory.GetNext();
+            this.currentLine = command ?? string.Empty;
+        }
+
+        private void HandleUpArrow()
+        {
+            if (this.commandHistory == null)
+            {
+                return;
+            }
+
+            var command = this.commandHistory.GetPrevious();
+            if (command != null)
+            {
+                this.currentLine = command;
+            }
+        }
+
+        private IRenderable RenderPrompt()
+        {
+            var text = new Text($"{Environment.NewLine}ACT> {this.currentLine}");
+            return text;
+        }
+
+        private async Task RunInteractiveSessionAsync(CancellationToken cancellationToken)
+        {
+            if (this.shellStream == null)
+            {
+                return;
+            }
+
+            // Create a cancellation token source that combines external cancellation with our session control
+            this.sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var sessionToken = this.sessionCancellation.Token;
+
+            // Start background task to read from SSH
+            var readTask = Task.Run(async () =>
+            {
+                try
+                {
+                    while (!sessionToken.IsCancellationRequested && this.sshClient?.IsConnected == true)
+                    {
+                        // Pause reading during nested command execution
+                        if (this.isExecutingNestedCommand)
+                        {
+                            await Task.Delay(100, sessionToken);
+                            continue;
+                        }
+
+                        if (this.shellStream.DataAvailable)
+                        {
+                            var data = this.shellStream.Read();
+                            lock (this.outputBuffer)
+                            {
+                                this.outputBuffer.Append(data);
+                            }
+                        }
+                        else
+                        {
+                            await Task.Delay(50, sessionToken);
+                        }
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Normal cancellation
+                }
+                catch
+                {
+                    // Connection lost or other error
+                }
+            }, sessionToken);
+
+            // Wait for initial prompt
+            await Task.Delay(500, sessionToken);
+
+            // Display initial output
+            string lastOutput;
+            lock (this.outputBuffer)
+            {
+                lastOutput = this.outputBuffer.ToString();
+                this.outputBuffer.Clear();
+            }
+
+            if (!string.IsNullOrEmpty(lastOutput))
+            {
+                AnsiConsole.Write(lastOutput);
+            }
+
+            // Main input loop with live prompt display
+            await AnsiConsole.Live(this.RenderPrompt())
+                .AutoClear(false)
+                .StartAsync(async ctx =>
+                {
+                    while (!sessionToken.IsCancellationRequested && this.sshClient?.IsConnected == true)
+                    {
+                        // Check for new output from device
+                        string newOutput;
+                        lock (this.outputBuffer)
+                        {
+                            if (this.outputBuffer.Length > 0)
+                            {
+                                newOutput = this.outputBuffer.ToString();
+                                this.outputBuffer.Clear();
+                            }
+                            else
+                            {
+                                newOutput = string.Empty;
+                            }
+                        }
+
+                        // If there's new output, write it before the prompt
+                        if (!string.IsNullOrEmpty(newOutput))
+                        {
+                            // Move cursor up to overwrite prompt
+                            AnsiConsole.Write("\r");
+                            AnsiConsole.Write(new string(' ', this.currentLine.Length + 2));
+                            AnsiConsole.Write("\r");
+
+                            // Write the new output
+                            AnsiConsole.Write(newOutput);
+
+                            // Update the live display
+                            ctx.UpdateTarget(this.RenderPrompt());
+                        }
+
+                        // Check for keyboard input
+                        if (Console.KeyAvailable)
+                        {
+                            var keyInfo = Console.ReadKey(intercept: true);
+
+                            // Handle Ctrl+X for exit
+                            if (keyInfo.Key == ConsoleKey.X && keyInfo.Modifiers == ConsoleModifiers.Control)
+                            {
+                                await this.ExitSessionAsync();
+                                break;
+                            }
+
+                            // Swallow other control sequences
+                            if (keyInfo.Modifiers.HasFlag(ConsoleModifiers.Control) ||
+                                keyInfo.Modifiers.HasFlag(ConsoleModifiers.Alt))
+                            {
+                                continue;
+                            }
+
+                            // Handle special keys
+                            var needsUpdate = true;
+                            switch (keyInfo.Key)
+                            {
+                                case ConsoleKey.Enter:
+                                    await this.SubmitCommandAsync(this.currentLine, sessionToken, ctx);
+                                    this.currentLine = string.Empty;
+                                    this.commandHistory?.ResetPosition();
+                                    break;
+
+                                case ConsoleKey.Backspace:
+                                    this.HandleBackspace();
+                                    break;
+
+                                case ConsoleKey.UpArrow:
+                                    this.HandleUpArrow();
+                                    break;
+
+                                case ConsoleKey.DownArrow:
+                                    this.HandleDownArrow();
+                                    break;
+
+                                case ConsoleKey.Tab:
+
+                                    // Check if derived class wants to handle it
+                                    if (!await this.HandleSpecialKeyAsync(keyInfo, sessionToken))
+                                    {
+                                        // Default: send to device
+                                        this.shellStream.WriteLine($"{this.currentLine}\t");
+                                    }
+                                    needsUpdate = false;
+                                    break;
+
+                                default:
+                                    if (!char.IsControl(keyInfo.KeyChar))
+                                    {
+                                        this.currentLine += keyInfo.KeyChar;
+                                    }
+                                    else
+                                    {
+                                        needsUpdate = false;
+                                    }
+                                    break;
+                            }
+
+                            if (needsUpdate && !this.isExecutingNestedCommand)
+                            {
+                                ctx.UpdateTarget(this.RenderPrompt());
+                            }
+                        }
+                        else
+                        {
+                            await Task.Delay(50, sessionToken);
+                        }
+                    }
+                });
+
+            try
+            {
+                await readTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when we cancel the session
+            }
+            catch
+            {
+                // Ignore other read task exceptions
+            }
+        }
+
+        private async Task SubmitCommandAsync(string command, CancellationToken cancellationToken, LiveDisplayContext ctx)
+        {
+            if (this.shellStream == null || string.IsNullOrWhiteSpace(command))
+            {
+                // Just show empty prompt
+                ctx.UpdateTarget(this.RenderPrompt());
+                return;
+            }
+
+            // Clear the live prompt before executing command
+            AnsiConsole.Write("\r");
+            AnsiConsole.Write(new string(' ', this.currentLine.Length + 2));
+            AnsiConsole.Write("\r");
+
+            // Check if user manually typed the exit command
+            if (command.Equals(this.ExitCommand, StringComparison.OrdinalIgnoreCase))
+            {
+                this.commandHistory?.AddCommand(command);
+                await this.ExitSessionAsync();
+                return;
+            }
+
+            // Check for nested command
+            if (command.StartsWith(':'))
+            {
+                var nestedCommand = command[1..].Trim();
+                this.commandHistory?.AddCommand(command);
+
+                // Set flag to pause output reading
+                this.isExecutingNestedCommand = true;
+
+                try
+                {
+                    AnsiConsole.WriteLine($"> {command}");
+                    await this.HandleNestedCommandAsync(nestedCommand, cancellationToken);
+                }
+                finally
+                {
+                    // Resume output reading
+                    this.isExecutingNestedCommand = false;
+                    ctx.UpdateTarget(this.RenderPrompt());
+                }
+
+                return;
+            }
+
+            // Echo the command
+            AnsiConsole.WriteLine($"> {command}");
+
+            // Send command to device
+            this.shellStream.WriteLine(command);
+            this.commandHistory?.AddCommand(command);
+
+            // Update prompt
+            ctx.UpdateTarget(this.RenderPrompt());
+        }
+    }
+}
