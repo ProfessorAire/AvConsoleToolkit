@@ -1,6 +1,6 @@
 // <copyright file="AddressBookListCommand.cs">
 // The MIT License
-// Copyright ï¿½ Christopher McNeely
+// Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -102,6 +102,7 @@ namespace AvConsoleToolkit.Commands.AddressBook
                     var ipAddress = !string.IsNullOrWhiteSpace(entry.HostAddress) ? entry.HostAddress : "[dim]<none>[/]";
                     var username = !string.IsNullOrEmpty(entry.Username) ? entry.Username.EscapeMarkup() : "[dim]<none>[/]";
                     var password = !string.IsNullOrEmpty(entry.Password) ? "[dim]******[/]" : "[dim]<none>[/]";
+
                     var comment = !string.IsNullOrEmpty(entry.Comment) ? entry.Comment.EscapeMarkup() : "[dim]<none>[/]";
 
                     if (settings.Detailed)
