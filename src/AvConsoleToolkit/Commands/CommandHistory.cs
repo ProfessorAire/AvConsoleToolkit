@@ -177,6 +177,37 @@ namespace AvConsoleToolkit.Commands
         }
 
         /// <summary>
+        /// Removes all occurrences of a specific command from the history.
+        /// </summary>
+        /// <param name="command">The command to remove.</param>
+        /// <returns>True if any commands were removed, false otherwise.</returns>
+        public bool RemoveCommand(string command)
+        {
+            if (string.IsNullOrWhiteSpace(command))
+            {
+                return false;
+            }
+
+            var removed = false;
+            for (int i = this.commands.Count - 1; i >= 0; i--)
+            {
+                if (this.commands[i].Equals(command, StringComparison.Ordinal))
+                {
+                    this.commands.RemoveAt(i);
+                    removed = true;
+                }
+            }
+
+            // Reset position to end of history
+            if (removed)
+            {
+                this.currentPosition = this.commands.Count;
+            }
+
+            return removed;
+        }
+
+        /// <summary>
         /// Resets the navigation position to the end of the history.
         /// </summary>
         public void ResetPosition()
@@ -201,31 +232,58 @@ namespace AvConsoleToolkit.Commands
         }
 
         /// <summary>
-        /// Searches command history for commands matching the given prefix.
-        /// Returns distinct results (no duplicates).
+        /// Searches command history for commands matching the given search text.
+        /// Supports both prefix matching and contains matching.
+        /// Returns distinct results (no duplicates) with match position information for highlighting.
         /// </summary>
-        /// <param name="prefix">The prefix to search for.</param>
+        /// <param name="searchText">The text to search for.</param>
         /// <param name="maxResults">Maximum number of results to return.</param>
-        /// <returns>List of unique matching commands in reverse chronological order.</returns>
-        public List<string> SearchByPrefix(string prefix, int maxResults = 5)
+        /// <returns>List of tuples containing the command and the start index of the match.</returns>
+        public List<(string Command, int MatchIndex)> SearchByPrefix(string searchText, int maxResults = 5)
         {
-            if (string.IsNullOrWhiteSpace(prefix))
+            if (string.IsNullOrWhiteSpace(searchText))
             {
-                // Return most recent commands (distinct only)
+                // Return most recent commands (distinct only) with no match index
                 return this.commands
                     .Distinct()
                     .TakeLast(maxResults)
                     .Reverse()
+                    .Select(cmd => (cmd, -1))
                     .ToList();
             }
 
-            // Search for commands starting with prefix (distinct only)
-            return this.commands
-                .Where(cmd => cmd.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                .Distinct()
-                .Reverse()
+            // Search for commands containing the search text (case-insensitive)
+            // Prioritize prefix matches, then by recency (most recent first)
+            var matchingCommands = new List<(string Command, int Index, bool IsPrefix, int LastPosition)>();
+            
+            // Find all matches and track their last position in history
+            for (int i = this.commands.Count - 1; i >= 0; i--)
+            {
+                var cmd = this.commands[i];
+                var index = cmd.IndexOf(searchText, StringComparison.OrdinalIgnoreCase);
+                
+                if (index >= 0)
+                {
+                    // Check if we already have this command
+                    var existing = matchingCommands.FirstOrDefault(x => x.Command.Equals(cmd, StringComparison.Ordinal));
+                    if (existing.Command == null)
+                    {
+                        // New command, add it
+                        matchingCommands.Add((cmd, index, index == 0, i));
+                    }
+                    // If duplicate, we already have the most recent one (since we're iterating backwards)
+                }
+            }
+
+            // Sort: prefix matches first, then by recency (higher position = more recent)
+            var results = matchingCommands
+                .OrderByDescending(x => x.IsPrefix)
+                .ThenByDescending(x => x.LastPosition)
                 .Take(maxResults)
+                .Select(x => (x.Command, x.Index))
                 .ToList();
+
+            return results;
         }
 
         /// <summary>
