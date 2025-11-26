@@ -507,6 +507,7 @@ namespace AvConsoleToolkit.Commands
         {
             this.showingHistoryMenu = false;
             this.historyMenuSelectedIndex = -1;
+            this.historyMenuItems = null;
         }
 
         private void HandleEscape()
