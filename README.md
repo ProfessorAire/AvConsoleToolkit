@@ -8,7 +8,7 @@ Download the latest release and unzip it to a location of your choice. Ensure th
 
 ## Updating
 
-You can download 
+You can update the program by running the `update` command to check for updates from GitHub.
 
 ## Command Highlights
 
