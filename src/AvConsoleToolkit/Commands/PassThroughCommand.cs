@@ -12,6 +12,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -47,6 +48,12 @@ namespace AvConsoleToolkit.Commands
         private readonly StringBuilder outputBuffer = new();
 
         private CancellationTokenSource? sessionCancellation;
+
+        private bool showingHistoryMenu;
+
+        private int historyMenuSelectedIndex;
+
+        private List<string>? historyMenuItems;
 
         /// <summary>
         /// Gets the command to send to the remote device to exit the session.
@@ -396,8 +403,22 @@ namespace AvConsoleToolkit.Commands
                 return;
             }
 
-            var command = this.commandHistory.GetNext();
-            this.currentLine = command ?? string.Empty;
+            // If history menu is showing, navigate down
+            if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuItems.Count > 0)
+            {
+                this.historyMenuSelectedIndex = Math.Min(this.historyMenuItems.Count - 1, this.historyMenuSelectedIndex + 1);
+            }
+            else if (this.historyMenuItems != null && this.historyMenuItems.Count > 0)
+            {
+                // Start showing history menu and select first item
+                this.showingHistoryMenu = true;
+                this.historyMenuSelectedIndex = 0;
+            }
+        }
+
+        private void HandleDownArrowWithMenu()
+        {
+            this.HandleDownArrow();
         }
 
         private void HandleUpArrow()
@@ -407,17 +428,106 @@ namespace AvConsoleToolkit.Commands
                 return;
             }
 
-            var command = this.commandHistory.GetPrevious();
-            if (command != null)
+            // If history menu is showing, navigate up
+            if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuItems.Count > 0)
             {
-                this.currentLine = command;
+                if (this.historyMenuSelectedIndex > 0)
+                {
+                    this.historyMenuSelectedIndex--;
+                }
+                else
+                {
+                    // At top, hide menu
+                    this.HideHistoryMenu();
+                }
+            }
+        }
+
+        private void ShowHistoryMenu()
+        {
+            if (this.commandHistory == null)
+            {
+                return;
+            }
+
+            // Get matching history items
+            this.historyMenuItems = this.commandHistory.SearchByPrefix(this.currentLine, 5);
+            
+            // Menu is not "active" until user presses down arrow
+            this.showingHistoryMenu = false;
+            this.historyMenuSelectedIndex = -1;
+        }
+
+        private void HideHistoryMenu()
+        {
+            this.showingHistoryMenu = false;
+            this.historyMenuSelectedIndex = -1;
+        }
+
+        private void SelectHistoryItem()
+        {
+            if (this.showingHistoryMenu && this.historyMenuItems != null && 
+                this.historyMenuSelectedIndex >= 0 && this.historyMenuSelectedIndex < this.historyMenuItems.Count)
+            {
+                this.currentLine = this.historyMenuItems[this.historyMenuSelectedIndex];
+                this.HideHistoryMenu();
+                this.historyMenuItems = null; // Clear the list
+            }
+        }
+
+        private void HandleEscape()
+        {
+            if (this.showingHistoryMenu || (this.historyMenuItems != null && this.historyMenuItems.Count > 0))
+            {
+                this.HideHistoryMenu();
+                this.historyMenuItems = null;
+            }
+            else
+            {
+                this.currentLine = string.Empty;
             }
         }
 
         private IRenderable RenderPrompt()
         {
-            var text = new Text($"{Environment.NewLine}{this.Prompt ?? "ACT>"} {this.currentLine}");
-            return text;
+            var components = new List<IRenderable>();
+
+            // Add the prompt line
+            components.Add(new Text($"{Environment.NewLine}{this.Prompt ?? "ACT>"} {this.currentLine}"));
+
+            // If there are history items, show them below the prompt
+            if (this.historyMenuItems != null && this.historyMenuItems.Count > 0)
+            {
+                // Find the longest item to set consistent width
+                var maxWidth = this.historyMenuItems.Max(item => item.Length) + 2; // +2 for padding
+
+                var historyPanel = new Panel(
+                    new Rows(
+                        this.historyMenuItems.Select((item, index) =>
+                        {
+                            var isSelected = this.showingHistoryMenu && index == this.historyMenuSelectedIndex;
+                            var paddedItem = item.PadRight(maxWidth);
+                            
+                            if (isSelected)
+                            {
+                                return new Markup($"[on grey][yellow]>[/] {paddedItem.EscapeMarkup()}[/]");
+                            }
+                            else
+                            {
+                                return new Markup($"[yellow]>[/] {paddedItem.EscapeMarkup()}");
+                            }
+                        })
+                    )
+                )
+                {
+                    Border = BoxBorder.None,
+                    Padding = new Padding(0, 0, 0, 0)
+                };
+
+                components.Add(historyPanel);
+            }
+
+            return new Rows(components);
         }
 
         private async Task RunInteractiveSessionAsync(CancellationToken cancellationToken)
@@ -567,11 +677,17 @@ namespace AvConsoleToolkit.Commands
                                     switch (keyInfo.Key)
                                     {
                                         case ConsoleKey.Enter:
-                                            if (!string.IsNullOrWhiteSpace(this.currentLine))
+                                            if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuSelectedIndex >= 0)
+                                            {
+                                                // Select the highlighted history item
+                                                this.SelectHistoryItem();
+                                            }
+                                            else if (!string.IsNullOrWhiteSpace(this.currentLine))
                                             {
                                                 await this.SubmitCommandAsync(this.currentLine, sessionToken);
                                                 this.currentLine = string.Empty;
                                                 this.commandHistory?.ResetPosition();
+                                                this.historyMenuItems = null;
 
                                                 // Check if we just queued a nested command for execution
                                                 if (this.isExecutingNestedCommand)
@@ -584,11 +700,12 @@ namespace AvConsoleToolkit.Commands
                                             {
                                                 needsUpdate = false;
                                             }
-
-                                                break;
+                                            break;
 
                                         case ConsoleKey.Backspace:
                                             this.HandleBackspace();
+                                            // Refresh history matches
+                                            this.ShowHistoryMenu();
                                             break;
 
                                         case ConsoleKey.UpArrow:
@@ -597,6 +714,10 @@ namespace AvConsoleToolkit.Commands
 
                                         case ConsoleKey.DownArrow:
                                             this.HandleDownArrow();
+                                            break;
+
+                                        case ConsoleKey.Escape:
+                                            this.HandleEscape();
                                             break;
 
                                         case ConsoleKey.Tab:
@@ -613,6 +734,8 @@ namespace AvConsoleToolkit.Commands
                                             if (!char.IsControl(keyInfo.KeyChar))
                                             {
                                                 this.currentLine += keyInfo.KeyChar;
+                                                // Refresh history matches automatically
+                                                this.ShowHistoryMenu();
                                             }
                                             else
                                             {
