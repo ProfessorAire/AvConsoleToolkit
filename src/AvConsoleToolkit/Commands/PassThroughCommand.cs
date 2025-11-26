@@ -53,7 +53,7 @@ namespace AvConsoleToolkit.Commands
 
         private int historyMenuSelectedIndex;
 
-        private List<string>? historyMenuItems;
+        private List<(string Command, int MatchIndex)>? historyMenuItems;
 
         /// <summary>
         /// Gets the command to send to the remote device to exit the session.
@@ -403,16 +403,30 @@ namespace AvConsoleToolkit.Commands
                 return;
             }
 
-            // If history menu is showing, navigate down
+            // If history menu is showing, navigate down in the menu
             if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuItems.Count > 0)
             {
                 this.historyMenuSelectedIndex = Math.Min(this.historyMenuItems.Count - 1, this.historyMenuSelectedIndex + 1);
             }
             else if (this.historyMenuItems != null && this.historyMenuItems.Count > 0)
             {
-                // Start showing history menu and select first item
+                // History items are available but menu not active - activate menu and select first item
                 this.showingHistoryMenu = true;
                 this.historyMenuSelectedIndex = 0;
+            }
+            else
+            {
+                // No history menu - use traditional down arrow history navigation
+                var nextCommand = this.commandHistory.GetNext();
+                if (nextCommand != null)
+                {
+                    this.currentLine = nextCommand;
+                }
+                else
+                {
+                    // At end of history, clear line
+                    this.currentLine = string.Empty;
+                }
             }
         }
 
@@ -428,7 +442,7 @@ namespace AvConsoleToolkit.Commands
                 return;
             }
 
-            // If history menu is showing, navigate up
+            // If history menu is showing, navigate up in the menu
             if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuItems.Count > 0)
             {
                 if (this.historyMenuSelectedIndex > 0)
@@ -441,6 +455,15 @@ namespace AvConsoleToolkit.Commands
                     this.HideHistoryMenu();
                 }
             }
+            else
+            {
+                // Menu not showing - use traditional up arrow history navigation
+                var previousCommand = this.commandHistory.GetPrevious();
+                if (previousCommand != null)
+                {
+                    this.currentLine = previousCommand;
+                }
+            }
         }
 
         private void ShowHistoryMenu()
@@ -450,9 +473,31 @@ namespace AvConsoleToolkit.Commands
                 return;
             }
 
-            // Get matching history items
+            // Check if history is enabled in settings
+            if (!Configuration.AppConfig.Settings.PassThrough.UseHistoryForPassThrough)
+            {
+                this.historyMenuItems = null;
+                return;
+            }
+
+            // If search text is empty, close the history menu
+            if (string.IsNullOrWhiteSpace(this.currentLine))
+            {
+                this.historyMenuItems = null;
+                this.showingHistoryMenu = false;
+                this.historyMenuSelectedIndex = -1;
+                return;
+            }
+
+            // Get matching history items with match position information
             this.historyMenuItems = this.commandHistory.SearchByPrefix(this.currentLine, 5);
             
+            if (this.historyMenuItems.Count == 0)
+            {
+                this.historyMenuItems = null;
+                return;
+            }
+
             // Menu is not "active" until user presses down arrow
             this.showingHistoryMenu = false;
             this.historyMenuSelectedIndex = -1;
@@ -462,17 +507,6 @@ namespace AvConsoleToolkit.Commands
         {
             this.showingHistoryMenu = false;
             this.historyMenuSelectedIndex = -1;
-        }
-
-        private void SelectHistoryItem()
-        {
-            if (this.showingHistoryMenu && this.historyMenuItems != null && 
-                this.historyMenuSelectedIndex >= 0 && this.historyMenuSelectedIndex < this.historyMenuItems.Count)
-            {
-                this.currentLine = this.historyMenuItems[this.historyMenuSelectedIndex];
-                this.HideHistoryMenu();
-                this.historyMenuItems = null; // Clear the list
-            }
         }
 
         private void HandleEscape()
@@ -488,6 +522,54 @@ namespace AvConsoleToolkit.Commands
             }
         }
 
+        private async Task SubmitCommandAsync(string command, CancellationToken cancellationToken)
+        {
+            if (this.shellStream == null || string.IsNullOrWhiteSpace(command))
+            {
+                // Just return, prompt will update naturally
+                return;
+            }
+
+            // Clear the live prompt before executing command
+            AnsiConsole.Write("\r");
+            AnsiConsole.Write(new string(' ', command.Length + 10));
+            AnsiConsole.Write("\r");
+
+            // Check if user manually typed the exit command
+            if (command.Equals(this.ExitCommand, StringComparison.OrdinalIgnoreCase) || command.Equals("exit", StringComparison.OrdinalIgnoreCase))
+            {
+                await this.ExitSessionAsync();
+                return;
+            }
+
+            // Check for nested command
+            if (command.StartsWith(':'))
+            {
+                var nestedCommand = command[1..].Trim();
+                this.commandHistory?.AddCommand(command);
+
+                // Echo the command first
+                AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
+                AnsiConsole.WriteLine(); // Add spacing
+
+                // Queue the nested command for execution AFTER Live display exits
+                this.pendingNestedCommand = nestedCommand;
+
+                // Set flag to trigger Live display exit
+                this.isExecutingNestedCommand = true;
+
+                // Return immediately - Live display will exit, then command will execute
+                return;
+            }
+
+            // Echo the command
+            AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
+
+            // Send command to device
+            this.shellStream.WriteLine(command);
+            this.commandHistory?.AddCommand(command);
+        }
+
         private IRenderable RenderPrompt()
         {
             var components = new List<IRenderable>();
@@ -499,26 +581,97 @@ namespace AvConsoleToolkit.Commands
             if (this.historyMenuItems != null && this.historyMenuItems.Count > 0)
             {
                 // Find the longest item to set consistent width
-                var maxWidth = this.historyMenuItems.Max(item => item.Length) + 2; // +2 for padding
+                var maxWidth = this.historyMenuItems.Max(item => item.Command.Length) + 4; // +4 for "> " prefix and padding
 
-                var historyPanel = new Panel(
-                    new Rows(
-                        this.historyMenuItems.Select((item, index) =>
+                var historyRows = this.historyMenuItems.Select((item, index) =>
+                {
+                    var isSelected = this.showingHistoryMenu && index == this.historyMenuSelectedIndex;
+                    var command = item.Command;
+                    var matchIndex = item.MatchIndex;
+
+                    // Build the markup with highlighting
+                    var markup = new StringBuilder();
+                    
+                    if (isSelected)
+                    {
+                        // Selected: white on grey for entire row
+                        markup.Append("[white on grey]> ");
+                    }
+                    else
+                    {
+                        // Unselected: olive arrow with default background
+                        markup.Append("[olive]>[/] ");
+                    }
+
+                    // Highlight the matching portion
+                    if (matchIndex >= 0)
+                    {
+                        var searchLength = this.currentLine.Length;
+                        
+                        // Add text before match
+                        if (matchIndex > 0)
                         {
-                            var isSelected = this.showingHistoryMenu && index == this.historyMenuSelectedIndex;
-                            var paddedItem = item.PadRight(maxWidth);
-                            
                             if (isSelected)
                             {
-                                return new Markup($"[on grey][yellow]>[/] {paddedItem.EscapeMarkup()}[/]");
+                                markup.Append(command.Substring(0, matchIndex).EscapeMarkup());
                             }
                             else
                             {
-                                return new Markup($"[yellow]>[/] {paddedItem.EscapeMarkup()}");
+                                markup.Append(command.Substring(0, matchIndex).EscapeMarkup());
                             }
-                        })
-                    )
-                )
+                        }
+                        
+                        // Add highlighted match
+                        if (isSelected)
+                        {
+                            // Keep white on grey, but make match bold or underlined
+                            markup.Append("[bold]");
+                            markup.Append(command.Substring(matchIndex, searchLength).EscapeMarkup());
+                            markup.Append("[/]");
+                        }
+                        else
+                        {
+                            // Cyan highlight for unselected items
+                            markup.Append("[cyan]");
+                            markup.Append(command.Substring(matchIndex, searchLength).EscapeMarkup());
+                            markup.Append("[/]");
+                        }
+                        
+                        // Add text after match
+                        if (matchIndex + searchLength < command.Length)
+                        {
+                            if (isSelected)
+                            {
+                                markup.Append(command.Substring(matchIndex + searchLength).EscapeMarkup());
+                            }
+                            else
+                            {
+                                markup.Append(command.Substring(matchIndex + searchLength).EscapeMarkup());
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // No match or match not found, just show the command
+                        markup.Append(command.EscapeMarkup());
+                    }
+
+                    // Pad to max width
+                    var currentLength = command.Length + 2; // +2 for "> "
+                    if (currentLength < maxWidth)
+                    {
+                        markup.Append(new string(' ', maxWidth - currentLength));
+                    }
+                    
+                    if (isSelected)
+                    {
+                        markup.Append("[/]"); // Close [white on grey]
+                    }
+
+                    return new Markup(markup.ToString());
+                }).ToList();
+
+                var historyPanel = new Panel(new Rows(historyRows))
                 {
                     Border = BoxBorder.None,
                     Padding = new Padding(0, 0, 0, 0)
@@ -665,6 +818,46 @@ namespace AvConsoleToolkit.Commands
                                         return; // Exit the Live context
                                     }
 
+                                    // Handle Alt+X to delete selected history item
+                                    if (keyInfo.Key == ConsoleKey.X && keyInfo.Modifiers == ConsoleModifiers.Alt)
+                                    {
+                                        if (this.showingHistoryMenu && this.historyMenuItems != null && 
+                                            this.historyMenuSelectedIndex >= 0 && this.historyMenuSelectedIndex < this.historyMenuItems.Count)
+                                        {
+                                            // Get the selected command
+                                            var commandToDelete = this.historyMenuItems[this.historyMenuSelectedIndex].Command;
+                                            
+                                            // Remove from history
+                                            if (this.commandHistory?.RemoveCommand(commandToDelete) == true)
+                                            {
+                                                // Refresh the history menu
+                                                this.ShowHistoryMenu();
+                                                
+                                                // Adjust selected index if needed
+                                                if (this.historyMenuItems == null || this.historyMenuItems.Count == 0)
+                                                {
+                                                    // No items left, hide menu
+                                                    this.HideHistoryMenu();
+                                                }
+                                                else if (this.historyMenuSelectedIndex >= this.historyMenuItems.Count)
+                                                {
+                                                    // Selected index out of bounds, move to last item
+                                                    this.historyMenuSelectedIndex = this.historyMenuItems.Count - 1;
+                                                    this.showingHistoryMenu = true; // Keep menu active
+                                                }
+                                                else
+                                                {
+                                                    // Keep menu active at current (or adjusted) index
+                                                    this.showingHistoryMenu = true;
+                                                }
+                                                
+                                                // Update display
+                                                ctx.UpdateTarget(this.RenderPrompt());
+                                            }
+                                        }
+                                        continue;
+                                    }
+
                                     // Swallow other control sequences
                                     if (keyInfo.Modifiers.HasFlag(ConsoleModifiers.Control) ||
                                         keyInfo.Modifiers.HasFlag(ConsoleModifiers.Alt))
@@ -679,8 +872,31 @@ namespace AvConsoleToolkit.Commands
                                         case ConsoleKey.Enter:
                                             if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuSelectedIndex >= 0)
                                             {
-                                                // Select the highlighted history item
-                                                this.SelectHistoryItem();
+                                                // Get the selected command
+                                                var selectedCommand = this.historyMenuItems[this.historyMenuSelectedIndex].Command;
+                                                
+                                                // Clear the history menu display immediately
+                                                this.HideHistoryMenu();
+                                                this.historyMenuItems = null;
+                                                
+                                                // Clear currentLine BEFORE submitting (otherwise SubmitCommandAsync uses wrong length for clearing)
+                                                this.currentLine = string.Empty;
+                                                
+                                                // Force update to hide the menu
+                                                ctx.UpdateTarget(this.RenderPrompt());
+                                                
+                                                // Now submit the selected command directly
+                                                await this.SubmitCommandAsync(selectedCommand, sessionToken);
+                                                this.commandHistory?.ResetPosition();
+                                                
+                                                // Check if we just queued a nested command for execution
+                                                if (this.isExecutingNestedCommand)
+                                                {
+                                                    // Exit Live context - nested command will execute after this returns
+                                                    return;
+                                                }
+                                                
+                                                needsUpdate = false; // Already updated above
                                             }
                                             else if (!string.IsNullOrWhiteSpace(this.currentLine))
                                             {
@@ -810,54 +1026,6 @@ namespace AvConsoleToolkit.Commands
             {
                 // Ignore other read task exceptions
             }
-        }
-
-        private async Task SubmitCommandAsync(string command, CancellationToken cancellationToken)
-        {
-            if (this.shellStream == null || string.IsNullOrWhiteSpace(command))
-            {
-                // Just return, prompt will update naturally
-                return;
-            }
-
-            // Clear the live prompt before executing command
-            AnsiConsole.Write("\r");
-            AnsiConsole.Write(new string(' ', this.currentLine.Length + 10));
-            AnsiConsole.Write("\r");
-
-            // Check if user manually typed the exit command
-            if (command.Equals(this.ExitCommand, StringComparison.OrdinalIgnoreCase) || command.Equals("exit", StringComparison.OrdinalIgnoreCase))
-            {
-                await this.ExitSessionAsync();
-                return;
-            }
-
-            // Check for nested command
-            if (command.StartsWith(':'))
-            {
-                var nestedCommand = command[1..].Trim();
-                this.commandHistory?.AddCommand(command);
-
-                // Echo the command first
-                AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
-                AnsiConsole.WriteLine(); // Add spacing
-
-                // Queue the nested command for execution AFTER Live display exits
-                this.pendingNestedCommand = nestedCommand;
-
-                // Set flag to trigger Live display exit
-                this.isExecutingNestedCommand = true;
-
-                // Return immediately - Live display will exit, then command will execute
-                return;
-            }
-
-            // Echo the command
-            AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
-
-            // Send command to device
-            this.shellStream.WriteLine(command);
-            this.commandHistory?.AddCommand(command);
         }
     }
 }

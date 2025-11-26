@@ -28,6 +28,11 @@ namespace AvConsoleToolkit.Configuration
         IConnectionSettings Connection { get; }
 
         /// <summary>
+        /// Gets the current connection settings used to configure Pass Through specific functionality.
+        /// </summary>
+        IPassThroughSettings PassThrough { get; }
+
+        /// <summary>
         /// Gets or sets the GitHub token used for accessing the GitHub API. If not set, specific operations
         /// may prompt for the token instead.
         /// </summary>
