@@ -124,7 +124,6 @@ namespace AvConsoleToolkit
                 .WithAlias("ab");
             });
 
-            App.SetDefaultCommand<Commands.AboutCommand>();
             var result = App.Run(args);
             SshManager.ReleaseAll();
             return result;
