@@ -11,6 +11,7 @@
 // </copyright>
 
 using System;
+using AvConsoleToolkit.Ssh;
 using Spectre.Console.Cli;
 
 namespace AvConsoleToolkit
@@ -22,15 +23,20 @@ namespace AvConsoleToolkit
     public static class Program
     {
         /// <summary>
+        /// Gets the <see cref="CommandApp"/> instance for the application.
+        /// </summary>
+        public static CommandApp? App { get; private set; }
+
+        /// <summary>
         /// Main method. Configures the command-line interface and runs the application.
         /// </summary>
         /// <param name="args">Command-line arguments.</param>
         /// <returns>Exit code.</returns>
         public static int Main(string[] args)
         {
-            var app = new CommandApp();
+            App = new CommandApp();
 
-            app.Configure(config =>
+            App.Configure(config =>
             {
                 config.SetApplicationName("act")
                 .PropagateExceptions()
@@ -118,7 +124,10 @@ namespace AvConsoleToolkit
                 .WithAlias("ab");
             });
 
-            return app.Run(args);
+            App.SetDefaultCommand<Commands.AboutCommand>();
+            var result = App.Run(args);
+            SshManager.ReleaseAll();
+            return result;
         }
     }
 }

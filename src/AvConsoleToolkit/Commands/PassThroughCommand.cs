@@ -11,6 +11,8 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,19 +31,39 @@ namespace AvConsoleToolkit.Commands
     public abstract class PassThroughCommand<TSettings> : AsyncCommand<TSettings>
         where TSettings : PassThroughSettings
     {
-        private readonly StringBuilder outputBuffer = new();
-
         private CommandHistory? commandHistory;
 
         private string currentLine = string.Empty;
 
-        private bool isExecutingNestedCommand;
-
-        private CancellationTokenSource? sessionCancellation;
+        private ISshClient? sshClient;
 
         private Ssh.IShellStream? shellStream;
 
-        private SshClient? sshClient;
+        private bool isExecutingNestedCommand;
+
+        private string? pendingNestedCommand;
+
+        private readonly StringBuilder outputBuffer = new();
+
+        private CancellationTokenSource? sessionCancellation;
+
+        /// <summary>
+        /// Gets the command to send to the remote device to exit the session.
+        /// Override this in derived classes to specify device-specific exit commands.
+        /// </summary>
+        protected abstract string ExitCommand { get; }
+
+        /// <summary>
+        /// Gets the command branch prefix for nested commands (e.g., "crestron").
+        /// Override this in derived classes to specify the command branch.
+        /// </summary>
+        protected abstract string CommandBranch { get; }
+
+        /// <summary>
+        /// Gets the current SSH client connection.
+        /// This allows derived classes to share the connection with nested commands.
+        /// </summary>
+        protected ISshClient? SshClient => this.sshClient;
 
         /// <summary>
         /// Gets the current shell stream.
@@ -54,18 +76,6 @@ namespace AvConsoleToolkit.Commands
         /// This allows derived classes to access connection parameters.
         /// </summary>
         protected TSettings? CurrentSettings { get; private set; }
-
-        /// <summary>
-        /// Gets the command to send to the remote device to exit the session.
-        /// Override this in derived classes to specify device-specific exit commands.
-        /// </summary>
-        protected abstract string ExitCommand { get; }
-
-        /// <summary>
-        /// Gets the current SSH client connection.
-        /// This allows derived classes to share the connection with nested commands.
-        /// </summary>
-        protected SshClient? SshClient => this.sshClient;
 
         /// <summary>
         /// Executes the pass-through command, establishing an SSH connection and entering interactive mode.
@@ -169,8 +179,99 @@ namespace AvConsoleToolkit.Commands
         /// <returns>True if the command was handled, false otherwise.</returns>
         protected virtual Task<bool> HandleNestedCommandAsync(string command, CancellationToken cancellationToken)
         {
-            AnsiConsole.MarkupLine($"[yellow]Nested commands not yet implemented in base class.[/]");
-            return Task.FromResult(false);
+            if (string.IsNullOrWhiteSpace(command) || Program.App == null)
+            {
+                AnsiConsole.MarkupLine("[yellow]Command could not be executed.[/]");
+                return Task.FromResult(false);
+            }
+
+            try
+            {
+                // Parse the command line into arguments
+                var args = ParseCommandLine(command);
+                if (args.Length == 0)
+                {
+                    return Task.FromResult(false);
+                }
+
+                // Prepend the command branch (e.g., "crestron")
+                var fullArgs = new List<string>(args.Length + 7);
+                fullArgs.Add(this.CommandBranch);
+                fullArgs.AddRange(args);
+
+                if (!fullArgs.Contains("-a") && !fullArgs.Contains("--address"))
+                {
+                    fullArgs.Add("-a");
+                    fullArgs.Add(this.CurrentSettings!.Address!);
+                }
+
+                if (!fullArgs.Contains("-u") && !fullArgs.Contains("--username"))
+                {
+                    fullArgs.Add("-u");
+                    fullArgs.Add(this.CurrentSettings!.Username!);
+                }
+
+                if (!fullArgs.Contains("-p") && !fullArgs.Contains("--password"))
+                {
+                    fullArgs.Add("-p");
+                    fullArgs.Add(this.CurrentSettings!.Password!);
+                }
+
+                // Execute using the main command app
+                var result = Program.App.Run(fullArgs);
+
+                return Task.FromResult(result == 0);
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[red]Error executing nested command:[/] {ex.Message.EscapeMarkup()}");
+                if (this.CurrentSettings?.Verbose == true)
+                {
+                    AnsiConsole.WriteException(ex);
+                }
+                return Task.FromResult(false);
+            }
+        }
+
+        /// <summary>
+        /// Parses a command line string into an array of arguments, respecting quotes.
+        /// </summary>
+        /// <param name="commandLine">The command line to parse.</param>
+        /// <returns>Array of parsed arguments.</returns>
+        protected static string[] ParseCommandLine(string commandLine)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            var current = new System.Text.StringBuilder();
+            var inQuotes = false;
+
+            for (int i = 0; i < commandLine.Length; i++)
+            {
+                var c = commandLine[i];
+
+                if (c == '"')
+                {
+                    inQuotes = !inQuotes;
+                }
+                else if (char.IsWhiteSpace(c) && !inQuotes)
+                {
+                    if (current.Length > 0)
+                    {
+                        parts.Add(current.ToString());
+                        current.Clear();
+                    }
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+
+            if (current.Length > 0)
+            {
+                parts.Add(current.ToString());
+            }
+
+            return parts.ToArray();
         }
 
         /// <summary>
@@ -207,27 +308,13 @@ namespace AvConsoleToolkit.Commands
                 await this.commandHistory.SaveAsync();
             }
 
-            // Disconnect SSH
-            try
+            // Release connections through SshManager
+            if (this.CurrentSettings != null &&
+                !string.IsNullOrEmpty(this.CurrentSettings.Address) &&
+                !string.IsNullOrEmpty(this.CurrentSettings.Username))
             {
-                this.shellStream?.Dispose();
-            }
-            catch
-            {
-                // Ignore disposal errors
-            }
-
-            try
-            {
-                if (this.sshClient?.IsConnected == true)
-                {
-                    this.sshClient.Disconnect();
-                }
-                this.sshClient?.Dispose();
-            }
-            catch
-            {
-                // Ignore disposal errors
+                // Note: We don't release here because the connection might be reused
+                // Connections will be cleaned up when the application exits
             }
 
             this.sessionCancellation?.Dispose();
@@ -240,13 +327,16 @@ namespace AvConsoleToolkit.Commands
                 await AnsiConsole.Status()
                     .StartAsync("Connecting to device...", async ctx =>
                     {
-                        this.sshClient = new SshClient(host, username, password);
-                        await this.sshClient.ConnectAsync(cancellationToken);
+                        this.sshClient = await Ssh.SshManager.GetSshClientAsync(host, username, password, cancellationToken);
+                        if (!this.sshClient.IsConnected)
+                        {
+                            ctx.Status("Connecting to SSH client.");
+                            await this.sshClient.ConnectAsync(cancellationToken);
+                        }
 
-                        this.shellStream = new Ssh.ShellStreamWrapper(
-                            this.sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024));
-
+                        this.shellStream = await Ssh.SshManager.GetShellStreamAsync(host, username, password, cancellationToken);
                         await this.OnConnectedAsync(cancellationToken);
+                        ctx.Status("Connected");
                     });
 
                 return true;
@@ -384,117 +474,174 @@ namespace AvConsoleToolkit.Commands
             }
 
             // Main input loop with live prompt display
-            await AnsiConsole.Live(this.RenderPrompt())
-                .AutoClear(false)
-                .StartAsync(async ctx =>
+            // Use a flag to control whether we're in live mode or executing nested commands
+            var inLiveMode = true;
+            
+            while (!sessionToken.IsCancellationRequested && this.sshClient?.IsConnected == true)
+            {
+                if (inLiveMode && !this.isExecutingNestedCommand)
                 {
-                    while (!sessionToken.IsCancellationRequested && this.sshClient?.IsConnected == true)
-                    {
-                        // Check for new output from device
-                        string newOutput;
-                        lock (this.outputBuffer)
+                    // Start Live display
+                    await AnsiConsole.Live(this.RenderPrompt())
+                        .AutoClear(false)
+                        .StartAsync(async ctx =>
                         {
-                            if (this.outputBuffer.Length > 0)
+                            while (!sessionToken.IsCancellationRequested && 
+                                   this.sshClient?.IsConnected == true && 
+                                   !this.isExecutingNestedCommand)
                             {
-                                newOutput = this.outputBuffer.ToString();
-                                this.outputBuffer.Clear();
-                            }
-                            else
-                            {
-                                newOutput = string.Empty;
-                            }
-                        }
-
-                        // If there's new output, write it before the prompt
-                        if (!string.IsNullOrEmpty(newOutput))
-                        {
-                            // Move cursor up to overwrite prompt
-                            AnsiConsole.Write("\r");
-                            AnsiConsole.Write(new string(' ', this.currentLine.Length + 2));
-                            AnsiConsole.Write("\r");
-
-                            // Write the new output
-                            AnsiConsole.Write(newOutput);
-
-                            // Update the live display
-                            ctx.UpdateTarget(this.RenderPrompt());
-                        }
-
-                        // Check for keyboard input
-                        if (Console.KeyAvailable)
-                        {
-                            var keyInfo = Console.ReadKey(intercept: true);
-
-                            // Handle Ctrl+X for exit
-                            if (keyInfo.Key == ConsoleKey.X && keyInfo.Modifiers == ConsoleModifiers.Control)
-                            {
-                                await this.ExitSessionAsync();
-                                break;
-                            }
-
-                            // Swallow other control sequences
-                            if (keyInfo.Modifiers.HasFlag(ConsoleModifiers.Control) ||
-                                keyInfo.Modifiers.HasFlag(ConsoleModifiers.Alt))
-                            {
-                                continue;
-                            }
-
-                            // Handle special keys
-                            var needsUpdate = true;
-                            switch (keyInfo.Key)
-                            {
-                                case ConsoleKey.Enter:
-                                    await this.SubmitCommandAsync(this.currentLine, sessionToken, ctx);
-                                    this.currentLine = string.Empty;
-                                    this.commandHistory?.ResetPosition();
-                                    break;
-
-                                case ConsoleKey.Backspace:
-                                    this.HandleBackspace();
-                                    break;
-
-                                case ConsoleKey.UpArrow:
-                                    this.HandleUpArrow();
-                                    break;
-
-                                case ConsoleKey.DownArrow:
-                                    this.HandleDownArrow();
-                                    break;
-
-                                case ConsoleKey.Tab:
-
-                                    // Check if derived class wants to handle it
-                                    if (!await this.HandleSpecialKeyAsync(keyInfo, sessionToken))
+                                // Check for new output from device
+                                string newOutput;
+                                lock (this.outputBuffer)
+                                {
+                                    if (this.outputBuffer.Length > 0)
                                     {
-                                        // Default: send to device
-                                        this.shellStream.WriteLine($"{this.currentLine}\t");
-                                    }
-                                    needsUpdate = false;
-                                    break;
-
-                                default:
-                                    if (!char.IsControl(keyInfo.KeyChar))
-                                    {
-                                        this.currentLine += keyInfo.KeyChar;
+                                        newOutput = this.outputBuffer.ToString();
+                                        this.outputBuffer.Clear();
                                     }
                                     else
                                     {
-                                        needsUpdate = false;
+                                        newOutput = string.Empty;
                                     }
-                                    break;
-                            }
+                                }
 
-                            if (needsUpdate && !this.isExecutingNestedCommand)
-                            {
-                                ctx.UpdateTarget(this.RenderPrompt());
+                                // If there's new output, write it before the prompt
+                                if (!string.IsNullOrEmpty(newOutput))
+                                {
+                                    // Move cursor up to overwrite prompt
+                                    AnsiConsole.Write("\r");
+                                    AnsiConsole.Write(new string(' ', this.currentLine.Length + 5));
+                                    AnsiConsole.Write("\r");
+
+                                    // Write the new output
+                                    AnsiConsole.Write(newOutput);
+
+                                    // Update the live display
+                                    ctx.UpdateTarget(this.RenderPrompt());
+                                }
+
+                                // Check for keyboard input
+                                if (Console.KeyAvailable)
+                                {
+                                    var keyInfo = Console.ReadKey(intercept: true);
+
+                                    // Handle Ctrl+X for exit
+                                    if (keyInfo.Key == ConsoleKey.X && keyInfo.Modifiers == ConsoleModifiers.Control)
+                                    {
+                                        await this.ExitSessionAsync();
+                                        return; // Exit the Live context
+                                    }
+
+                                    // Swallow other control sequences
+                                    if (keyInfo.Modifiers.HasFlag(ConsoleModifiers.Control) ||
+                                        keyInfo.Modifiers.HasFlag(ConsoleModifiers.Alt))
+                                    {
+                                        continue;
+                                    }
+
+                                    // Handle special keys
+                                    bool needsUpdate = true;
+                                    switch (keyInfo.Key)
+                                    {
+                                        case ConsoleKey.Enter:
+                                            await this.SubmitCommandAsync(this.currentLine, sessionToken);
+                                            this.currentLine = string.Empty;
+                                            this.commandHistory?.ResetPosition();
+                                            
+                                            // Check if we just queued a nested command for execution
+                                            if (this.isExecutingNestedCommand)
+                                            {
+                                                // Exit Live context - nested command will execute after this returns
+                                                return;
+                                            }
+                                            break;
+
+                                        case ConsoleKey.Backspace:
+                                            this.HandleBackspace();
+                                            break;
+
+                                        case ConsoleKey.UpArrow:
+                                            this.HandleUpArrow();
+                                            break;
+
+                                        case ConsoleKey.DownArrow:
+                                            this.HandleDownArrow();
+                                            break;
+
+                                        case ConsoleKey.Tab:
+                                            // Check if derived class wants to handle it
+                                            if (!await this.HandleSpecialKeyAsync(keyInfo, sessionToken))
+                                            {
+                                                // Default: send to device
+                                                this.shellStream.WriteLine(this.currentLine + "\t");
+                                            }
+                                            needsUpdate = false;
+                                            break;
+
+                                        default:
+                                            if (!char.IsControl(keyInfo.KeyChar))
+                                            {
+                                                this.currentLine += keyInfo.KeyChar;
+                                            }
+                                            else
+                                            {
+                                                needsUpdate = false;
+                                            }
+                                            break;
+                                    }
+
+                                    if (needsUpdate)
+                                    {
+                                        ctx.UpdateTarget(this.RenderPrompt());
+                                    }
+                                }
+                                else
+                                {
+                                    await Task.Delay(50, sessionToken);
+                                }
                             }
-                        }
-                        else
+                        });
+
+                    // If we exited because of nested command execution, handle it
+                    if (this.isExecutingNestedCommand && this.pendingNestedCommand != null)
+                    {
+                        inLiveMode = false;
+                    }
+                }
+                else if (this.isExecutingNestedCommand && this.pendingNestedCommand != null)
+                {
+                    // Live display has fully exited, now execute the pending nested command
+                    var commandToExecute = this.pendingNestedCommand;
+                    this.pendingNestedCommand = null;
+
+                    try
+                    {
+                        // Execute nested command (outside Live display context)
+                        await this.HandleNestedCommandAsync(commandToExecute, sessionToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        AnsiConsole.MarkupLine($"[red]Error executing nested command:[/] {ex.Message.EscapeMarkup()}");
+                        if (this.CurrentSettings?.Verbose == true)
                         {
-                            await Task.Delay(50, sessionToken);
+                            AnsiConsole.WriteException(ex);
                         }
                     }
-                });
+                    finally
+                    {
+                        AnsiConsole.WriteLine(); // Add spacing after nested command
+                        
+                        // Mark execution complete and go back to live mode
+                        this.isExecutingNestedCommand = false;
+                        inLiveMode = true;
+                    }
+                }
+                else
+                {
+                    // Should not reach here, but just in case
+                    await Task.Delay(50, sessionToken);
+                }
+            }
 
             try
             {
@@ -510,18 +657,17 @@ namespace AvConsoleToolkit.Commands
             }
         }
 
-        private async Task SubmitCommandAsync(string command, CancellationToken cancellationToken, LiveDisplayContext ctx)
+        private async Task SubmitCommandAsync(string command, CancellationToken cancellationToken)
         {
             if (this.shellStream == null || string.IsNullOrWhiteSpace(command))
             {
-                // Just show empty prompt
-                ctx.UpdateTarget(this.RenderPrompt());
+                // Just return, prompt will update naturally
                 return;
             }
 
             // Clear the live prompt before executing command
             AnsiConsole.Write("\r");
-            AnsiConsole.Write(new string(' ', this.currentLine.Length + 2));
+            AnsiConsole.Write(new string(' ', this.currentLine.Length + 10));
             AnsiConsole.Write("\r");
 
             // Check if user manually typed the exit command
@@ -538,33 +684,26 @@ namespace AvConsoleToolkit.Commands
                 var nestedCommand = command[1..].Trim();
                 this.commandHistory?.AddCommand(command);
 
-                // Set flag to pause output reading
+                // Echo the command first
+                AnsiConsole.WriteLine($"ACT> {command}");
+                AnsiConsole.WriteLine(); // Add spacing
+
+                // Queue the nested command for execution AFTER Live display exits
+                this.pendingNestedCommand = nestedCommand;
+                
+                // Set flag to trigger Live display exit
                 this.isExecutingNestedCommand = true;
 
-                try
-                {
-                    AnsiConsole.WriteLine($"> {command}");
-                    await this.HandleNestedCommandAsync(nestedCommand, cancellationToken);
-                }
-                finally
-                {
-                    // Resume output reading
-                    this.isExecutingNestedCommand = false;
-                    ctx.UpdateTarget(this.RenderPrompt());
-                }
-
+                // Return immediately - Live display will exit, then command will execute
                 return;
             }
 
             // Echo the command
-            AnsiConsole.WriteLine($"> {command}");
+            AnsiConsole.WriteLine($"ACT> {command}");
 
             // Send command to device
             this.shellStream.WriteLine(command);
             this.commandHistory?.AddCommand(command);
-
-            // Update prompt
-            ctx.UpdateTarget(this.RenderPrompt());
         }
     }
 }
