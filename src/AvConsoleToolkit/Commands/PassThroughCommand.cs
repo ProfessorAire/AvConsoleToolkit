@@ -14,6 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Renci.SshNet;
@@ -28,7 +29,7 @@ namespace AvConsoleToolkit.Commands
     /// Handles SSH connection management, command history, line buffering, and basic I/O.
     /// </summary>
     /// <typeparam name="TSettings">The settings type for the command.</typeparam>
-    public abstract class PassThroughCommand<TSettings> : AsyncCommand<TSettings>
+    public abstract partial class PassThroughCommand<TSettings> : AsyncCommand<TSettings>
         where TSettings : PassThroughSettings
     {
         private CommandHistory? commandHistory;
@@ -76,6 +77,17 @@ namespace AvConsoleToolkit.Commands
         /// This allows derived classes to access connection parameters.
         /// </summary>
         protected TSettings? CurrentSettings { get; private set; }
+
+        /// <summary>
+        /// Gets the Regex used to identify the device prompt.
+        /// </summary>
+        [GeneratedRegex(@"^([^\r\n]*>) ?$", RegexOptions.Multiline)]
+        protected partial Regex PromptRegex { get; }
+
+        /// <summary>
+        /// Gets the device prompt, or <see langword="null"/> if none has been determined.
+        /// </summary>
+        protected string? Prompt { get; private set; }
 
         /// <summary>
         /// Executes the pass-through command, establishing an SSH connection and entering interactive mode.
@@ -404,7 +416,7 @@ namespace AvConsoleToolkit.Commands
 
         private IRenderable RenderPrompt()
         {
-            var text = new Text($"{Environment.NewLine}ACT> {this.currentLine}");
+            var text = new Text($"{Environment.NewLine}{this.Prompt ?? "ACT>"} {this.currentLine}");
             return text;
         }
 
@@ -438,6 +450,16 @@ namespace AvConsoleToolkit.Commands
                             var data = this.shellStream.Read();
                             lock (this.outputBuffer)
                             {
+                                if (this.Prompt is null)
+                                {
+                                    var match = this.PromptRegex.Match(data);
+                                    if (match.Success)
+                                    {
+                                        this.Prompt = match.Groups[1].Value;
+                                        this.RenderPrompt();
+                                    }
+                                }
+
                                 this.outputBuffer.Append(data);
                             }
                         }
@@ -458,7 +480,7 @@ namespace AvConsoleToolkit.Commands
             }, sessionToken);
 
             // Wait for initial prompt
-            await Task.Delay(500, sessionToken);
+            await Task.Delay(1000, sessionToken);
 
             // Display initial output
             string lastOutput;
@@ -476,7 +498,7 @@ namespace AvConsoleToolkit.Commands
             // Main input loop with live prompt display
             // Use a flag to control whether we're in live mode or executing nested commands
             var inLiveMode = true;
-            
+            var initial = true;
             while (!sessionToken.IsCancellationRequested && this.sshClient?.IsConnected == true)
             {
                 if (inLiveMode && !this.isExecutingNestedCommand)
@@ -486,8 +508,8 @@ namespace AvConsoleToolkit.Commands
                         .AutoClear(false)
                         .StartAsync(async ctx =>
                         {
-                            while (!sessionToken.IsCancellationRequested && 
-                                   this.sshClient?.IsConnected == true && 
+                            while (!sessionToken.IsCancellationRequested &&
+                                   this.sshClient?.IsConnected == true &&
                                    !this.isExecutingNestedCommand)
                             {
                                 // Check for new output from device
@@ -508,17 +530,18 @@ namespace AvConsoleToolkit.Commands
                                 // If there's new output, write it before the prompt
                                 if (!string.IsNullOrEmpty(newOutput))
                                 {
-                                    // Move cursor up to overwrite prompt
-                                    AnsiConsole.Write("\r");
-                                    AnsiConsole.Write(new string(' ', this.currentLine.Length + 5));
-                                    AnsiConsole.Write("\r");
-
                                     // Write the new output
                                     AnsiConsole.Write(newOutput);
 
                                     // Update the live display
                                     ctx.UpdateTarget(this.RenderPrompt());
                                 }
+                                else if (initial)
+                                {
+                                    ctx.UpdateTarget(this.RenderPrompt());
+                                    initial = false;
+                                }
+
 
                                 // Check for keyboard input
                                 if (Console.KeyAvailable)
@@ -544,17 +567,25 @@ namespace AvConsoleToolkit.Commands
                                     switch (keyInfo.Key)
                                     {
                                         case ConsoleKey.Enter:
-                                            await this.SubmitCommandAsync(this.currentLine, sessionToken);
-                                            this.currentLine = string.Empty;
-                                            this.commandHistory?.ResetPosition();
-                                            
-                                            // Check if we just queued a nested command for execution
-                                            if (this.isExecutingNestedCommand)
+                                            if (!string.IsNullOrWhiteSpace(this.currentLine))
                                             {
-                                                // Exit Live context - nested command will execute after this returns
-                                                return;
+                                                await this.SubmitCommandAsync(this.currentLine, sessionToken);
+                                                this.currentLine = string.Empty;
+                                                this.commandHistory?.ResetPosition();
+
+                                                // Check if we just queued a nested command for execution
+                                                if (this.isExecutingNestedCommand)
+                                                {
+                                                    // Exit Live context - nested command will execute after this returns
+                                                    return;
+                                                }
                                             }
-                                            break;
+                                            else
+                                            {
+                                                needsUpdate = false;
+                                            }
+
+                                                break;
 
                                         case ConsoleKey.Backspace:
                                             this.HandleBackspace();
@@ -606,6 +637,7 @@ namespace AvConsoleToolkit.Commands
                     if (this.isExecutingNestedCommand && this.pendingNestedCommand != null)
                     {
                         inLiveMode = false;
+                        initial = true;
                     }
                 }
                 else if (this.isExecutingNestedCommand && this.pendingNestedCommand != null)
@@ -630,7 +662,7 @@ namespace AvConsoleToolkit.Commands
                     finally
                     {
                         AnsiConsole.WriteLine(); // Add spacing after nested command
-                        
+
                         // Mark execution complete and go back to live mode
                         this.isExecutingNestedCommand = false;
                         inLiveMode = true;
@@ -671,9 +703,8 @@ namespace AvConsoleToolkit.Commands
             AnsiConsole.Write("\r");
 
             // Check if user manually typed the exit command
-            if (command.Equals(this.ExitCommand, StringComparison.OrdinalIgnoreCase))
+            if (command.Equals(this.ExitCommand, StringComparison.OrdinalIgnoreCase) || command.Equals("exit", StringComparison.OrdinalIgnoreCase))
             {
-                this.commandHistory?.AddCommand(command);
                 await this.ExitSessionAsync();
                 return;
             }
@@ -685,12 +716,12 @@ namespace AvConsoleToolkit.Commands
                 this.commandHistory?.AddCommand(command);
 
                 // Echo the command first
-                AnsiConsole.WriteLine($"ACT> {command}");
+                AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
                 AnsiConsole.WriteLine(); // Add spacing
 
                 // Queue the nested command for execution AFTER Live display exits
                 this.pendingNestedCommand = nestedCommand;
-                
+
                 // Set flag to trigger Live display exit
                 this.isExecutingNestedCommand = true;
 
@@ -699,7 +730,7 @@ namespace AvConsoleToolkit.Commands
             }
 
             // Echo the command
-            AnsiConsole.WriteLine($"ACT> {command}");
+            AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
 
             // Send command to device
             this.shellStream.WriteLine(command);
