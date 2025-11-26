@@ -199,5 +199,46 @@ namespace AvConsoleToolkit.Commands
                 // Silently ignore errors saving history
             }
         }
+
+        /// <summary>
+        /// Searches command history for commands matching the given prefix.
+        /// Returns distinct results (no duplicates).
+        /// </summary>
+        /// <param name="prefix">The prefix to search for.</param>
+        /// <param name="maxResults">Maximum number of results to return.</param>
+        /// <returns>List of unique matching commands in reverse chronological order.</returns>
+        public List<string> SearchByPrefix(string prefix, int maxResults = 5)
+        {
+            if (string.IsNullOrWhiteSpace(prefix))
+            {
+                // Return most recent commands (distinct only)
+                return this.commands
+                    .Distinct()
+                    .TakeLast(maxResults)
+                    .Reverse()
+                    .ToList();
+            }
+
+            // Search for commands starting with prefix (distinct only)
+            return this.commands
+                .Where(cmd => cmd.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .Distinct()
+                .Reverse()
+                .Take(maxResults)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Gets the most recent commands up to the specified count.
+        /// </summary>
+        /// <param name="count">Number of recent commands to return.</param>
+        /// <returns>List of recent commands in reverse chronological order.</returns>
+        public List<string> GetRecent(int count = 5)
+        {
+            return this.commands
+                .TakeLast(count)
+                .Reverse()
+                .ToList();
+        }
     }
 }
