@@ -62,46 +62,10 @@ namespace AvConsoleToolkit.Commands
 
                 GithubPackageResolver? githubResolver;
 
-                // Todo: Remove this before a v1.0 public release.
-                if (currentVersion.MajorRevision < 1)
-                {
-                    var token = Configuration.AppConfig.Settings.GithubToken;
-                    if (string.IsNullOrWhiteSpace(token))
-                    {
-                        token = AnsiConsole.Prompt(new TextPrompt<string>("Enter a GitHub access token with rights to view the ProfessorAire/AvConsoleToolkit repo in order to check for pre-release updates from GitHub.\r\nLeave this blank to only check for updates from the program's 'versions' directory:")
-                        {
-                            AllowEmpty = true
-                        });
-                    }
+                githubResolver = new GithubPackageResolver("ProfessorAire", "AvConsoleToolkit", "AvConsoleToolkit-*.zip");
 
-                    if (string.IsNullOrWhiteSpace(token))
-                    {
-                        AnsiConsole.MarkupLine("[yellow]No token provided, will only examine the local versions directory for updates.[/]");
-                        githubResolver = null;
-                    }
-                    else
-                    {
-                        var httpClient = new HttpClient();
-                        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("AvConsoleToolkit-Updater");
-                        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                        githubResolver = new GithubPackageResolver(httpClient, "ProfessorAire", "AvConsoleToolkit", "AvConsoleToolkit-*.zip");
-                    }
-                }
-                else
-                {
-                    githubResolver = new GithubPackageResolver("ProfessorAire", "AvConsoleToolkit", "AvConsoleToolkit-*.zip");
-                }
-
-                IPackageResolver updateResolver = githubResolver is null ? localResolver : githubResolver;
-
-                if (Equals(updateResolver, localResolver))
-                {
-                    AnsiConsole.MarkupLineInterpolated($"[grey]Checking for updates from local versions:[/] [fuchsia]'{localVersionsPath}'[/]");
-                }
-                else
-                {
-                    AnsiConsole.MarkupLine("[grey]Checking for updates from [/][fuchsia]GitHub.[/]");
-                }
+                IPackageResolver updateResolver = new AggregatePackageResolver([githubResolver, localResolver]);
+                AnsiConsole.MarkupLine("[grey]Checking for updates from [/][fuchsia]GitHub.[/] and the local 'Versions' directory.");
 
                 // Create update manager with ZIP extractor
                 using var manager = new UpdateManager(localResolver, new ZipPackageExtractor());
@@ -187,11 +151,11 @@ namespace AvConsoleToolkit.Commands
                 {
                     AnsiConsole.Prompt(
                new ConfirmationPrompt("Press [green]Enter[/] to install the update or 'n' to cancel...")
-                    {
-                        DefaultValue = true,
-                        ShowDefaultValue = false,
-                        ShowChoices = false
-                    });
+               {
+                   DefaultValue = true,
+                   ShowDefaultValue = false,
+                   ShowChoices = false
+               });
                 }
 
                 // Launch updater (this will restart the application)
