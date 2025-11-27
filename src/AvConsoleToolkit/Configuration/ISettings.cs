@@ -24,19 +24,11 @@ namespace AvConsoleToolkit.Configuration
         /// <summary>
         /// Gets the current connection settings used to configure connection related functionality.
         /// </summary>
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
         IConnectionSettings Connection { get; }
 
         /// <summary>
         /// Gets the current connection settings used to configure Pass Through specific functionality.
         /// </summary>
         IPassThroughSettings PassThrough { get; }
-
-        /// <summary>
-        /// Gets or sets the GitHub token used for accessing the GitHub API. If not set, specific operations
-        /// may prompt for the token instead.
-        /// </summary>
-        [DefaultValue("")]
-        string GithubToken { get; set; }
     }
 }
