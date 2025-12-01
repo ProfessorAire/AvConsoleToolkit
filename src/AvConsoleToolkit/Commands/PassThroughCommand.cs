@@ -695,51 +695,78 @@ namespace AvConsoleToolkit.Commands
             this.sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var sessionToken = this.sessionCancellation.Token;
 
-            // Start background task to read from SSH
+            // Flag to track if we need to reconnect
+            bool needsReconnect = false;
+
+            // Start background task to read from SSH with reconnection detection
             var readTask = Task.Run(async () =>
             {
-                try
+                while (!sessionToken.IsCancellationRequested)
                 {
-                    while (!sessionToken.IsCancellationRequested && this.sshClient?.IsConnected == true)
+                    try
                     {
-                        // Pause reading during nested command execution
-                        if (this.isExecutingNestedCommand)
+                        while (!sessionToken.IsCancellationRequested && this.sshClient?.IsConnected == true)
                         {
-                            await Task.Delay(100, sessionToken);
-                            continue;
-                        }
-
-                        if (this.shellStream.DataAvailable)
-                        {
-                            var data = this.shellStream.Read();
-                            lock (this.outputBuffer)
+                            // Pause reading during nested command execution
+                            if (this.isExecutingNestedCommand)
                             {
-                                if (this.Prompt is null)
-                                {
-                                    var match = this.PromptRegex.Match(data);
-                                    if (match.Success)
-                                    {
-                                        this.Prompt = match.Groups[1].Value;
-                                        this.RenderPrompt();
-                                    }
-                                }
+                                await Task.Delay(100, sessionToken);
+                                continue;
+                            }
 
-                                this.outputBuffer.Append(data);
+                            if (this.shellStream.DataAvailable)
+                            {
+                                var data = this.shellStream.Read();
+                                lock (this.outputBuffer)
+                                {
+                                    if (this.Prompt is null)
+                                    {
+                                        var match = this.PromptRegex.Match(data);
+                                        if (match.Success)
+                                        {
+                                            this.Prompt = match.Groups[1].Value;
+                                            this.RenderPrompt();
+                                        }
+                                    }
+
+                                    this.outputBuffer.Append(data);
+                                }
+                            }
+                            else
+                            {
+                                await Task.Delay(50, sessionToken);
                             }
                         }
-                        else
+
+                        // Connection lost - signal reconnection needed
+                        if (!sessionToken.IsCancellationRequested && this.sshClient?.IsConnected == false)
                         {
-                            await Task.Delay(50, sessionToken);
+                            needsReconnect = true;
+                            // Wait for reconnection to complete
+                            while (needsReconnect && !sessionToken.IsCancellationRequested)
+                            {
+                                await Task.Delay(100, sessionToken);
+                            }
                         }
                     }
-                }
-                catch (OperationCanceledException)
-                {
-                    // Normal cancellation
-                }
-                catch
-                {
-                    // Connection lost or other error
+                    catch (OperationCanceledException)
+                    {
+                        // Normal cancellation
+                        break;
+                    }
+                    catch (Exception)
+                    {
+                        // Connection error - signal reconnection needed
+                        if (!sessionToken.IsCancellationRequested)
+                        {
+                            needsReconnect = true;
+                            // Wait for reconnection to complete
+                            while (needsReconnect && !sessionToken.IsCancellationRequested)
+                            {
+                                await Task.Delay(100, sessionToken);
+                            }
+                        }
+                    }
                 }
             }, sessionToken);
 
@@ -760,12 +787,39 @@ namespace AvConsoleToolkit.Commands
             }
 
             // Main input loop with live prompt display
-            // Use a flag to control whether we're in live mode or executing nested commands
             var inLiveMode = true;
             var initial = true;
-            while (!sessionToken.IsCancellationRequested && this.sshClient?.IsConnected == true)
+            
+            while (!sessionToken.IsCancellationRequested && !this.isExecutingNestedCommand)
             {
-                if (inLiveMode && !this.isExecutingNestedCommand)
+                // Check if reconnection is needed
+                if (needsReconnect)
+                {
+                    // Exit Live display to show reconnection messages
+                    inLiveMode = false;
+                    
+                    AnsiConsole.WriteLine();
+                    AnsiConsole.MarkupLine("[yellow]Connection lost - attempting to reconnect...[/]");
+                    
+                    // Attempt reconnection
+                    var reconnected = await this.ReconnectAsync(sessionToken);
+                    
+                    if (reconnected)
+                    {
+                        AnsiConsole.MarkupLine("[green]Successfully reconnected![/]");
+                        AnsiConsole.WriteLine();
+                        needsReconnect = false;
+                        inLiveMode = true;
+                        initial = true;
+                    }
+                    else
+                    {
+                        // Reconnection failed, session will terminate
+                        return;
+                    }
+                }
+
+                if (inLiveMode && this.sshClient?.IsConnected == true)
                 {
                     // Start Live display
                     await AnsiConsole.Live(this.RenderPrompt())
@@ -774,7 +828,8 @@ namespace AvConsoleToolkit.Commands
                         {
                             while (!sessionToken.IsCancellationRequested &&
                                    this.sshClient?.IsConnected == true &&
-                                   !this.isExecutingNestedCommand)
+                                   !this.isExecutingNestedCommand &&
+                                   !needsReconnect)
                             {
                                 // Check for new output from device
                                 string newOutput;
@@ -805,7 +860,6 @@ namespace AvConsoleToolkit.Commands
                                     ctx.UpdateTarget(this.RenderPrompt());
                                     initial = false;
                                 }
-
 
                                 // Check for keyboard input
                                 if (Console.KeyAvailable)
@@ -978,34 +1032,32 @@ namespace AvConsoleToolkit.Commands
                     {
                         inLiveMode = false;
                         initial = true;
-                    }
-                }
-                else if (this.isExecutingNestedCommand && this.pendingNestedCommand != null)
-                {
-                    // Live display has fully exited, now execute the pending nested command
-                    var commandToExecute = this.pendingNestedCommand;
-                    this.pendingNestedCommand = null;
+                        
+                        // Execute nested command
+                        var commandToExecute = this.pendingNestedCommand;
+                        this.pendingNestedCommand = null;
 
-                    try
-                    {
-                        // Execute nested command (outside Live display context)
-                        await this.HandleNestedCommandAsync(commandToExecute, sessionToken);
-                    }
-                    catch (Exception ex)
-                    {
-                        AnsiConsole.MarkupLine($"[red]Error executing nested command:[/] {ex.Message.EscapeMarkup()}");
-                        if (this.CurrentSettings?.Verbose == true)
+                        try
                         {
-                            AnsiConsole.WriteException(ex);
+                            // Execute nested command (outside Live display context)
+                            await this.HandleNestedCommandAsync(commandToExecute, sessionToken);
                         }
-                    }
-                    finally
-                    {
-                        AnsiConsole.WriteLine(); // Add spacing after nested command
+                        catch (Exception ex)
+                        {
+                            AnsiConsole.MarkupLine($"[red]Error executing nested command:[/] {ex.Message.EscapeMarkup()}");
+                            if (this.CurrentSettings?.Verbose == true)
+                            {
+                                AnsiConsole.WriteException(ex);
+                            }
+                        }
+                        finally
+                        {
+                            AnsiConsole.WriteLine(); // Add spacing after nested command
 
-                        // Mark execution complete and go back to live mode
-                        this.isExecutingNestedCommand = false;
-                        inLiveMode = true;
+                            // Mark execution complete and go back to live mode
+                            this.isExecutingNestedCommand = false;
+                            inLiveMode = true;
+                        }
                     }
                 }
                 else
@@ -1027,6 +1079,87 @@ namespace AvConsoleToolkit.Commands
             {
                 // Ignore other read task exceptions
             }
+        }
+
+        private async Task<bool> ReconnectAsync(CancellationToken cancellationToken)
+        {
+            if (this.CurrentSettings == null || string.IsNullOrEmpty(this.CurrentSettings.Address))
+            {
+                return false;
+            }
+
+            // Check if reconnection is disabled
+            if (this.CurrentSettings.NoReconnect)
+            {
+                AnsiConsole.MarkupLine("[red]Automatic reconnection is disabled. Session terminated.[/]");
+                this.sessionCancellation?.Cancel();
+                return false;
+            }
+
+            // Get configured max retries (-1 means infinite)
+            var maxRetries = Configuration.AppConfig.Settings.PassThrough.NumberOfReconnectionAttempts;
+            var isInfiniteRetries = maxRetries < 0;
+            
+            int retryCount = 0;
+            int delayMs = 500;
+
+            while ((isInfiniteRetries || retryCount < maxRetries) && !cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(delayMs, cancellationToken);
+                    
+                    if (isInfiniteRetries)
+                    {
+                        AnsiConsole.MarkupLine($"[yellow]Reconnection attempt {retryCount + 1}...[/]");
+                    }
+                    else
+                    {
+                        AnsiConsole.MarkupLine($"[yellow]Reconnection attempt {retryCount + 1}/{maxRetries}...[/]");
+                    }
+
+                    // Attempt to reconnect
+                    var reconnected = await this.ConnectAsync(
+                        this.CurrentSettings.Address,
+                        this.CurrentSettings.Username!,
+                        this.CurrentSettings.Password!,
+                        cancellationToken);
+
+                    if (reconnected)
+                    {
+                        return true;
+                    }
+
+                    retryCount++;
+                    
+                    // Cap exponential backoff at 10 seconds
+                    delayMs = Math.Min(delayMs * 2, 10000);
+                }
+                catch (Exception ex)
+                {
+                    retryCount++;
+                    AnsiConsole.MarkupLine($"[red]Reconnection failed: {ex.Message}[/]");
+
+                    if (!isInfiniteRetries && retryCount >= maxRetries)
+                    {
+                        AnsiConsole.MarkupLine("[red]Maximum reconnection attempts reached. Session terminated.[/]");
+                        this.sessionCancellation?.Cancel();
+                        return false;
+                    }
+
+                    // Cap exponential backoff at 30 seconds
+                    delayMs = Math.Min(delayMs * 2, 30000);
+                }
+            }
+            
+            // If we exit the loop without success (non-infinite retries exhausted)
+            if (!isInfiniteRetries)
+            {
+                AnsiConsole.MarkupLine("[red]Maximum reconnection attempts reached. Session terminated.[/]");
+                this.sessionCancellation?.Cancel();
+            }
+            
+            return false;
         }
     }
 }

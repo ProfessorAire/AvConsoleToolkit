@@ -47,5 +47,12 @@ namespace AvConsoleToolkit.Commands
         [CommandOption("-v|--verbose")]
         [Description("Show verbose diagnostic output")]
         public bool Verbose { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether automatic reconnection should be disabled.
+        /// </summary>
+        [CommandOption("-n|--no-reconnect")]
+        [Description("Disable automatic reconnection on connection loss")]
+        public bool NoReconnect { get; set; }
     }
 }
