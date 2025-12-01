@@ -21,7 +21,7 @@ namespace AvConsoleToolkit.Configuration
     public interface IConnectionSettings
     {
         /// <summary>
-        /// Gets or sets the location of the Crestron Address Books. Supports a semicolon-separated list of paths.C
+        /// Gets or sets the location of the Crestron Address Books. Supports a semicolon-separated list of paths.
         /// Can be directories containing Toolbox <c>xadr</c> files, or individual Toolbox <c>xadr</c> files.
         /// </summary>
         string AddressBooksLocation { get; set; }
