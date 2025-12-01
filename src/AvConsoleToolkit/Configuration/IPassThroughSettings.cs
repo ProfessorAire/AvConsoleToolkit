@@ -12,5 +12,11 @@ namespace AvConsoleToolkit.Configuration
         /// </summary>
         [DefaultValue(true)]
         bool UseHistoryForPassThrough { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of times the system will attempt to reconnect after a connection failure.
+        /// </summary>
+        [DefaultValue(-1)]
+        int NumberOfReconnectionAttempts { get; set; }
     }
 }

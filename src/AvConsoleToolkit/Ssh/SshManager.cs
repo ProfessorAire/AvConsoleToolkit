@@ -62,6 +62,8 @@ namespace AvConsoleToolkit.Ssh
                     // Clean up disconnected client
                     existingClient.Dispose();
                     SshClients.Remove(key);
+
+                    ReleaseShellStream(address, username);
                 }
             }
 
@@ -183,7 +185,14 @@ namespace AvConsoleToolkit.Ssh
             {
                 if (ShellStreams.TryGetValue(key, out var stream))
                 {
-                    stream.Dispose();
+                    try
+                    {
+                        stream.Dispose();
+                    }
+                    catch
+                    {
+                    }
+
                     ShellStreams.Remove(key);
                 }
             }
