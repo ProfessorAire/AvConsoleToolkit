@@ -549,9 +549,8 @@ namespace AvConsoleToolkit.Commands
                 var nestedCommand = command[1..].Trim();
                 this.commandHistory?.AddCommand(command);
 
-                // Echo the command first
-                AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
-                AnsiConsole.WriteLine(); // Add spacing
+                // Don't echo the command - the nested command will handle its own output
+                // This prevents duplicate command lines in the output
 
                 // Queue the nested command for execution AFTER Live display exits
                 this.pendingNestedCommand = nestedCommand;
@@ -1082,9 +1081,14 @@ namespace AvConsoleToolkit.Commands
                         }
                         finally
                         {
-                            AnsiConsole.WriteLine(); // Add spacing after nested command
+                            // Clear any buffered output that accumulated during nested command execution
+                            // This prevents stray prompts and blank lines from appearing when returning to Live mode
+                            lock (this.outputBuffer)
+                            {
+                                this.outputBuffer.Clear();
+                            }
 
-                            // Mark execution complete and go back to live mode
+                            // Mark execution complete and go back to live mode (without extra spacing)
                             this.isExecutingNestedCommand = false;
                             inLiveMode = true;
                         }
