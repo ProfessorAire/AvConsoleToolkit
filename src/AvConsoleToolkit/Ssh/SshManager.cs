@@ -24,11 +24,11 @@ namespace AvConsoleToolkit.Ssh
     /// </summary>
     internal static class SshManager
     {
-        private static readonly Dictionary<string, SshClient> SshClients = new();
+        private static readonly Dictionary<string, SshClient> SshClients = [];
 
-        private static readonly Dictionary<string, SftpClient> SftpClients = new();
+        private static readonly Dictionary<string, SftpClient> SftpClients = [];
 
-        private static readonly Dictionary<string, IShellStream> ShellStreams = new();
+        private static readonly Dictionary<string, IShellStream> ShellStreams = [];
 
         private static readonly Lock LockObject = new();
 
