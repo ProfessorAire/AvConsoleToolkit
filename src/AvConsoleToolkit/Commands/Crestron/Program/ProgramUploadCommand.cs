@@ -1,6 +1,6 @@
 // <copyright file="ProgramUploadCommand.cs">
 // The MIT License
-// Copyright © Christopher McNeely
+// Copyright Â© Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -124,7 +124,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 // .clz files must always be extracted and uploaded as individual files
                 // because they are not full program packages that can be loaded directly
                 var isClz = extension == ".clz";
-
+                
                 var result = -1;
                 if (settings.ChangedOnly || isClz)
                 {
@@ -721,8 +721,8 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                         // Library packages (.clz) must always have all files uploaded unless -c flag is explicitly set
                         // Also, if KillProgram is set, skip file comparison and upload everything
                         var isLibraryPackage = extension == ".clz";
-                        var uploadAllFiles = settings.KillProgram || isLibraryPackage && !settings.ChangedOnly;
-
+                        var uploadAllFiles = settings.KillProgram || (isLibraryPackage && !settings.ChangedOnly);
+                        
                         if (uploadAllFiles)
                         {
                             if (settings.Verbose)
@@ -849,7 +849,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 }
 
                 var isClz = extension == ".clz";
-                var uploadAllFiles = settings.KillProgram || isClz && !settings.ChangedOnly;
+                var uploadAllFiles = settings.KillProgram || (isClz && !settings.ChangedOnly);
                 AnsiConsole.MarkupLine($"[yellow]{changes.Count} file(s) {(uploadAllFiles ? "to upload" : "have changed")}.[/]");
 
                 // Now we know we need to upload, establish SSH connection
