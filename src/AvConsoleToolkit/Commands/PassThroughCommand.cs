@@ -406,7 +406,12 @@ namespace AvConsoleToolkit.Commands
             // If history menu is showing, navigate down in the menu
             if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuItems.Count > 0)
             {
-                this.historyMenuSelectedIndex = Math.Min(this.historyMenuItems.Count - 1, this.historyMenuSelectedIndex + 1);
+                this.historyMenuSelectedIndex++;
+                // Wrap around to first item if we go past the last
+                if (this.historyMenuSelectedIndex >= this.historyMenuItems.Count)
+                {
+                    this.historyMenuSelectedIndex = 0;
+                }
             }
             else if (this.historyMenuItems != null && this.historyMenuItems.Count > 0)
             {
@@ -424,7 +429,7 @@ namespace AvConsoleToolkit.Commands
                 }
                 else
                 {
-                    // At end of history, clear line
+                    // At end of history (most recent), clear the line
                     this.currentLine = string.Empty;
                 }
             }
@@ -442,27 +447,31 @@ namespace AvConsoleToolkit.Commands
                 return;
             }
 
+            // If history menu items are available but menu not active, activate it and select last item
+            if (!this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuItems.Count > 0)
+            {
+                this.showingHistoryMenu = true;
+                this.historyMenuSelectedIndex = this.historyMenuItems.Count - 1;
+                return;
+            }
+
             // If history menu is showing, navigate up in the menu
             if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuItems.Count > 0)
             {
-                if (this.historyMenuSelectedIndex > 0)
+                this.historyMenuSelectedIndex--;
+                // Wrap around to last item if we go before the first
+                if (this.historyMenuSelectedIndex < 0)
                 {
-                    this.historyMenuSelectedIndex--;
+                    this.historyMenuSelectedIndex = this.historyMenuItems.Count - 1;
                 }
-                else
-                {
-                    // At top, hide menu
-                    this.HideHistoryMenu();
-                }
+                return;
             }
-            else
+
+            // No history menu - use traditional up arrow history navigation
+            var previousCommand = this.commandHistory.GetPrevious();
+            if (previousCommand != null)
             {
-                // Menu not showing - use traditional up arrow history navigation
-                var previousCommand = this.commandHistory.GetPrevious();
-                if (previousCommand != null)
-                {
-                    this.currentLine = previousCommand;
-                }
+                this.currentLine = previousCommand;
             }
         }
 
@@ -604,9 +613,9 @@ namespace AvConsoleToolkit.Commands
                     }
 
                     // Highlight the matching portion
-                    if (matchIndex >= 0)
+                    if (matchIndex >= 0 && matchIndex < command.Length)
                     {
-                        var searchLength = this.currentLine.Length;
+                        var searchLength = Math.Min(this.currentLine.Length, command.Length - matchIndex);
                         
                         // Add text before match
                         if (matchIndex > 0)
@@ -782,7 +791,32 @@ namespace AvConsoleToolkit.Commands
 
             if (!string.IsNullOrEmpty(lastOutput))
             {
-                AnsiConsole.Write(lastOutput);
+                // Strip trailing prompt from initial output to avoid duplicate
+                if (this.Prompt != null)
+                {
+                    // Remove trailing prompt (with or without space)
+                    var promptWithSpace = $"{this.Prompt} ";
+                    if (lastOutput.EndsWith(promptWithSpace))
+                    {
+                        lastOutput = lastOutput[..^promptWithSpace.Length];
+                    }
+                    else if (lastOutput.EndsWith(this.Prompt))
+                    {
+                        lastOutput = lastOutput[..^this.Prompt.Length];
+                    }
+                    
+                    // Trim any trailing whitespace
+                    lastOutput = lastOutput.TrimEnd('\r', '\n', ' ', '\t');
+                    if (!string.IsNullOrEmpty(lastOutput))
+                    {
+                        lastOutput += Environment.NewLine;
+                    }
+                }
+                
+                if (!string.IsNullOrEmpty(lastOutput))
+                {
+                    AnsiConsole.Write(lastOutput);
+                }
             }
 
             // Main input loop with live prompt display
@@ -1059,6 +1093,12 @@ namespace AvConsoleToolkit.Commands
                     // If we exited because of nested command execution, handle it
                     if (this.isExecutingNestedCommand && this.pendingNestedCommand != null)
                     {
+                        // Clear buffer immediately to prevent any accumulated output from showing
+                        lock (this.outputBuffer)
+                        {
+                            this.outputBuffer.Clear();
+                        }
+
                         inLiveMode = false;
                         initial = true;
                         
