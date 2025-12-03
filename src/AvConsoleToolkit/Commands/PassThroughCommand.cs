@@ -354,6 +354,11 @@ namespace AvConsoleToolkit.Commands
                         }
 
                         this.shellStream = await Ssh.SshManager.GetShellStreamAsync(host, username, password, cancellationToken);
+                        
+                        // Some Crestron devices require an initial carriage return to start sending data
+                        // Send a newline to trigger the initial prompt and header
+                        this.shellStream.WriteLine(string.Empty);
+                        
                         await this.OnConnectedAsync(cancellationToken);
                         ctx.Status("Connected");
                     });
@@ -778,7 +783,7 @@ namespace AvConsoleToolkit.Commands
                 }
             }, sessionToken);
 
-            // Wait for initial prompt
+            // Wait for initial prompt - increased time for devices that send headers
             await Task.Delay(1000, sessionToken);
 
             // Display initial output
@@ -791,26 +796,35 @@ namespace AvConsoleToolkit.Commands
 
             if (!string.IsNullOrEmpty(lastOutput))
             {
-                // Strip trailing prompt from initial output to avoid duplicate
+                // Strip trailing prompts from initial output to avoid duplicates
+                // Some devices send multiple prompts, so we need to remove all of them
                 if (this.Prompt != null)
                 {
-                    // Remove trailing prompt (with or without space)
+                    var outputToWrite = lastOutput;
+                    
+                    // Remove all instances of the prompt (with and without trailing space)
                     var promptWithSpace = $"{this.Prompt} ";
-                    if (lastOutput.EndsWith(promptWithSpace))
+                    outputToWrite = outputToWrite.Replace(promptWithSpace, string.Empty);
+                    outputToWrite = outputToWrite.Replace(this.Prompt, string.Empty);
+                    
+                    // Clean up any resulting multiple consecutive newlines
+                    while (outputToWrite.Contains("\n\n\n"))
                     {
-                        lastOutput = lastOutput[..^promptWithSpace.Length];
+                        outputToWrite = outputToWrite.Replace("\n\n\n", "\n\n");
                     }
-                    else if (lastOutput.EndsWith(this.Prompt))
+                    while (outputToWrite.Contains("\r\n\r\n\r\n"))
                     {
-                        lastOutput = lastOutput[..^this.Prompt.Length];
+                        outputToWrite = outputToWrite.Replace("\r\n\r\n\r\n", "\r\n\r\n");
                     }
                     
-                    // Trim any trailing whitespace
-                    lastOutput = lastOutput.TrimEnd('\r', '\n', ' ', '\t');
-                    if (!string.IsNullOrEmpty(lastOutput))
+                    // Trim trailing whitespace
+                    outputToWrite = outputToWrite.TrimEnd('\r', '\n', ' ', '\t');
+                    if (!string.IsNullOrEmpty(outputToWrite))
                     {
-                        lastOutput += Environment.NewLine;
+                        outputToWrite += Environment.NewLine;
                     }
+                    
+                    lastOutput = outputToWrite;
                 }
                 
                 if (!string.IsNullOrEmpty(lastOutput))
