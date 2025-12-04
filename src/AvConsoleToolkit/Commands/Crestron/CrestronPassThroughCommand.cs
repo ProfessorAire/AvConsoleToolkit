@@ -11,6 +11,7 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Spectre.Console;
@@ -32,6 +33,23 @@ namespace AvConsoleToolkit.Commands.Crestron
         /// Gets the command branch for Crestron commands ("crestron").
         /// </summary>
         protected override string CommandBranch => "crestron";
+
+        /// <summary>
+        /// Gets command mappings for Crestron devices, providing Unix-like command aliases.
+        /// </summary>
+        /// <returns>A dictionary mapping common Unix commands to their Crestron equivalents.</returns>
+        protected override IReadOnlyDictionary<string, string>? GetCommandMappings()
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "ls", "dir" },
+                { "cat", "type" },
+                { "rm", "del" },
+                { "cp", "copy" },
+                { "mv", "move" },
+                { "pwd", "cd" }
+            };
+        }
 
         /// <summary>
         /// Handles tab completion for Crestron devices by forwarding the current buffer and tab to the device.
@@ -56,7 +74,7 @@ namespace AvConsoleToolkit.Commands.Crestron
         protected override async Task OnConnectedAsync(CancellationToken cancellationToken)
         {
             // Wait a moment for the device to be ready
-            await Task.Delay(100, cancellationToken);
+            //await Task.Delay(100, cancellationToken);
 
             // Could send any Crestron-specific initialization commands here if needed
             // For example: Set terminal type, configure display options, etc.

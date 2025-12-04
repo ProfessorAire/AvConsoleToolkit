@@ -72,6 +72,15 @@ namespace AvConsoleToolkit.Commands
         protected abstract string CommandBranch { get; }
 
         /// <summary>
+        /// Gets a dictionary of command mappings for the device.
+        /// The key is the command to map from (e.g., "ls"), and the value is the command to map to (e.g., "dir").
+        /// Commands are matched case-insensitively as the first word in the command line.
+        /// Override this in derived classes to provide device-specific command aliases.
+        /// </summary>
+        /// <returns>A dictionary of command mappings, or null/empty if no mappings are needed.</returns>
+        protected virtual IReadOnlyDictionary<string, string>? GetCommandMappings() => null;
+
+        /// <summary>
         /// Gets the current SSH client connection.
         /// This allows derived classes to share the connection with nested commands.
         /// </summary>
@@ -575,12 +584,58 @@ namespace AvConsoleToolkit.Commands
                 return;
             }
 
-            // Echo the command
+            // Apply command mappings if available
+            var mappedCommand = this.ApplyCommandMapping(command);
+
+            // Echo the original command (not the mapped one) for user clarity
             AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
 
-            // Send command to device
-            this.shellStream.WriteLine(command);
+            // Send the mapped command to device
+            this.shellStream.WriteLine(mappedCommand);
             this.commandHistory?.AddCommand(command);
+        }
+
+        /// <summary>
+        /// Applies command mappings to the given command if any are configured.
+        /// </summary>
+        /// <param name="command">The original command entered by the user.</param>
+        /// <returns>The mapped command, or the original command if no mapping applies.</returns>
+        private string ApplyCommandMapping(string command)
+        {
+            var mappings = this.GetCommandMappings();
+            if (mappings == null || mappings.Count == 0)
+            {
+                return command;
+            }
+
+            // Extract the first word (the command name)
+            var parts = command.Split([' ', '\t'], 2, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+            {
+                return command;
+            }
+
+            var commandName = parts[0];
+            var arguments = parts.Length > 1 ? parts[1] : string.Empty;
+
+            // Check if there's a mapping for this command (case-insensitive)
+            var mapping = mappings.FirstOrDefault(kvp => 
+                string.Equals(kvp.Key, commandName, StringComparison.OrdinalIgnoreCase));
+
+            if (mapping.Key != null)
+            {
+                // Build the mapped command
+                if (string.IsNullOrEmpty(arguments))
+                {
+                    return mapping.Value;
+                }
+                else
+                {
+                    return $"{mapping.Value} {arguments}";
+                }
+            }
+
+            return command;
         }
 
         private IRenderable RenderPrompt()
