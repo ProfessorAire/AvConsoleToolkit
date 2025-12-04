@@ -117,9 +117,9 @@ namespace AvConsoleToolkit.Commands.Config
             {
                 var userPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "ConsoleToolkit",
-                    "ct.config");
-                var localPath = Path.Combine(Environment.CurrentDirectory, "ct.config");
+                    "AvConsoleToolkit",
+                    "act.config");
+                var localPath = Path.Combine(Environment.CurrentDirectory, "act.config");
 
                 AnsiConsole.MarkupLine("[bold]Configuration Sources (in order of precedence):[/]");
                 AnsiConsole.MarkupLine($"  [dim]1. Local:[/]  {localPath} {(File.Exists(localPath) ? "[green](exists)[/]" : "[dim](not found)[/]")}");
