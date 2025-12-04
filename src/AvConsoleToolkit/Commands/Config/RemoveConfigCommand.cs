@@ -14,6 +14,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using AvConsoleToolkit.Configuration;
 using IniParser;
 using IniParser.Model;
 using Spectre.Console;
@@ -41,18 +42,7 @@ namespace AvConsoleToolkit.Commands.Config
         /// <exception cref="OperationCanceledException">The operation was cancelled via <paramref name="cancellationToken"/>.</exception>
         public override async Task<int> ExecuteAsync(CommandContext context, RemoveConfigSettings settings, CancellationToken cancellationToken)
         {
-            string configPath;
-            if (settings.Local)
-            {
-                configPath = Path.Combine(Environment.CurrentDirectory, "ct.config");
-            }
-            else
-            {
-                configPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "ConsoleToolkit",
-                    "ct.config");
-            }
+            var configPath = settings.Local ? AppConfig.LocalPath : AppConfig.UserPath;
 
             if (!File.Exists(configPath))
             {
