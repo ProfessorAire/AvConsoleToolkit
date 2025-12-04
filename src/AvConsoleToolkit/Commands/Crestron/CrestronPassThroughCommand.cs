@@ -35,12 +35,14 @@ namespace AvConsoleToolkit.Commands.Crestron
         protected override string CommandBranch => "crestron";
 
         /// <summary>
-        /// Gets command mappings for Crestron devices, providing Unix-like command aliases.
+        /// Gets command mappings for Crestron devices, merging default Unix-like aliases with user-configured mappings.
+        /// User-configured mappings from settings take precedence over defaults.
         /// </summary>
         /// <returns>A dictionary mapping common Unix commands to their Crestron equivalents.</returns>
         protected override IReadOnlyDictionary<string, string>? GetCommandMappings()
         {
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            // Start with default mappings
+            var merged = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 { "ls", "dir" },
                 { "cat", "type" },
@@ -49,6 +51,24 @@ namespace AvConsoleToolkit.Commands.Crestron
                 { "mv", "move" },
                 { "pwd", "cd" }
             };
+
+            // Parse and merge user-defined mappings from configuration
+            var configMappings = Configuration.AppConfig.Settings.PassThrough.CrestronCommandMappings;
+            if (!string.IsNullOrWhiteSpace(configMappings))
+            {
+                var pairs = configMappings.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                foreach (var pair in pairs)
+                {
+                    var parts = pair.Split('=', 2, StringSplitOptions.TrimEntries);
+                    if (parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]) && !string.IsNullOrWhiteSpace(parts[1]))
+                    {
+                        // User-defined mappings override defaults
+                        merged[parts[0]] = parts[1];
+                    }
+                }
+            }
+
+            return merged.Count > 0 ? merged : null;
         }
 
         /// <summary>
