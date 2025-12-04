@@ -55,6 +55,10 @@ namespace AvConsoleToolkit.Commands
 
         private List<(string Command, int MatchIndex)>? historyMenuItems;
 
+        private bool showCursor = true;
+
+        private int cursorBlinkCounter = 0;
+
         /// <summary>
         /// Gets the command to send to the remote device to exit the session.
         /// Override this in derived classes to specify device-specific exit commands.
@@ -440,11 +444,6 @@ namespace AvConsoleToolkit.Commands
             }
         }
 
-        private void HandleDownArrowWithMenu()
-        {
-            this.HandleDownArrow();
-        }
-
         private void HandleUpArrow()
         {
             if (this.commandHistory == null)
@@ -586,10 +585,23 @@ namespace AvConsoleToolkit.Commands
 
         private IRenderable RenderPrompt()
         {
+            Console.CursorVisible = false;
             var components = new List<IRenderable>();
 
-            // Add the prompt line
-            components.Add(new Text($"{Environment.NewLine}{this.Prompt ?? "ACT>"} {this.currentLine}"));
+            // Add the prompt line with cursor
+            var promptText = $"{Environment.NewLine}{this.Prompt ?? "ACT>"} {this.currentLine}";
+            
+            // Add cursor if it should be visible
+            if (this.showCursor)
+            {
+                promptText += "\x1b[90m\x2502\x1b[0m"; // Pipe cursor character
+            }
+            else
+            {
+                promptText += " "; // Space to maintain consistent width
+            }
+            
+            components.Add(new Text(promptText));
 
             // If there are history items, show them below the prompt
             if (this.historyMenuItems != null && this.historyMenuItems.Count > 0)
@@ -738,7 +750,6 @@ namespace AvConsoleToolkit.Commands
                                         if (match.Success)
                                         {
                                             this.Prompt = match.Groups[1].Value;
-                                            this.RenderPrompt();
                                         }
                                     }
 
@@ -1057,18 +1068,30 @@ namespace AvConsoleToolkit.Commands
                                             this.HandleBackspace();
                                             // Refresh history matches
                                             this.ShowHistoryMenu();
+                                            // Reset cursor blink on input
+                                            this.showCursor = true;
+                                            this.cursorBlinkCounter = 0;
                                             break;
 
                                         case ConsoleKey.UpArrow:
                                             this.HandleUpArrow();
+                                            // Reset cursor blink on navigation
+                                            this.showCursor = true;
+                                            this.cursorBlinkCounter = 0;
                                             break;
 
                                         case ConsoleKey.DownArrow:
                                             this.HandleDownArrow();
+                                            // Reset cursor blink on navigation
+                                            this.showCursor = true;
+                                            this.cursorBlinkCounter = 0;
                                             break;
 
                                         case ConsoleKey.Escape:
                                             this.HandleEscape();
+                                            // Reset cursor blink
+                                            this.showCursor = true;
+                                            this.cursorBlinkCounter = 0;
                                             break;
 
                                         case ConsoleKey.Tab:
@@ -1087,6 +1110,9 @@ namespace AvConsoleToolkit.Commands
                                                 this.currentLine += keyInfo.KeyChar;
                                                 // Refresh history matches automatically
                                                 this.ShowHistoryMenu();
+                                                // Reset cursor blink on input
+                                                this.showCursor = true;
+                                                this.cursorBlinkCounter = 0;
                                             }
                                             else
                                             {
@@ -1102,6 +1128,15 @@ namespace AvConsoleToolkit.Commands
                                 }
                                 else
                                 {
+                                    // Blink cursor every ~500ms (10 iterations * 50ms)
+                                    this.cursorBlinkCounter++;
+                                    if (this.cursorBlinkCounter >= 10)
+                                    {
+                                        this.showCursor = !this.showCursor;
+                                        this.cursorBlinkCounter = 0;
+                                        ctx.UpdateTarget(this.RenderPrompt());
+                                    }
+                                    
                                     await Task.Delay(50, sessionToken);
                                 }
                             }
