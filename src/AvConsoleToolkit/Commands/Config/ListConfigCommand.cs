@@ -17,6 +17,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
+using AvConsoleToolkit.Configuration;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -115,11 +116,8 @@ namespace AvConsoleToolkit.Commands.Config
             // Show config file locations
             if (settings.ShowSources)
             {
-                var userPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "AvConsoleToolkit",
-                    "act.config");
-                var localPath = Path.Combine(Environment.CurrentDirectory, "act.config");
+                var userPath = AppConfig.UserPath;
+                var localPath = AppConfig.LocalPath;
 
                 AnsiConsole.MarkupLine("[bold]Configuration Sources (in order of precedence):[/]");
                 AnsiConsole.MarkupLine($"  [dim]1. Local:[/]  {localPath} {(File.Exists(localPath) ? "[green](exists)[/]" : "[dim](not found)[/]")}");

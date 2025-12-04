@@ -15,6 +15,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using AvConsoleToolkit.Configuration;
 using IniParser;
 using IniParser.Model;
 using Spectre.Console;
@@ -76,18 +77,7 @@ namespace AvConsoleToolkit.Commands.Config
                 }
             }
 
-            string configPath;
-            if (settings.Local)
-            {
-                configPath = Path.Combine(Environment.CurrentDirectory, "ct.config");
-            }
-            else
-            {
-                configPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "ConsoleToolkit",
-                    "ct.config");
-            }
+            var configPath = settings.Local ? AppConfig.LocalPath : AppConfig.UserPath;
 
             Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
 
