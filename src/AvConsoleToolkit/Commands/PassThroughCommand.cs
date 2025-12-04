@@ -784,7 +784,10 @@ namespace AvConsoleToolkit.Commands
             }, sessionToken);
 
             // Wait for initial prompt - increased time for devices that send headers
-            await Task.Delay(1000, sessionToken);
+            while (this.Prompt == null)
+            {
+                await Task.Delay(100, sessionToken);
+            }
 
             // Display initial output
             string lastOutput;
