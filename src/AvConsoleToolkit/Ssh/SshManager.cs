@@ -68,7 +68,10 @@ namespace AvConsoleToolkit.Ssh
             }
 
             // Create new client
-            var client = new SshClient(address, username, password);
+            var client = new SshClient(address, username, password)
+            {
+                KeepAliveInterval = TimeSpan.FromSeconds(10),
+            };
 
             lock (LockObject)
             {
