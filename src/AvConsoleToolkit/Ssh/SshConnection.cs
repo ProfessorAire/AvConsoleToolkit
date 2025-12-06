@@ -207,10 +207,14 @@ namespace AvConsoleToolkit.Ssh
                     new PrivateKeyAuthenticationMethod(Environment.UserName, privateKey));
                 client = new SshClient(connectionInfo);
             }
-            else
+            else if (this.username != null && this.password != null)
             {
                 // Password authentication
-                client = new SshClient(this.hostAddress, this.port, this.username!, this.password!);
+                client = new SshClient(this.hostAddress, this.port, this.username, this.password);
+            }
+            else
+            {
+                throw new InvalidOperationException("Either privateKeyPath or username/password must be provided");
             }
 
             client.KeepAliveInterval = TimeSpan.FromSeconds(10);
@@ -247,10 +251,14 @@ namespace AvConsoleToolkit.Ssh
                     new PrivateKeyAuthenticationMethod(Environment.UserName, privateKey));
                 client = new SftpClient(connectionInfo);
             }
-            else
+            else if (this.username != null && this.password != null)
             {
                 // Password authentication
-                client = new SftpClient(this.hostAddress, this.port, this.username!, this.password!);
+                client = new SftpClient(this.hostAddress, this.port, this.username, this.password);
+            }
+            else
+            {
+                throw new InvalidOperationException("Either privateKeyPath or username/password must be provided");
             }
 
             lock (this.lockObject)

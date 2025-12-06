@@ -95,7 +95,8 @@ namespace AvConsoleToolkit.Ssh
                 throw new FileNotFoundException("No SSH private key found. Expected key at ~/.ssh/id_rsa or ~/.ssh/id_ed25519");
             }
 
-            var key = this.GetConnectionKey(hostAddress, port, "keyauth");
+            // Use system username for cache key since key auth doesn't require explicit username
+            var key = this.GetConnectionKey(hostAddress, port, Environment.UserName);
 
             lock (this.lockObject)
             {
