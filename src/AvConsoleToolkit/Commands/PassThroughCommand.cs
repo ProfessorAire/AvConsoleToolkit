@@ -37,6 +37,12 @@ namespace AvConsoleToolkit.Commands
 
         private string currentLine = string.Empty;
 
+        private int cursorPosition = 0;
+
+        private int selectionStart = -1;
+
+        private int selectionEnd = -1;
+
         private ISshClient? sshClient;
 
         private Ssh.IShellStream? shellStream;
@@ -58,6 +64,8 @@ namespace AvConsoleToolkit.Commands
         private bool showCursor = true;
 
         private int cursorBlinkCounter = 0;
+
+        private string originalTypedValue = string.Empty;
 
         /// <summary>
         /// Gets the command to send to the remote device to exit the session.
@@ -399,9 +407,158 @@ namespace AvConsoleToolkit.Commands
 
         private void HandleBackspace()
         {
-            if (this.currentLine.Length > 0)
+            // If there's a selection, delete the selected text
+            if (this.selectionStart >= 0 && this.selectionEnd >= 0)
             {
-                this.currentLine = this.currentLine[..^1];
+                var start = Math.Min(this.selectionStart, this.selectionEnd);
+                var end = Math.Max(this.selectionStart, this.selectionEnd);
+                var deleteCount = end - start;
+                this.currentLine = this.currentLine.Remove(start, deleteCount);
+                this.cursorPosition = start;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+            else if (this.cursorPosition > 0)
+            {
+                this.currentLine = this.currentLine.Remove(this.cursorPosition - 1, 1);
+                this.cursorPosition--;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+        }
+
+        private void HandleDelete()
+        {
+            // If there's a selection, delete the selected text
+            if (this.selectionStart >= 0 && this.selectionEnd >= 0)
+            {
+                var start = Math.Min(this.selectionStart, this.selectionEnd);
+                var end = Math.Max(this.selectionStart, this.selectionEnd);
+                var deleteCount = end - start;
+                this.currentLine = this.currentLine.Remove(start, deleteCount);
+                this.cursorPosition = start;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+            else if (this.cursorPosition < this.currentLine.Length)
+            {
+                this.currentLine = this.currentLine.Remove(this.cursorPosition, 1);
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+        }
+
+        private void HandleLeftArrow(bool shift)
+        {
+            if (this.showingHistoryMenu)
+            {
+                return;
+            }
+
+            if (shift)
+            {
+                // Shift+Left: extend or create selection
+                if (this.selectionStart == -1)
+                {
+                    this.selectionStart = this.cursorPosition;
+                }
+                this.cursorPosition = Math.Max(0, this.cursorPosition - 1);
+                this.selectionEnd = this.cursorPosition;
+                if (this.selectionStart == this.selectionEnd)
+                {
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
+                }
+            }
+            else
+            {
+                // Left: move cursor left
+                this.cursorPosition = Math.Max(0, this.cursorPosition - 1);
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+        }
+
+        private void HandleRightArrow(bool shift)
+        {
+            if (this.showingHistoryMenu)
+            {
+                return;
+            }
+
+            if (shift)
+            {
+                // Shift+Right: extend or create selection
+                if (this.selectionStart == -1)
+                {
+                    this.selectionStart = this.cursorPosition;
+                }
+                this.cursorPosition = Math.Min(this.currentLine.Length, this.cursorPosition + 1);
+                this.selectionEnd = this.cursorPosition;
+                if (this.selectionStart == this.selectionEnd)
+                {
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
+                }
+            }
+            else
+            {
+                // Right: move cursor right
+                this.cursorPosition = Math.Min(this.currentLine.Length, this.cursorPosition + 1);
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+        }
+
+        private void HandleHome(bool shift)
+        {
+            if (shift)
+            {
+                // Shift+Home: extend or create selection to start of line
+                if (this.selectionStart == -1)
+                {
+                    this.selectionStart = this.cursorPosition;
+                }
+                this.cursorPosition = 0;
+                this.selectionEnd = this.cursorPosition;
+                if (this.selectionStart == this.selectionEnd)
+                {
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
+                }
+            }
+            else
+            {
+                // Home: move cursor to start of line
+                this.cursorPosition = 0;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+        }
+
+        private void HandleEnd(bool shift)
+        {
+            if (shift)
+            {
+                // Shift+End: extend or create selection to end of line
+                if (this.selectionStart == -1)
+                {
+                    this.selectionStart = this.cursorPosition;
+                }
+                this.cursorPosition = this.currentLine.Length;
+                this.selectionEnd = this.cursorPosition;
+                if (this.selectionStart == this.selectionEnd)
+                {
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
+                }
+            }
+            else
+            {
+                // End: move cursor to end of line
+                this.cursorPosition = this.currentLine.Length;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
             }
         }
 
@@ -415,11 +572,25 @@ namespace AvConsoleToolkit.Commands
             // If history menu is showing, navigate down in the menu
             if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuItems.Count > 0)
             {
-                this.historyMenuSelectedIndex++;
-                // Wrap around to first item if we go past the last
-                if (this.historyMenuSelectedIndex >= this.historyMenuItems.Count)
+                // Check if we're about to wrap from last to first
+                if (this.historyMenuSelectedIndex >= this.historyMenuItems.Count - 1)
                 {
-                    this.historyMenuSelectedIndex = 0;
+                    // Wrap to show original typed value as intermediate step
+                    this.historyMenuSelectedIndex = -1;
+                    this.currentLine = this.originalTypedValue;
+                    this.cursorPosition = this.currentLine.Length;
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
+                    this.showingHistoryMenu = false;
+                }
+                else
+                {
+                    // Normal navigation: move to next item
+                    this.historyMenuSelectedIndex++;
+                    this.currentLine = this.historyMenuItems[this.historyMenuSelectedIndex].Command;
+                    this.cursorPosition = this.currentLine.Length;
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
                 }
             }
             else if (this.historyMenuItems != null && this.historyMenuItems.Count > 0)
@@ -427,6 +598,10 @@ namespace AvConsoleToolkit.Commands
                 // History items are available but menu not active - activate menu and select first item
                 this.showingHistoryMenu = true;
                 this.historyMenuSelectedIndex = 0;
+                this.currentLine = this.historyMenuItems[0].Command;
+                this.cursorPosition = this.currentLine.Length;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
             }
             else
             {
@@ -435,11 +610,17 @@ namespace AvConsoleToolkit.Commands
                 if (nextCommand != null)
                 {
                     this.currentLine = nextCommand;
+                    this.cursorPosition = this.currentLine.Length;
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
                 }
                 else
                 {
                     // At end of history (most recent), clear the line
                     this.currentLine = string.Empty;
+                    this.cursorPosition = 0;
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
                 }
             }
         }
@@ -456,17 +637,35 @@ namespace AvConsoleToolkit.Commands
             {
                 this.showingHistoryMenu = true;
                 this.historyMenuSelectedIndex = this.historyMenuItems.Count - 1;
+                this.currentLine = this.historyMenuItems[this.historyMenuSelectedIndex].Command;
+                this.cursorPosition = this.currentLine.Length;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
                 return;
             }
 
             // If history menu is showing, navigate up in the menu
             if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuItems.Count > 0)
             {
-                this.historyMenuSelectedIndex--;
-                // Wrap around to last item if we go before the first
-                if (this.historyMenuSelectedIndex < 0)
+                // Check if we're about to wrap from first to last
+                if (this.historyMenuSelectedIndex <= 0)
                 {
-                    this.historyMenuSelectedIndex = this.historyMenuItems.Count - 1;
+                    // Wrap to show original typed value as intermediate step
+                    this.historyMenuSelectedIndex = -1;
+                    this.currentLine = this.originalTypedValue;
+                    this.cursorPosition = this.currentLine.Length;
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
+                    this.showingHistoryMenu = false;
+                }
+                else
+                {
+                    // Normal navigation: move to previous item
+                    this.historyMenuSelectedIndex--;
+                    this.currentLine = this.historyMenuItems[this.historyMenuSelectedIndex].Command;
+                    this.cursorPosition = this.currentLine.Length;
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
                 }
                 return;
             }
@@ -476,6 +675,9 @@ namespace AvConsoleToolkit.Commands
             if (previousCommand != null)
             {
                 this.currentLine = previousCommand;
+                this.cursorPosition = this.currentLine.Length;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
             }
         }
 
@@ -502,6 +704,12 @@ namespace AvConsoleToolkit.Commands
                 return;
             }
 
+            // Store the original typed value before activating menu
+            if (!this.showingHistoryMenu && (this.historyMenuItems == null || this.historyMenuItems.Count == 0))
+            {
+                this.originalTypedValue = this.currentLine;
+            }
+
             // Get matching history items with match position information
             this.historyMenuItems = this.commandHistory.SearchByPrefix(this.currentLine, 5);
             
@@ -521,6 +729,7 @@ namespace AvConsoleToolkit.Commands
             this.showingHistoryMenu = false;
             this.historyMenuSelectedIndex = -1;
             this.historyMenuItems = null;
+            this.originalTypedValue = string.Empty;
         }
 
         private void HandleEscape()
@@ -533,6 +742,9 @@ namespace AvConsoleToolkit.Commands
             else
             {
                 this.currentLine = string.Empty;
+                this.cursorPosition = 0;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
             }
         }
 
@@ -588,20 +800,54 @@ namespace AvConsoleToolkit.Commands
             Console.CursorVisible = false;
             var components = new List<IRenderable>();
 
-            // Add the prompt line with cursor
-            var promptText = $"{Environment.NewLine}{this.Prompt ?? "ACT>"} {this.currentLine}";
-            
-            // Add cursor if it should be visible
-            if (this.showCursor)
+            // Build the prompt line with cursor position and selection highlighting
+            var promptPrefix = $"{Environment.NewLine}{this.Prompt ?? "ACT>"} ";
+            var markup = new StringBuilder(promptPrefix.EscapeMarkup());
+
+            // Build the command line with cursor and selection highlighting
+            for (int i = 0; i < this.currentLine.Length; i++)
             {
-                promptText += "\x1b[90m\x2502\x1b[0m"; // Pipe cursor character
+                var character = this.currentLine[i];
+                
+                // Check if this position is within selection
+                var isInSelection = this.selectionStart >= 0 && this.selectionEnd >= 0 &&
+                                   i >= Math.Min(this.selectionStart, this.selectionEnd) &&
+                                   i < Math.Max(this.selectionStart, this.selectionEnd);
+                
+                // Check if this is the cursor position
+                var isCursorPosition = i == this.cursorPosition;
+
+                if (isCursorPosition && this.showCursor)
+                {
+                    // Cursor position with background color
+                    markup.Append($"[white on blue]{character.ToString().EscapeMarkup()}[/]");
+                }
+                else if (isInSelection)
+                {
+                    // Selection highlighting
+                    markup.Append($"[white on grey]{character.ToString().EscapeMarkup()}[/]");
+                }
+                else
+                {
+                    // Normal character
+                    markup.Append(character.ToString().EscapeMarkup());
+                }
             }
-            else
+
+            // If cursor is at the end of the line, render a space with cursor background
+            if (this.cursorPosition == this.currentLine.Length)
             {
-                promptText += " "; // Space to maintain consistent width
+                if (this.showCursor)
+                {
+                    markup.Append("[white on blue] [/]");
+                }
+                else
+                {
+                    markup.Append(" ");
+                }
             }
-            
-            components.Add(new Text(promptText));
+
+            components.Add(new Markup(markup.ToString()));
 
             // If there are history items, show them below the prompt
             if (this.historyMenuItems != null && this.historyMenuItems.Count > 0)
@@ -616,17 +862,17 @@ namespace AvConsoleToolkit.Commands
                     var matchIndex = item.MatchIndex;
 
                     // Build the markup with highlighting
-                    var markup = new StringBuilder();
+                    var historyMarkup = new StringBuilder();
                     
                     if (isSelected)
                     {
                         // Selected: white on grey for entire row
-                        markup.Append("[white on grey]> ");
+                        historyMarkup.Append("[white on grey]> ");
                     }
                     else
                     {
                         // Unselected: olive arrow with default background
-                        markup.Append("[olive]>[/] ");
+                        historyMarkup.Append("[olive]>[/] ");
                     }
 
                     // Highlight the matching portion
@@ -637,64 +883,51 @@ namespace AvConsoleToolkit.Commands
                         // Add text before match
                         if (matchIndex > 0)
                         {
-                            if (isSelected)
-                            {
-                                markup.Append(command.Substring(0, matchIndex).EscapeMarkup());
-                            }
-                            else
-                            {
-                                markup.Append(command.Substring(0, matchIndex).EscapeMarkup());
-                            }
+                            historyMarkup.Append(command.Substring(0, matchIndex).EscapeMarkup());
                         }
                         
                         // Add highlighted match
                         if (isSelected)
                         {
                             // Keep white on grey, but make match bold or underlined
-                            markup.Append("[bold]");
-                            markup.Append(command.Substring(matchIndex, searchLength).EscapeMarkup());
-                            markup.Append("[/]");
+                            historyMarkup.Append("[bold]");
+
+                            historyMarkup.Append(command.Substring(matchIndex, searchLength).EscapeMarkup());
+                            historyMarkup.Append("[/]");
                         }
                         else
                         {
                             // Cyan highlight for unselected items
-                            markup.Append("[cyan]");
-                            markup.Append(command.Substring(matchIndex, searchLength).EscapeMarkup());
-                            markup.Append("[/]");
+                            historyMarkup.Append("[cyan]");
+                            historyMarkup.Append(command.Substring(matchIndex, searchLength).EscapeMarkup());
+                            historyMarkup.Append("[/]");
                         }
                         
                         // Add text after match
                         if (matchIndex + searchLength < command.Length)
                         {
-                            if (isSelected)
-                            {
-                                markup.Append(command.Substring(matchIndex + searchLength).EscapeMarkup());
-                            }
-                            else
-                            {
-                                markup.Append(command.Substring(matchIndex + searchLength).EscapeMarkup());
-                            }
+                            historyMarkup.Append(command.Substring(matchIndex + searchLength).EscapeMarkup());
                         }
                     }
                     else
                     {
                         // No match or match not found, just show the command
-                        markup.Append(command.EscapeMarkup());
+                        historyMarkup.Append(command.EscapeMarkup());
                     }
 
                     // Pad to max width
                     var currentLength = command.Length + 2; // +2 for "> "
                     if (currentLength < maxWidth)
                     {
-                        markup.Append(new string(' ', maxWidth - currentLength));
+                        historyMarkup.Append(new string(' ', maxWidth - currentLength));
                     }
                     
                     if (isSelected)
                     {
-                        markup.Append("[/]"); // Close [white on grey]
+                        historyMarkup.Append("[/]"); // Close [white on grey]
                     }
 
-                    return new Markup(markup.ToString());
+                    return new Markup(historyMarkup.ToString());
                 }).ToList();
 
                 var historyPanel = new Panel(new Rows(historyRows))
@@ -973,12 +1206,14 @@ namespace AvConsoleToolkit.Commands
                                             // Get the selected command
                                             var commandToDelete = this.historyMenuItems[this.historyMenuSelectedIndex].Command;
                                             
+
                                             // Remove from history
                                             if (this.commandHistory?.RemoveCommand(commandToDelete) == true)
                                             {
                                                 // Refresh the history menu
                                                 this.ShowHistoryMenu();
                                                 
+
                                                 // Adjust selected index if needed
                                                 if (this.historyMenuItems == null || this.historyMenuItems.Count == 0)
                                                 {
@@ -997,6 +1232,7 @@ namespace AvConsoleToolkit.Commands
                                                     this.showingHistoryMenu = true;
                                                 }
                                                 
+
                                                 // Update display
                                                 ctx.UpdateTarget(this.RenderPrompt());
                                             }
@@ -1021,20 +1257,25 @@ namespace AvConsoleToolkit.Commands
                                                 // Get the selected command
                                                 var selectedCommand = this.historyMenuItems[this.historyMenuSelectedIndex].Command;
                                                 
+
                                                 // Clear the history menu display immediately
                                                 this.HideHistoryMenu();
                                                 this.historyMenuItems = null;
                                                 
+
                                                 // Clear currentLine BEFORE submitting (otherwise SubmitCommandAsync uses wrong length for clearing)
                                                 this.currentLine = string.Empty;
                                                 
+
                                                 // Force update to hide the menu
                                                 ctx.UpdateTarget(this.RenderPrompt());
                                                 
+
                                                 // Now submit the selected command directly
                                                 await this.SubmitCommandAsync(selectedCommand, sessionToken);
                                                 this.commandHistory?.ResetPosition();
                                                 
+
                                                 // Check if we just queued a nested command for execution
                                                 if (this.isExecutingNestedCommand)
                                                 {
@@ -1042,6 +1283,7 @@ namespace AvConsoleToolkit.Commands
                                                     return;
                                                 }
                                                 
+
                                                 needsUpdate = false; // Already updated above
                                             }
                                             else if (!string.IsNullOrWhiteSpace(this.currentLine))
@@ -1073,6 +1315,15 @@ namespace AvConsoleToolkit.Commands
                                             this.cursorBlinkCounter = 0;
                                             break;
 
+                                        case ConsoleKey.Delete:
+                                            this.HandleDelete();
+                                            // Refresh history matches
+                                            this.ShowHistoryMenu();
+                                            // Reset cursor blink on input
+                                            this.showCursor = true;
+                                            this.cursorBlinkCounter = 0;
+                                            break;
+
                                         case ConsoleKey.UpArrow:
                                             this.HandleUpArrow();
                                             // Reset cursor blink on navigation
@@ -1083,6 +1334,34 @@ namespace AvConsoleToolkit.Commands
                                         case ConsoleKey.DownArrow:
                                             this.HandleDownArrow();
                                             // Reset cursor blink on navigation
+                                            this.showCursor = true;
+                                            this.cursorBlinkCounter = 0;
+                                            break;
+
+                                        case ConsoleKey.LeftArrow:
+                                            this.HandleLeftArrow(keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift));
+                                            // Reset cursor blink on navigation
+                                            this.showCursor = true;
+                                            this.cursorBlinkCounter = 0;
+                                            break;
+
+                                        case ConsoleKey.RightArrow:
+                                            this.HandleRightArrow(keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift));
+                                            // Reset cursor blink on navigation
+                                            this.showCursor = true;
+                                            this.cursorBlinkCounter = 0;
+                                            break;
+
+                                        case ConsoleKey.Home:
+                                            this.HandleHome(keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift));
+                                            // Reset cursor blink
+                                            this.showCursor = true;
+                                            this.cursorBlinkCounter = 0;
+                                            break;
+
+                                        case ConsoleKey.End:
+                                            this.HandleEnd(keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift));
+                                            // Reset cursor blink
                                             this.showCursor = true;
                                             this.cursorBlinkCounter = 0;
                                             break;
@@ -1107,7 +1386,21 @@ namespace AvConsoleToolkit.Commands
                                         default:
                                             if (!char.IsControl(keyInfo.KeyChar))
                                             {
-                                                this.currentLine += keyInfo.KeyChar;
+                                                // If there's a selection, delete it first
+                                                if (this.selectionStart >= 0 && this.selectionEnd >= 0)
+                                                {
+                                                    var start = Math.Min(this.selectionStart, this.selectionEnd);
+                                                    var end = Math.Max(this.selectionStart, this.selectionEnd);
+                                                    var deleteCount = end - start;
+                                                    this.currentLine = this.currentLine.Remove(start, deleteCount);
+                                                    this.cursorPosition = start;
+                                                    this.selectionStart = -1;
+                                                    this.selectionEnd = -1;
+                                                }
+                                                
+                                                // Insert character at cursor position
+                                                this.currentLine = this.currentLine.Insert(this.cursorPosition, keyInfo.KeyChar.ToString());
+                                                this.cursorPosition++;
                                                 // Refresh history matches automatically
                                                 this.ShowHistoryMenu();
                                                 // Reset cursor blink on input
