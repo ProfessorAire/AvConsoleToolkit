@@ -26,14 +26,14 @@ namespace AvConsoleToolkit.Commands
     public class AboutCommand : AsyncCommand<AboutSettings>
     {
         /// <summary>
-        /// Name of the third-party licenses file to look for alongside the executable.
-        /// </summary>
-        private const string ThirdPartyLicensesFileName = "THIRD_PARTY_LICENSES.md";
-
-        /// <summary>
         /// Name of the embedded LICENSE resource.
         /// </summary>
         private const string LicenseResourceName = "AvConsoleToolkit.LICENSE";
+
+        /// <summary>
+        /// Name of the third-party licenses file to look for alongside the executable.
+        /// </summary>
+        private const string ThirdPartyLicensesFileName = "THIRD_PARTY_LICENSES.md";
 
         /// <summary>
         /// Executes the about command, displaying application information and optional license details.
@@ -117,13 +117,13 @@ namespace AvConsoleToolkit.Commands
                 {
                     using var reader = new StreamReader(stream);
                     var licenseText = reader.ReadToEnd();
-                    
+
                     var panel = new Panel(licenseText.EscapeMarkup())
                     {
                         Border = BoxBorder.Rounded,
                         Padding = new Padding(1, 1, 1, 1)
                     };
-                    
+
                     AnsiConsole.Write(panel);
                 }
                 else
@@ -161,7 +161,7 @@ namespace AvConsoleToolkit.Commands
                 try
                 {
                     var licensesText = File.ReadAllText(licensesPath);
-                    
+
                     // Create table
                     var table = new Table()
                         .Border(TableBorder.Rounded)
@@ -171,7 +171,7 @@ namespace AvConsoleToolkit.Commands
 
                     // Parse the licenses
                     var lines = licensesText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    
+
                     string? currentPackage = null;
                     string? currentLicense = null;
                     string? currentUrl = null;
@@ -208,11 +208,12 @@ namespace AvConsoleToolkit.Commands
                         }
                         else if (line.StartsWith("**License Type:**"))
                         {
-                            currentLicense = line.Replace("**License Type:**", "").Trim();
+                            currentLicense = line.Replace("**License Type:**", string.Empty).Trim();
                         }
                         else if (line.StartsWith("**License URL:**"))
                         {
-                            var urlLine = line.Replace("**License URL:**", "").Trim();
+                            var urlLine = line.Replace("**License URL:**", string.Empty).Trim();
+
                             // Extract URL from markdown link format [text](url)
                             if (urlLine.Contains("](") && urlLine.Contains(")"))
                             {

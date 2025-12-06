@@ -1,4 +1,4 @@
-﻿// <copyright file="ISettings.cs">
+// <copyright file="ISshConnection.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,24 +10,23 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Diagnostics.CodeAnalysis;
-
-namespace AvConsoleToolkit.Configuration
+namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
-    /// Defines the application's settings.
+    /// Provides access to both shell and file transfer functionality over SSH.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface ISettings
+    public interface ISshConnection : IShellConnection, IFileTransferConnection
     {
         /// <summary>
-        /// Gets the current connection settings used to configure connection related functionality.
+        /// Gets a value indicating whether the connection is established.
         /// </summary>
-        IConnectionSettings Connection { get; }
+        new bool IsConnected { get; }
 
         /// <summary>
-        /// Gets the current connection settings used to configure Pass Through specific functionality.
+        /// Gets or sets the maximum number of reconnection attempts.
+        /// A value of 0 means no automatic reconnection.
+        /// A value of -1 means unlimited reconnection attempts.
         /// </summary>
-        IPassThroughSettings PassThrough { get; }
+        int MaxReconnectionAttempts { get; set; }
     }
 }

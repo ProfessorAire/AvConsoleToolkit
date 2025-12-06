@@ -143,6 +143,19 @@ namespace AvConsoleToolkit.Commands
         }
 
         /// <summary>
+        /// Gets the most recent commands up to the specified count.
+        /// </summary>
+        /// <param name="count">Number of recent commands to return.</param>
+        /// <returns>List of recent commands in reverse chronological order.</returns>
+        public List<string> GetRecent(int count = 5)
+        {
+            return this.commands
+                .TakeLast(count)
+                .Reverse()
+                .ToList();
+        }
+
+        /// <summary>
         /// Loads command history from disk asynchronously.
         /// </summary>
         /// <returns>A task representing the asynchronous load operation.</returns>
@@ -255,13 +268,13 @@ namespace AvConsoleToolkit.Commands
             // Search for commands containing the search text (case-insensitive)
             // Prioritize prefix matches, then by recency (most recent first)
             var matchingCommands = new List<(string Command, int Index, bool IsPrefix, int LastPosition)>();
-            
+
             // Find all matches and track their last position in history
             for (int i = this.commands.Count - 1; i >= 0; i--)
             {
                 var cmd = this.commands[i];
                 var index = cmd.IndexOf(searchText, StringComparison.OrdinalIgnoreCase);
-                
+
                 if (index >= 0)
                 {
                     // Check if we already have this command
@@ -271,6 +284,7 @@ namespace AvConsoleToolkit.Commands
                         // New command, add it
                         matchingCommands.Add((cmd, index, index == 0, i));
                     }
+
                     // If duplicate, we already have the most recent one (since we're iterating backwards)
                 }
             }
@@ -284,19 +298,6 @@ namespace AvConsoleToolkit.Commands
                 .ToList();
 
             return results;
-        }
-
-        /// <summary>
-        /// Gets the most recent commands up to the specified count.
-        /// </summary>
-        /// <param name="count">Number of recent commands to return.</param>
-        /// <returns>List of recent commands in reverse chronological order.</returns>
-        public List<string> GetRecent(int count = 5)
-        {
-            return this.commands
-                .TakeLast(count)
-                .Reverse()
-                .ToList();
         }
     }
 }

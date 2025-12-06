@@ -1,7 +1,7 @@
-﻿// <copyright file="IShellStream.cs">
+// <copyright file="IShellConnection.cs">
 // The MIT License
 // Copyright © Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -18,20 +18,45 @@ using System.Threading.Tasks;
 namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
-    /// Interface for shell stream operations to enable testability.
+    /// Provides access to functionality for interacting with a communication stream,
+    /// such as an SSH stream, or a Telnet stream.
     /// </summary>
-    internal interface IShellStream : IDisposable
+    public interface IShellConnection : IDisposable
     {
         /// <summary>
-        /// Gets a value indicating whether data is available to read.
+        /// Occurs when the shell connection is disconnected.
+        /// </summary>
+        event EventHandler? ShellDisconnected;
+
+        /// <summary>
+        /// Occurs when the shell connection is reconnected after a disconnection.
+        /// </summary>
+        event EventHandler? ShellReconnected;
+
+        /// <summary>
+        /// Gets a value indicating whether data is available to read from the shell stream.
         /// </summary>
         bool DataAvailable { get; }
 
         /// <summary>
+        /// Gets a value indicating whether the connection is established.
+        /// </summary>
+        bool IsConnected { get; }
+
+        /// <summary>
+        /// Asynchronously establishes a shell connection to the remote host.
+        /// </summary>
+        /// <param name="cancellationToken">A cancellation token that can be used to cancel the connection attempt.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if the shell
+        /// connection is established successfully; otherwise, <see langword="false"/>.</returns>
+        Task<bool> ConnectShellAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Reads data from the shell stream.
         /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>The data read from the stream.</returns>
-        string Read();
+        Task<string> ReadAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Asynchronously waits for the completion of a command executed on the shell stream.
@@ -57,6 +82,8 @@ namespace AvConsoleToolkit.Ssh
         /// Writes a line to the shell stream.
         /// </summary>
         /// <param name="line">The line to write.</param>
-        void WriteLine(string line);
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        Task WriteLineAsync(string line, CancellationToken cancellationToken = default);
     }
 }
