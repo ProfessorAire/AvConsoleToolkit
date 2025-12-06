@@ -11,6 +11,7 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -28,10 +29,43 @@ namespace AvConsoleToolkit.Ssh
         bool IsConnected { get; }
 
         /// <summary>
-        /// Gets the shell stream for this connection.
+        /// Gets a value indicating whether data is available to read from the shell stream.
+        /// </summary>
+        bool DataAvailable { get; }
+
+        /// <summary>
+        /// Reads data from the shell stream.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>The shell stream instance.</returns>
-        Task<IShellStream> GetShellStreamAsync(CancellationToken cancellationToken = default);
+        /// <returns>The data read from the stream.</returns>
+        Task<string> ReadAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Writes a line to the shell stream.
+        /// </summary>
+        /// <param name="line">The line to write.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        Task WriteLineAsync(string line, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Asynchronously waits for the completion of a command executed on the shell stream.
+        /// </summary>
+        /// <param name="successPatterns">A collection of string patterns indicating successful command completion.</param>
+        /// <param name="failurePatterns">A collection of string patterns indicating command failure.</param>
+        /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+        /// <param name="timeoutMs">The maximum time, in milliseconds, to wait for command completion. Default is 15000ms.</param>
+        /// <param name="writeReceivedData">If <see langword="true"/>, writes received data to the output. Default is <see langword="true"/>.</param>
+        /// <returns>
+        /// A task that represents the asynchronous operation. The task result is <see langword="true"/> if a success pattern is matched;
+        /// <see langword="false"/> if a failure pattern is matched or the operation times out.
+        /// </returns>
+        /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is cancelled during execution.</exception>
+        Task<bool> WaitForCommandCompletionAsync(
+            IEnumerable<string>? successPatterns,
+            IEnumerable<string>? failurePatterns,
+            CancellationToken cancellationToken,
+            int timeoutMs = 15000,
+            bool writeReceivedData = true);
     }
 }

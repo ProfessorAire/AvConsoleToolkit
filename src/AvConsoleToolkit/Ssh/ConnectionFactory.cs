@@ -14,6 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace AvConsoleToolkit.Ssh
 {
@@ -39,7 +40,7 @@ namespace AvConsoleToolkit.Ssh
         public static ConnectionFactory Instance => LazyInstance.Value;
 
         /// <inheritdoc/>
-        public ISshConnection GetSshConnection(string hostAddress, int port, string username, string password)
+        public Task<ISshConnection> GetSshConnectionAsync(string hostAddress, int port, string username, string password)
         {
             if (string.IsNullOrEmpty(hostAddress))
             {
@@ -62,17 +63,17 @@ namespace AvConsoleToolkit.Ssh
             {
                 if (this.connectionCache.TryGetValue(key, out var existingConnection))
                 {
-                    return existingConnection;
+                    return Task.FromResult(existingConnection);
                 }
 
                 var connection = new SshConnection(hostAddress, port, username, password);
                 this.connectionCache[key] = connection;
-                return connection;
+                return Task.FromResult<ISshConnection>(connection);
             }
         }
 
         /// <inheritdoc/>
-        public ISshConnection GetSshConnection(string hostAddress, int port)
+        public Task<ISshConnection> GetSshConnectionAsync(string hostAddress, int port)
         {
             if (string.IsNullOrEmpty(hostAddress))
             {
@@ -102,12 +103,12 @@ namespace AvConsoleToolkit.Ssh
             {
                 if (this.connectionCache.TryGetValue(key, out var existingConnection))
                 {
-                    return existingConnection;
+                    return Task.FromResult(existingConnection);
                 }
 
                 var connection = new SshConnection(hostAddress, port, privateKeyPath);
                 this.connectionCache[key] = connection;
-                return connection;
+                return Task.FromResult<ISshConnection>(connection);
             }
         }
 

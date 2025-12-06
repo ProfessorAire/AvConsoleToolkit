@@ -10,6 +10,8 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
+using System.Threading.Tasks;
+
 namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
@@ -25,7 +27,7 @@ namespace AvConsoleToolkit.Ssh
         /// <param name="username">The username for authentication.</param>
         /// <param name="password">The password for authentication.</param>
         /// <returns>An SSH connection instance.</returns>
-        ISshConnection GetSshConnection(string hostAddress, int port, string username, string password);
+        Task<ISshConnection> GetSshConnectionAsync(string hostAddress, int port, string username, string password);
 
         /// <summary>
         /// Gets an SSH connection with SSH key authentication.
@@ -34,7 +36,7 @@ namespace AvConsoleToolkit.Ssh
         /// <param name="hostAddress">The host address to connect to.</param>
         /// <param name="port">The port to connect on.</param>
         /// <returns>An SSH connection instance.</returns>
-        ISshConnection GetSshConnection(string hostAddress, int port);
+        Task<ISshConnection> GetSshConnectionAsync(string hostAddress, int port);
 
         /// <summary>
         /// Releases all cached connections.

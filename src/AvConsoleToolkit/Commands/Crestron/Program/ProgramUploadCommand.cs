@@ -262,7 +262,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         {
             var remoteHashPath = $"{remotePath}/{HashManifestFileName}";
 
-            if (!sftpClient.Exists(remoteHashPath))
+            if (!await connection.ExistsAsync(remoteHashPath))
             {
                 if (verbose)
                 {
@@ -279,7 +279,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             return await Task.Run(() =>
                    {
                        using var memoryStream = new MemoryStream();
-                       sftpClient.DownloadFile(remoteHashPath, memoryStream);
+                       await connection.DownloadFileAsync(remoteHashPath, memoryStream);
                        memoryStream.Position = 0;
 
                        var hashes = new Dictionary<string, string>();
@@ -329,9 +329,9 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
                 currentPath = string.IsNullOrEmpty(currentPath) ? part : $"{currentPath}/{part}";
 
-                if (!sftpClient.Exists(currentPath))
+                if (!await connection.ExistsAsync(currentPath))
                 {
-                    sftpClient.CreateDirectory(currentPath);
+                    await connection.CreateDirectoryAsync(currentPath);
                 }
             }
         }
@@ -352,7 +352,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                    {
                        var files = new Dictionary<string, ISftpFile>();
 
-                       if (!sftpClient.Exists(remotePath))
+                       if (!await connection.ExistsAsync(remotePath))
                        {
                            return files;
                        }
@@ -377,7 +377,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             Dictionary<string, ISftpFile> files,
             bool verbose = false)
         {
-            var items = sftpClient.ListDirectory(currentPath);
+            var items = await connection.ListDirectoryAsync(currentPath);
 
             foreach (var item in items)
             {
@@ -635,19 +635,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             CancellationToken cancellationToken)
         {
             // First, analyze files without SSH connection - only need SFTP for listing
-            var connection = ConnectionFactory.Instance.GetSshConnection(settings.Host, 22, settings.Username, settings.Password);
-            var sftpClient = await connection.GetSftpClientAsync();
-
-            if (!sftpClient.IsConnected)
-            {
-                await AnsiConsole.Status()
-                   .StartAsync("Connecting to device...", async ctx =>
-                   {
-                       ctx.Status("Connecting to SFTP client for file analysis.");
-                       await sftpClient.ConnectAsync(cancellationToken);
-                       ctx.Status("Connected");
-                   });
-            }
+            var connection = await ConnectionFactory.Instance.GetSshConnectionAsync(settings.Host, 22, settings.Username, settings.Password);
 
             var analysisResult = await AnsiConsole.Progress()
                 .AutoClear(false)
@@ -845,7 +833,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 if (changes.Count == 0 && !settings.KillProgram)
                 {
                     AnsiConsole.MarkupLine("[green]No files have changed. Upload skipped.[/]");
-                    sftpClient.Disconnect();
+                    
                     return 0;
                 }
 
@@ -853,18 +841,8 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 var uploadAllFiles = settings.KillProgram || isClz && !settings.ChangedOnly;
                 AnsiConsole.MarkupLine($"[yellow]{changes.Count} file(s) {(uploadAllFiles ? "to upload" : "have changed")}.[/]");
 
-                // Now we know we need to upload, establish SSH connection
-                using var sshClient = new SshClient(settings.Host, settings.Username, settings.Password);
-
-                await AnsiConsole.Status()
-                         .StartAsync("Establishing SSH connection...", async ctx =>
-                         {
-                             ctx.Status("Connecting to SSH client.");
-                             await sshClient.ConnectAsync(cancellationToken);
-                             ctx.Status("SSH Connected");
-                         });
-
-                using var shellStream = new Ssh.ShellStreamWrapper(sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024));
+                // Get shell stream for console commands
+                var shellStream = await connection.GetShellStreamInternalAsync(cancellationToken);
 
                 if (settings.KillProgram)
                 {
@@ -917,7 +895,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
                                     await Task.Run(() =>
                                     {
-                                        sftpClient.UploadFile(fileStream, remoteFilePath, true, uploaded =>
+                                        await connection.UploadFileAsync(fileStream, remoteFilePath, true, uploaded =>
                                         {
                                             var percentage = (((double)uploaded) / fileSize) * 100;
                                             uploadTask.Value = percentage;
@@ -925,7 +903,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                                     });
 
                                     var sourceLastWriteTimeUtc = File.GetLastWriteTimeUtc(localPath);
-                                    sftpClient.SetLastWriteTimeUtc(remoteFilePath, sourceLastWriteTimeUtc);
+                                    await connection.SetLastWriteTimeUtcAsync(remoteFilePath, sourceLastWriteTimeUtc);
 
                                     uploadTask.Value = 100;
                                     uploadTask.StopTask();
@@ -1176,7 +1154,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 }
 
                 memoryStream.Position = 0;
-                sftpClient.UploadFile(memoryStream, remoteHashPath, true);
+                await connection.UploadFileAsync(memoryStream, remoteHashPath, true);
             });
 
             if (verbose)
@@ -1197,10 +1175,8 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             string remotePath,
             CancellationToken cancellationToken)
         {
-            var connection = ConnectionFactory.Instance.GetSshConnection(settings.Host, 22, settings.Username, settings.Password);
-            var sshClient = await connection.GetSshClientAsync(cancellationToken);
-            var sftpClient = await connection.GetSftpClientAsync();
-            var shellStream = await connection.GetShellStreamAsync(cancellationToken);
+            var connection = await ConnectionFactory.Instance.GetSshConnectionAsync(settings.Host, 22, settings.Username, settings.Password);
+            var shellStream = await connection.GetShellStreamInternalAsync(cancellationToken);
 
             // Kill program if requested
             if (settings.KillProgram)

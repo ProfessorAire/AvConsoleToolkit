@@ -20,7 +20,7 @@ namespace AvConsoleToolkit.Ssh
     /// <summary>
     /// Interface for shell stream operations to enable testability.
     /// </summary>
-    public interface IShellStream : IDisposable
+    internal interface IShellStream : IDisposable
     {
         /// <summary>
         /// Gets a value indicating whether data is available to read.

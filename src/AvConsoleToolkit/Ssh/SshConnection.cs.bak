@@ -1,16 +1,20 @@
 // <copyright file="SshConnection.cs">
 // The MIT License
 // Copyright © Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Renci.SshNet;
-using Renci.SshNet.Sftp;
 using Spectre.Console;
 
 namespace AvConsoleToolkit.Ssh
@@ -32,6 +36,13 @@ namespace AvConsoleToolkit.Ssh
         private IShellStream? shellStream;
         private bool disposed;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SshConnection"/> class with password authentication.
+        /// </summary>
+        /// <param name="hostAddress">The host address to connect to.</param>
+        /// <param name="port">The port to connect on.</param>
+        /// <param name="username">The username for authentication.</param>
+        /// <param name="password">The password for authentication.</param>
         public SshConnection(string hostAddress, int port, string username, string password)
         {
             this.hostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
@@ -41,6 +52,12 @@ namespace AvConsoleToolkit.Ssh
             this.privateKeyPath = null;
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SshConnection"/> class with SSH key authentication.
+        /// </summary>
+        /// <param name="hostAddress">The host address to connect to.</param>
+        /// <param name="port">The port to connect on.</param>
+        /// <param name="privateKeyPath">The path to the private key file.</param>
         public SshConnection(string hostAddress, int port, string privateKeyPath)
         {
             this.hostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
@@ -50,6 +67,7 @@ namespace AvConsoleToolkit.Ssh
             this.password = null;
         }
 
+        /// <inheritdoc/>
         public bool IsConnected
         {
             get
@@ -62,87 +80,100 @@ namespace AvConsoleToolkit.Ssh
             }
         }
 
-        public bool DataAvailable
+        /// <inheritdoc/>
+        public async Task<ISshClient> GetSshClientAsync(CancellationToken cancellationToken = default)
         {
-            get
+            this.ThrowIfDisposed();
+
+            lock (this.lockObject)
             {
-                lock (this.lockObject)
+                if (this.sshClient != null && this.sshClient.IsConnected)
                 {
-                    return this.shellStream?.DataAvailable ?? false;
+                    return this.sshClient;
+                }
+
+                if (this.sshClient != null && !this.sshClient.IsConnected)
+                {
+                    // Clean up disconnected client
+                    this.CleanupSshClient();
                 }
             }
+
+            // Create and connect new client
+            return await this.ConnectSshClientAsync(cancellationToken);
         }
 
-        public async Task<string> ReadAsync(CancellationToken cancellationToken = default)
+        /// <inheritdoc/>
+        public async Task<ISftpClient> GetSftpClientAsync(CancellationToken cancellationToken = default)
         {
-            var stream = await this.EnsureShellStreamAsync(cancellationToken);
-            return await Task.Run(() => stream.Read(), cancellationToken);
+            this.ThrowIfDisposed();
+
+            lock (this.lockObject)
+            {
+                if (this.sftpClient != null && this.sftpClient.IsConnected)
+                {
+                    return this.sftpClient;
+                }
+
+                if (this.sftpClient != null && !this.sftpClient.IsConnected)
+                {
+                    // Clean up disconnected client
+                    this.CleanupSftpClient();
+                }
+            }
+
+            // Create and connect new client
+            return await this.ConnectSftpClientAsync(cancellationToken);
         }
 
-        public async Task WriteLineAsync(string line, CancellationToken cancellationToken = default)
+        /// <inheritdoc/>
+        public async Task<IShellStream> GetShellStreamAsync(CancellationToken cancellationToken = default)
         {
-            var stream = await this.EnsureShellStreamAsync(cancellationToken);
-            await Task.Run(() => stream.WriteLine(line), cancellationToken);
+            this.ThrowIfDisposed();
+
+            lock (this.lockObject)
+            {
+                if (this.shellStream != null)
+                {
+                    return this.shellStream;
+                }
+            }
+
+            // Ensure SSH client is connected first
+            var client = await this.GetSshClientAsync(cancellationToken);
+            
+            if (!client.IsConnected)
+            {
+                AnsiConsole.Write(new ConnectionStatusRenderable(this.hostAddress, ConnectionStatus.Connecting));
+                AnsiConsole.WriteLine();
+                await client.ConnectAsync(cancellationToken);
+                AnsiConsole.Write(new ConnectionStatusRenderable(this.hostAddress, ConnectionStatus.Connected));
+                AnsiConsole.WriteLine();
+            }
+
+            // Create shell stream
+            var stream = new ShellStreamWrapper(
+                ((SshClient)client).CreateShellStream("xterm", 80, 24, 800, 600, 1024));
+
+            lock (this.lockObject)
+            {
+                this.shellStream = stream;
+            }
+
+            return stream;
         }
 
-        public async Task<bool> WaitForCommandCompletionAsync(
-            IEnumerable<string>? successPatterns,
-            IEnumerable<string>? failurePatterns,
-            CancellationToken cancellationToken,
-            int timeoutMs = 15000,
-            bool writeReceivedData = true)
-        {
-            var stream = await this.EnsureShellStreamAsync(cancellationToken);
-            return await stream.WaitForCommandCompletionAsync(successPatterns, failurePatterns, cancellationToken, timeoutMs, writeReceivedData);
-        }
-
-        public async Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default)
-        {
-            var client = await this.EnsureSftpClientAsync(cancellationToken);
-            return await Task.Run(() => client.Exists(path), cancellationToken);
-        }
-
-        public async Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
-        {
-            var client = await this.EnsureSftpClientAsync(cancellationToken);
-            await Task.Run(() => client.CreateDirectory(path), cancellationToken);
-        }
-
-        public async Task<IEnumerable<ISftpFile>> ListDirectoryAsync(string path, CancellationToken cancellationToken = default)
-        {
-            var client = await this.EnsureSftpClientAsync(cancellationToken);
-            return await Task.Run(() => client.ListDirectory(path).ToList(), cancellationToken);
-        }
-
-        public async Task DownloadFileAsync(string remotePath, Stream destination, CancellationToken cancellationToken = default)
-        {
-            var client = await this.EnsureSftpClientAsync(cancellationToken);
-            await Task.Run(() => client.DownloadFile(remotePath, destination), cancellationToken);
-        }
-
-        public async Task UploadFileAsync(Stream source, string remotePath, bool canOverride, Action<ulong>? uploadCallback = null, CancellationToken cancellationToken = default)
-        {
-            var client = await this.EnsureSftpClientAsync(cancellationToken);
-            await Task.Run(() => client.UploadFile(source, remotePath, canOverride, uploadCallback), cancellationToken);
-        }
-
-        public async Task SetLastWriteTimeUtcAsync(string remotePath, DateTime lastWriteTime, CancellationToken cancellationToken = default)
-        {
-            var client = await this.EnsureSftpClientAsync(cancellationToken);
-            await Task.Run(() => client.SetLastWriteTimeUtc(remotePath, lastWriteTime), cancellationToken);
-        }
-
-        Task<IShellStream> ISshConnection. GetShellStreamInternalAsync(CancellationToken cancellationToken = default)
-        {
-            return this.EnsureShellStreamAsync(cancellationToken);
-        }
-
+        /// <inheritdoc/>
         public void Dispose()
         {
             this.Dispose(true);
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// Releases the unmanaged resources used by the <see cref="SshConnection"/> and optionally releases the managed resources.
+        /// </summary>
+        /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
         protected virtual void Dispose(bool disposing)
         {
             if (!this.disposed)
@@ -161,85 +192,13 @@ namespace AvConsoleToolkit.Ssh
             }
         }
 
-        private async Task<SshClient> EnsureSshClientAsync(CancellationToken cancellationToken)
-        {
-            this.ThrowIfDisposed();
-
-            lock (this.lockObject)
-            {
-                if (this.sshClient != null && this.sshClient.IsConnected)
-                {
-                    return this.sshClient;
-                }
-
-                if (this.sshClient != null && !this.sshClient.IsConnected)
-                {
-                    this.CleanupSshClient();
-                }
-            }
-
-            return await this.ConnectSshClientAsync(cancellationToken);
-        }
-
-        private async Task<SftpClient> EnsureSftpClientAsync(CancellationToken cancellationToken)
-        {
-            this.ThrowIfDisposed();
-
-            lock (this.lockObject)
-            {
-                if (this.sftpClient != null && this.sftpClient.IsConnected)
-                {
-                    return this.sftpClient;
-                }
-
-                if (this.sftpClient != null && !this.sftpClient.IsConnected)
-                {
-                    this.CleanupSftpClient();
-                }
-            }
-
-            return await this.ConnectSftpClientAsync(cancellationToken);
-        }
-
-        private async Task<IShellStream> EnsureShellStreamAsync(CancellationToken cancellationToken)
-        {
-            this.ThrowIfDisposed();
-
-            lock (this.lockObject)
-            {
-                if (this.shellStream != null)
-                {
-                    return this.shellStream;
-                }
-            }
-
-            var client = await this.EnsureSshClientAsync(cancellationToken);
-            
-            if (!client.IsConnected)
-            {
-                AnsiConsole.Write(new ConnectionStatusRenderable(this.hostAddress, ConnectionStatus.Connecting));
-                AnsiConsole.WriteLine();
-                await client.ConnectAsync(cancellationToken);
-                AnsiConsole.Write(new ConnectionStatusRenderable(this.hostAddress, ConnectionStatus.Connected));
-                AnsiConsole.WriteLine();
-            }
-
-            var stream = new ShellStreamWrapper(client.CreateShellStream("xterm", 80, 24, 800, 600, 1024));
-
-            lock (this.lockObject)
-            {
-                this.shellStream = stream;
-            }
-
-            return stream;
-        }
-
-        private async Task<SshClient> ConnectSshClientAsync(CancellationToken cancellationToken)
+        private async Task<ISshClient> ConnectSshClientAsync(CancellationToken cancellationToken)
         {
             SshClient client;
 
             if (!string.IsNullOrEmpty(this.privateKeyPath))
             {
+                // SSH key authentication
                 var privateKey = new PrivateKeyFile(this.privateKeyPath);
                 var connectionInfo = new ConnectionInfo(
                     this.hostAddress,
@@ -250,6 +209,7 @@ namespace AvConsoleToolkit.Ssh
             }
             else if (this.username != null && this.password != null)
             {
+                // Password authentication
                 client = new SshClient(this.hostAddress, this.port, this.username, this.password);
             }
             else
@@ -276,12 +236,13 @@ namespace AvConsoleToolkit.Ssh
             return client;
         }
 
-        private async Task<SftpClient> ConnectSftpClientAsync(CancellationToken cancellationToken)
+        private async Task<ISftpClient> ConnectSftpClientAsync(CancellationToken cancellationToken)
         {
             SftpClient client;
 
             if (!string.IsNullOrEmpty(this.privateKeyPath))
             {
+                // SSH key authentication
                 var privateKey = new PrivateKeyFile(this.privateKeyPath);
                 var connectionInfo = new ConnectionInfo(
                     this.hostAddress,
@@ -292,6 +253,7 @@ namespace AvConsoleToolkit.Ssh
             }
             else if (this.username != null && this.password != null)
             {
+                // Password authentication
                 client = new SftpClient(this.hostAddress, this.port, this.username, this.password);
             }
             else
