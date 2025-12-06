@@ -18,6 +18,8 @@ on:
 jobs:
   release:
     runs-on: windows-latest
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: ./.github/workflows
