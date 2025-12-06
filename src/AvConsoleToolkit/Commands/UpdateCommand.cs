@@ -1,7 +1,7 @@
 ﻿// <copyright file="UpdateCommand.cs">
 // The MIT License
 // Copyright © Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -11,12 +11,13 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Net.Http;
-using System.Net.Http.Headers;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using AvConsoleToolkit.Updates;
 using Onova;
 using Onova.Exceptions;
 using Onova.Services;
@@ -53,25 +54,28 @@ namespace AvConsoleToolkit.Commands
                 AnsiConsole.WriteLine();
 
                 // Get current version from assembly
-                var currentVersion = Assembly.GetExecutingAssembly().GetName().Version!;
-                AnsiConsole.MarkupLine($"[cyan]Current version:[/] [green]{currentVersion}[/]");
+                var assembly = Assembly.GetExecutingAssembly();
+                var version = assembly.GetName().Version;
+                var currentVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? version?.ToString() ?? "Unknown";
+                var currentSemanticVersion = SemanticVersion.Parse(currentVersion);
+                AnsiConsole.MarkupLine($"[cyan]Current version:[/] [green]{currentSemanticVersion}[/]");
 
                 // Create local and GitHub package resolvers
                 var localVersionsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "versions");
                 var localResolver = new LocalPackageResolver(localVersionsPath, "AvConsoleToolkit-*.zip");
 
-                GithubPackageResolver? githubResolver;
+                var githubResolver = new GitHubReleasePackageResolver("ProfessorAire", "AvConsoleToolkit", "AvConsoleToolkit-*.zip", settings.ConsiderPreRelease, settings.Verbose);
 
-                githubResolver = new GithubPackageResolver("ProfessorAire", "AvConsoleToolkit", "AvConsoleToolkit-*.zip");
+                var updateResolver = new AggregatePackageResolver([githubResolver, localResolver]);
+                AnsiConsole.MarkupLine("[grey]Checking for updates from [/][fuchsia]GitHub[/] and the local 'Versions' directory.");
 
-                IPackageResolver updateResolver = new AggregatePackageResolver([githubResolver, localResolver]);
-                AnsiConsole.MarkupLine("[grey]Checking for updates from [/][fuchsia]GitHub.[/] and the local 'Versions' directory.");
-
-                // Create update manager with ZIP extractor
-                using var manager = new UpdateManager(localResolver, new ZipPackageExtractor());
+                // Create update manager with ZIP extractor - use the aggregate resolver that includes GitHub
+                using var manager = new UpdateManager(updateResolver, new ZipPackageExtractor());
 
                 // Check for updates
                 Version? latestVersion = null;
+                SemanticVersion? latestSemanticVersion = null;
+                IReadOnlyList<SemanticVersion>? semanticVersions = null;
                 await AnsiConsole.Status()
                   .StartAsync("Checking for updates...", async ctx =>
                   {
@@ -79,10 +83,13 @@ namespace AvConsoleToolkit.Commands
                       {
                           if (OperatingSystem.IsWindows())
                           {
+                              semanticVersions = await githubResolver.GetSemanticVersionsAsync(cancellationToken);
                               var result = await manager.CheckForUpdatesAsync(cancellationToken);
+
                               if (result.CanUpdate && result.LastVersion != null)
                               {
                                   latestVersion = result.LastVersion;
+                                  latestSemanticVersion = semanticVersions.First(v => v.ToVersion() == latestVersion);
                               }
                           }
                       }
@@ -98,9 +105,9 @@ namespace AvConsoleToolkit.Commands
                     return 0;
                 }
 
-                AnsiConsole.MarkupLine($"[cyan]Latest version:[/]  [green]{latestVersion}[/]");
+                AnsiConsole.MarkupLine($"[cyan]Latest version:[/]  [green]{latestSemanticVersion}[/]");
 
-                if (currentVersion >= latestVersion)
+                if (currentSemanticVersion >= latestSemanticVersion)
                 {
                     AnsiConsole.MarkupLine("[green]✓[/] You are already on the latest version!");
                     return 0;
@@ -111,7 +118,7 @@ namespace AvConsoleToolkit.Commands
                 // Prompt user to update
                 if (!settings.AutoConfirm)
                 {
-                    var confirm = AnsiConsole.Confirm($"Update to version [green]{latestVersion}[/]?", defaultValue: true);
+                    var confirm = AnsiConsole.Confirm($"Update to version [green]{latestSemanticVersion}[/]?", defaultValue: true);
                     if (!confirm)
                     {
                         AnsiConsole.MarkupLine("[yellow]Update cancelled.[/]");
@@ -151,11 +158,11 @@ namespace AvConsoleToolkit.Commands
                 {
                     AnsiConsole.Prompt(
                new ConfirmationPrompt("Press [green]Enter[/] to install the update or 'n' to cancel...")
-               {
-                   DefaultValue = true,
-                   ShowDefaultValue = false,
-                   ShowChoices = false
-               });
+                    {
+                        DefaultValue = true,
+                        ShowDefaultValue = false,
+                        ShowChoices = false
+                    });
                 }
 
                 // Launch updater (this will restart the application)
