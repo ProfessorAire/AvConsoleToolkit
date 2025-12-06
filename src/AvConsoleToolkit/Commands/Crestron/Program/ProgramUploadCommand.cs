@@ -1,6 +1,6 @@
 // <copyright file="ProgramUploadCommand.cs">
 // The MIT License
-// Copyright © Christopher McNeely
+// Copyright ï¿½ Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -635,7 +635,8 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             CancellationToken cancellationToken)
         {
             // First, analyze files without SSH connection - only need SFTP for listing
-            var sftpClient = await SshManager.GetSftpClientAsync(settings.Host, settings.Username, settings.Password);
+            var connection = ConnectionFactory.Instance.GetSshConnection(settings.Host, 22, settings.Username, settings.Password);
+            var sftpClient = await connection.GetSftpClientAsync();
 
             if (!sftpClient.IsConnected)
             {
@@ -1196,31 +1197,10 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             string remotePath,
             CancellationToken cancellationToken)
         {
-            var sshClient = await SshManager.GetSshClientAsync(settings.Host, settings.Username, settings.Password, cancellationToken);
-            var sftpClient = await SshManager.GetSftpClientAsync(settings.Host, settings.Username, settings.Password);
-
-            if (!sshClient.IsConnected || !sftpClient.IsConnected)
-            {
-                await AnsiConsole.Status()
-                   .StartAsync("Connecting to device...", async ctx =>
-                   {
-                       if (!sshClient.IsConnected)
-                       {
-                           ctx.Status("Connecting to SSH client.");
-                           await sshClient.ConnectAsync(cancellationToken);
-                       }
-
-                       if (!sftpClient.IsConnected)
-                       {
-                           ctx.Status("Connecting to SFTP client.");
-                           await sftpClient.ConnectAsync(cancellationToken);
-                       }
-
-                       ctx.Status("Connected");
-                   });
-            }
-
-            var shellStream = await SshManager.GetShellStreamAsync(settings.Host, settings.Username, settings.Password, cancellationToken);
+            var connection = ConnectionFactory.Instance.GetSshConnection(settings.Host, 22, settings.Username, settings.Password);
+            var sshClient = await connection.GetSshClientAsync(cancellationToken);
+            var sftpClient = await connection.GetSftpClientAsync();
+            var shellStream = await connection.GetShellStreamAsync(cancellationToken);
 
             // Kill program if requested
             if (settings.KillProgram)

@@ -62,14 +62,7 @@ namespace AvConsoleToolkit.Ssh
             {
                 if (this.connectionCache.TryGetValue(key, out var existingConnection))
                 {
-                    if (existingConnection.IsConnected)
-                    {
-                        return existingConnection;
-                    }
-
-                    // Remove disconnected connection from cache
-                    existingConnection.Dispose();
-                    this.connectionCache.Remove(key);
+                    return existingConnection;
                 }
 
                 var connection = new SshConnection(hostAddress, port, username, password);
@@ -108,14 +101,7 @@ namespace AvConsoleToolkit.Ssh
             {
                 if (this.connectionCache.TryGetValue(key, out var existingConnection))
                 {
-                    if (existingConnection.IsConnected)
-                    {
-                        return existingConnection;
-                    }
-
-                    // Remove disconnected connection from cache
-                    existingConnection.Dispose();
-                    this.connectionCache.Remove(key);
+                    return existingConnection;
                 }
 
                 var connection = new SshConnection(hostAddress, port, privateKeyPath);

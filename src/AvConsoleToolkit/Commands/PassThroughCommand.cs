@@ -1,6 +1,6 @@
 // <copyright file="PassThroughCommand.cs">
 // The MIT License
-// Copyright © Christopher McNeely
+// Copyright ï¿½ Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -42,6 +42,8 @@ namespace AvConsoleToolkit.Commands
         private int selectionStart = -1;
 
         private int selectionEnd = -1;
+
+        private Ssh.ISshConnection? sshConnection;
 
         private ISshClient? sshClient;
 
@@ -367,14 +369,10 @@ namespace AvConsoleToolkit.Commands
                 await AnsiConsole.Status()
                     .StartAsync("Connecting to device...", async ctx =>
                     {
-                        this.sshClient = await Ssh.SshManager.GetSshClientAsync(host, username, password, cancellationToken);
-                        if (!this.sshClient.IsConnected)
-                        {
-                            ctx.Status("Connecting to SSH client.");
-                            await this.sshClient.ConnectAsync(cancellationToken);
-                        }
-
-                        this.shellStream = await Ssh.SshManager.GetShellStreamAsync(host, username, password, cancellationToken);
+                        this.sshConnection = Ssh.ConnectionFactory.Instance.GetSshConnection(host, 22, username, password);
+                        this.sshClient = await this.sshConnection.GetSshClientAsync(cancellationToken);
+                        
+                        this.shellStream = await this.sshConnection.GetShellStreamAsync(cancellationToken);
                         
                         // Some Crestron devices require an initial carriage return to start sending data
                         // Send a newline to trigger the initial prompt and header
@@ -1018,7 +1016,7 @@ namespace AvConsoleToolkit.Commands
                 {
                     try
                     {
-                        while (!sessionToken.IsCancellationRequested && this.sshClient?.IsConnected == true)
+                        while (!sessionToken.IsCancellationRequested && this.sshConnection?.IsConnected == true)
                         {
                             // Pause reading during nested command execution
                             if (this.isExecutingNestedCommand)
@@ -1051,7 +1049,7 @@ namespace AvConsoleToolkit.Commands
                         }
 
                         // Connection lost - signal reconnection needed
-                        if (!sessionToken.IsCancellationRequested && this.sshClient?.IsConnected == false)
+                        if (!sessionToken.IsCancellationRequested && this.sshConnection?.IsConnected == false)
                         {
                             needsReconnect = true;
                             // Wait for reconnection to complete
@@ -1168,7 +1166,7 @@ namespace AvConsoleToolkit.Commands
                     }
                 }
 
-                if (inLiveMode && this.sshClient?.IsConnected == true)
+                if (inLiveMode && this.sshConnection?.IsConnected == true)
                 {
                     // Start Live display
                     await AnsiConsole.Live(this.RenderPrompt())
@@ -1176,7 +1174,7 @@ namespace AvConsoleToolkit.Commands
                         .StartAsync(async ctx =>
                         {
                             while (!sessionToken.IsCancellationRequested &&
-                                   this.sshClient?.IsConnected == true &&
+                                   this.sshConnection?.IsConnected == true &&
                                    !this.isExecutingNestedCommand &&
                                    !needsReconnect)
                             {
