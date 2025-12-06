@@ -1,4 +1,4 @@
-﻿// <copyright file="IPassThroughSettings.cs">
+// <copyright file="IConnectionFactory.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,37 +10,36 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
-
-namespace AvConsoleToolkit.Configuration
+namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
-    /// Defines settings for pass-through sessions.
+    /// Factory for creating and caching SSH connections.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface IPassThroughSettings
+    public interface IConnectionFactory
     {
         /// <summary>
-        /// Gets or sets custom command mappings for Crestron pass-through sessions.
-        /// Format: "command1=mappedCommand1;command2=mappedCommand2"
-        /// Example: "ls=dir;cat=type;clear=cls"
-        /// These mappings will be merged with the default mappings, with user-defined mappings taking precedence.
+        /// Gets an SSH connection with SSH key authentication.
+        /// Attempts to authenticate using the user's local SSH key.
         /// </summary>
-        [DefaultValue("")]
-        string CrestronCommandMappings { get; set; }
+        /// <param name="hostAddress">The host address to connect to.</param>
+        /// <param name="port">The port to connect on.</param>
+        /// <param name="username">The username for authentication.</param>
+        /// <returns>An SSH connection instance.</returns>
+        ISshConnection GetSshConnection(string hostAddress, int port, string username);
 
         /// <summary>
-        /// Gets or sets the number of times the system will attempt to reconnect after a connection failure.
-        /// A value of -1 indicates infinite reconnection attempts.
+        /// Gets an SSH connection with password authentication.
         /// </summary>
-        [DefaultValue(-1)]
-        int NumberOfReconnectionAttempts { get; set; }
+        /// <param name="hostAddress">The host address to connect to.</param>
+        /// <param name="port">The port to connect on.</param>
+        /// <param name="username">The username for authentication.</param>
+        /// <param name="password">The password for authentication.</param>
+        /// <returns>An SSH connection instance.</returns>
+        ISshConnection GetSshConnection(string hostAddress, int port, string username, string password);
 
         /// <summary>
-        /// Gets a value indicating whether to use command history for pass-through sessions.
+        /// Releases all cached connections.
         /// </summary>
-        [DefaultValue(true)]
-        bool UseHistoryForPassThrough { get; set; }
+        void ReleaseAll();
     }
 }

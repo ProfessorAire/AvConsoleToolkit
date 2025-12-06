@@ -1,7 +1,7 @@
 // <copyright file="SetConfigCommand.cs">
 // The MIT License
 // Copyright © Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -50,7 +50,7 @@ namespace AvConsoleToolkit.Commands.Config
 
             if (!string.IsNullOrWhiteSpace(sectionName))
             {
-                var settingsType = Configuration.AppConfig.Settings.GetType();
+                var settingsType = AppConfig.Settings.GetType();
                 var sectionProp = settingsType.GetProperty(sectionName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
                 if (sectionProp == null)
                 {
@@ -68,7 +68,7 @@ namespace AvConsoleToolkit.Commands.Config
             }
             else
             {
-                var settingsType = Configuration.AppConfig.Settings.GetType();
+                var settingsType = AppConfig.Settings.GetType();
                 var keyProp = settingsType.GetProperty(keyName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
                 if (keyProp == null)
                 {

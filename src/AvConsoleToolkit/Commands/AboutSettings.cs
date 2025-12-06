@@ -21,19 +21,19 @@ namespace AvConsoleToolkit.Commands
     public class AboutSettings : CommandSettings
     {
         /// <summary>
-        /// Gets or sets a value indicating whether to show third-party licenses.
-        /// </summary>
-        [CommandOption("--licenses")]
-        [Description("Show third-party package licenses")]
-        [DefaultValue(false)]
-        public bool ShowLicenses { get; set; }
-
-        /// <summary>
         /// Gets or sets a value indicating whether to show the program license.
         /// </summary>
         [CommandOption("--license")]
         [Description("Show the program license")]
         [DefaultValue(false)]
         public bool ShowLicense { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to show third-party licenses.
+        /// </summary>
+        [CommandOption("--licenses")]
+        [Description("Show third-party package licenses")]
+        [DefaultValue(false)]
+        public bool ShowLicenses { get; set; }
     }
 }
