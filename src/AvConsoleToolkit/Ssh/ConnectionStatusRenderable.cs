@@ -58,17 +58,20 @@ namespace AvConsoleToolkit.Ssh
     /// </summary>
     public class ConnectionStatusRenderable : IRenderable
     {
-        private readonly string connectionName;
+        private readonly string connectionType;
+        private readonly string hostAddress;
         private readonly ConnectionStatus status;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConnectionStatusRenderable"/> class.
         /// </summary>
-        /// <param name="connectionName">The name or description of the connection.</param>
+        /// <param name="connectionType">The type of connection (e.g., "SSH", "Telnet").</param>
+        /// <param name="hostAddress">The host address being connected to.</param>
         /// <param name="status">The current status of the connection.</param>
-        public ConnectionStatusRenderable(string connectionName, ConnectionStatus status)
+        public ConnectionStatusRenderable(string connectionType, string hostAddress, ConnectionStatus status)
         {
-            this.connectionName = connectionName ?? throw new ArgumentNullException(nameof(connectionName));
+            this.connectionType = connectionType ?? throw new ArgumentNullException(nameof(connectionType));
+            this.hostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
             this.status = status;
         }
 
@@ -100,7 +103,7 @@ namespace AvConsoleToolkit.Ssh
                 _ => "Unknown"
             };
 
-            return $"{this.connectionName}: {statusText}";
+            return $"{this.connectionType} ({this.hostAddress}): {statusText}";
         }
 
         private Color GetStatusColor()

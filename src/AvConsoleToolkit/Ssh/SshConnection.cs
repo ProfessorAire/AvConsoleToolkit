@@ -32,6 +32,13 @@ namespace AvConsoleToolkit.Ssh
         private IShellStream? shellStream;
         private bool disposed;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SshConnection"/> class with password authentication.
+        /// </summary>
+        /// <param name="hostAddress">The host address to connect to.</param>
+        /// <param name="port">The port to connect on.</param>
+        /// <param name="username">The username for authentication.</param>
+        /// <param name="password">The password for authentication.</param>
         public SshConnection(string hostAddress, int port, string username, string password)
         {
             this.hostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
@@ -41,12 +48,25 @@ namespace AvConsoleToolkit.Ssh
             this.privateKeyPath = null;
         }
 
-        public SshConnection(string hostAddress, int port, string privateKeyPath)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SshConnection"/> class with SSH key authentication.
+        /// </summary>
+        /// <param name="hostAddress">The host address to connect to.</param>
+        /// <param name="port">The port to connect on.</param>
+        /// <param name="username">The username for authentication.</param>
+        /// <param name="privateKeyPath">The path to the private key file.</param>
+        /// <param name="usePrivateKey">Must be true to use this constructor for private key authentication.</param>
+        public SshConnection(string hostAddress, int port, string username, string privateKeyPath, bool usePrivateKey)
         {
+            if (!usePrivateKey)
+            {
+                throw new ArgumentException("This constructor is for private key authentication only. Set usePrivateKey to true.", nameof(usePrivateKey));
+            }
+
             this.hostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
             this.port = port;
+            this.username = username ?? throw new ArgumentNullException(nameof(username));
             this.privateKeyPath = privateKeyPath ?? throw new ArgumentNullException(nameof(privateKeyPath));
-            this.username = null;
             this.password = null;
         }
 
@@ -217,10 +237,10 @@ namespace AvConsoleToolkit.Ssh
             
             if (!client.IsConnected)
             {
-                AnsiConsole.Write(new ConnectionStatusRenderable(this.hostAddress, ConnectionStatus.Connecting));
+                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Connecting));
                 AnsiConsole.WriteLine();
                 await client.ConnectAsync(cancellationToken);
-                AnsiConsole.Write(new ConnectionStatusRenderable(this.hostAddress, ConnectionStatus.Connected));
+                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Connected));
                 AnsiConsole.WriteLine();
             }
 
@@ -238,14 +258,14 @@ namespace AvConsoleToolkit.Ssh
         {
             SshClient client;
 
-            if (!string.IsNullOrEmpty(this.privateKeyPath))
+            if (!string.IsNullOrEmpty(this.privateKeyPath) && !string.IsNullOrEmpty(this.username))
             {
                 var privateKey = new PrivateKeyFile(this.privateKeyPath);
                 var connectionInfo = new ConnectionInfo(
                     this.hostAddress,
                     this.port,
-                    Environment.UserName,
-                    new PrivateKeyAuthenticationMethod(Environment.UserName, privateKey));
+                    this.username,
+                    new PrivateKeyAuthenticationMethod(this.username, privateKey));
                 client = new SshClient(connectionInfo);
             }
             else if (this.username != null && this.password != null)
@@ -266,10 +286,10 @@ namespace AvConsoleToolkit.Ssh
 
             if (!client.IsConnected)
             {
-                AnsiConsole.Write(new ConnectionStatusRenderable(this.hostAddress, ConnectionStatus.Connecting));
+                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Connecting));
                 AnsiConsole.WriteLine();
                 await client.ConnectAsync(cancellationToken);
-                AnsiConsole.Write(new ConnectionStatusRenderable(this.hostAddress, ConnectionStatus.Connected));
+                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Connected));
                 AnsiConsole.WriteLine();
             }
 
@@ -280,14 +300,14 @@ namespace AvConsoleToolkit.Ssh
         {
             SftpClient client;
 
-            if (!string.IsNullOrEmpty(this.privateKeyPath))
+            if (!string.IsNullOrEmpty(this.privateKeyPath) && !string.IsNullOrEmpty(this.username))
             {
                 var privateKey = new PrivateKeyFile(this.privateKeyPath);
                 var connectionInfo = new ConnectionInfo(
                     this.hostAddress,
                     this.port,
-                    Environment.UserName,
-                    new PrivateKeyAuthenticationMethod(Environment.UserName, privateKey));
+                    this.username,
+                    new PrivateKeyAuthenticationMethod(this.username, privateKey));
                 client = new SftpClient(connectionInfo);
             }
             else if (this.username != null && this.password != null)
@@ -306,10 +326,10 @@ namespace AvConsoleToolkit.Ssh
 
             if (!client.IsConnected)
             {
-                AnsiConsole.Write(new ConnectionStatusRenderable(this.hostAddress, ConnectionStatus.Connecting));
+                AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, ConnectionStatus.Connecting));
                 AnsiConsole.WriteLine();
                 await client.ConnectAsync(cancellationToken);
-                AnsiConsole.Write(new ConnectionStatusRenderable(this.hostAddress, ConnectionStatus.Connected));
+                AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, ConnectionStatus.Connected));
                 AnsiConsole.WriteLine();
             }
 

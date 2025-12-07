@@ -359,7 +359,7 @@ namespace AvConsoleToolkit.Commands
                 await AnsiConsole.Status()
                     .StartAsync("Connecting to device...", async ctx =>
                     {
-                        this.sshConnection = await Ssh.ConnectionFactory.Instance.GetSshConnectionAsync(host, 22, username, password);
+                        this.sshConnection = Ssh.ConnectionFactory.Instance.GetSshConnection(host, 22, username, password);
                         
                         // Some Crestron devices require an initial carriage return to start sending data
                         // Send a newline to trigger the initial prompt and header

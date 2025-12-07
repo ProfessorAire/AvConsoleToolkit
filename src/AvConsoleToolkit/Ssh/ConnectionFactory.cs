@@ -14,7 +14,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace AvConsoleToolkit.Ssh
 {
@@ -40,7 +39,7 @@ namespace AvConsoleToolkit.Ssh
         public static ConnectionFactory Instance => LazyInstance.Value;
 
         /// <inheritdoc/>
-        public Task<ISshConnection> GetSshConnectionAsync(string hostAddress, int port, string username, string password)
+        public ISshConnection GetSshConnection(string hostAddress, int port, string username, string password)
         {
             if (string.IsNullOrEmpty(hostAddress))
             {
@@ -63,21 +62,26 @@ namespace AvConsoleToolkit.Ssh
             {
                 if (this.connectionCache.TryGetValue(key, out var existingConnection))
                 {
-                    return Task.FromResult(existingConnection);
+                    return existingConnection;
                 }
 
                 var connection = new SshConnection(hostAddress, port, username, password);
                 this.connectionCache[key] = connection;
-                return Task.FromResult<ISshConnection>(connection);
+                return connection;
             }
         }
 
         /// <inheritdoc/>
-        public Task<ISshConnection> GetSshConnectionAsync(string hostAddress, int port)
+        public ISshConnection GetSshConnection(string hostAddress, int port, string username)
         {
             if (string.IsNullOrEmpty(hostAddress))
             {
                 throw new ArgumentNullException(nameof(hostAddress));
+            }
+
+            if (string.IsNullOrEmpty(username))
+            {
+                throw new ArgumentNullException(nameof(username));
             }
 
             // Determine the path to the user's SSH private key
@@ -96,19 +100,18 @@ namespace AvConsoleToolkit.Ssh
                 throw new FileNotFoundException("No SSH private key found. Expected key at ~/.ssh/id_rsa or ~/.ssh/id_ed25519");
             }
 
-            // Use system username for cache key since key auth doesn't require explicit username
-            var key = this.GetConnectionKey(hostAddress, port, Environment.UserName);
+            var key = this.GetConnectionKey(hostAddress, port, username);
 
             lock (this.lockObject)
             {
                 if (this.connectionCache.TryGetValue(key, out var existingConnection))
                 {
-                    return Task.FromResult(existingConnection);
+                    return existingConnection;
                 }
 
-                var connection = new SshConnection(hostAddress, port, privateKeyPath);
+                var connection = new SshConnection(hostAddress, port, username, privateKeyPath, usePrivateKey: true);
                 this.connectionCache[key] = connection;
-                return Task.FromResult<ISshConnection>(connection);
+                return connection;
             }
         }
 

@@ -635,7 +635,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             CancellationToken cancellationToken)
         {
             // First, analyze files without SSH connection - only need SFTP for listing
-            var connection = await ConnectionFactory.Instance.GetSshConnectionAsync(settings.Host, 22, settings.Username, settings.Password);
+            var connection = ConnectionFactory.Instance.GetSshConnection(settings.Host, 22, settings.Username, settings.Password);
 
             var analysisResult = await AnsiConsole.Progress()
                 .AutoClear(false)
@@ -1175,7 +1175,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             string remotePath,
             CancellationToken cancellationToken)
         {
-            var connection = await ConnectionFactory.Instance.GetSshConnectionAsync(settings.Host, 22, settings.Username, settings.Password);
+            var connection = ConnectionFactory.Instance.GetSshConnection(settings.Host, 22, settings.Username, settings.Password);
             var shellStream = await connection.GetShellStreamInternalAsync(cancellationToken);
 
             // Kill program if requested
