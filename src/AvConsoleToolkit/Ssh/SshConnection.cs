@@ -152,7 +152,7 @@ namespace AvConsoleToolkit.Ssh
             await Task.Run(() => client.SetLastWriteTimeUtc(remotePath, lastWriteTime), cancellationToken);
         }
 
-        Task<IShellStream> ISshConnection. GetShellStreamInternalAsync(CancellationToken cancellationToken = default)
+        Task<IShellStream> ISshConnection.GetShellStreamInternalAsync(CancellationToken cancellationToken)
         {
             return this.EnsureShellStreamAsync(cancellationToken);
         }

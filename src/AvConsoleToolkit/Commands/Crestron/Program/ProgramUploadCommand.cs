@@ -251,12 +251,12 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <summary>
         /// Downloads and parses the hash manifest file from the remote device.
         /// </summary>
-        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="connection">SSH connection.</param>
         /// <param name="remotePath">Remote program directory path.</param>
         /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
         /// <returns>Dictionary mapping relative file paths to their stored hashes, or null if manifest doesn't exist.</returns>
         private static async Task<Dictionary<string, string>?> DownloadHashManifestAsync(
-            ISftpClient sftpClient,
+            IFileTransferConnection connection,
             string remotePath,
             bool verbose = false)
         {
@@ -276,7 +276,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 AnsiConsole.MarkupLine($"[dim]Downloading hash manifest from '{remoteHashPath.EscapeMarkup()}'[/]");
             }
 
-            return await Task.Run(() =>
+            return await Task.Run(async () =>
                    {
                        using var memoryStream = new MemoryStream();
                        await connection.DownloadFileAsync(remoteHashPath, memoryStream);
@@ -313,9 +313,9 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// Ensures that the specified remote directory and its ancestors exist on the SFTP server.
         /// Creates missing directories as needed.
         /// </summary>
-        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="connection">File transfer connection.</param>
         /// <param name="remotePath">Remote directory path to ensure exists.</param>
-        private static void EnsureRemoteDirectoryExists(ISftpClient sftpClient, string remotePath)
+        private static async Task EnsureRemoteDirectoryExistsAsync(IFileTransferConnection connection, string remotePath)
         {
             var parts = remotePath.Split('/');
             var currentPath = string.Empty;
@@ -339,39 +339,36 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <summary>
         /// Retrieves metadata for all remote files under the specified remote path.
         /// </summary>
-        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="connection">File transfer connection.</param>
         /// <param name="remotePath">Base remote path to enumerate.</param>
         /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
         /// <returns>A dictionary mapping relative remote paths to <see cref="ISftpFile"/> metadata.</returns>
         private static async Task<Dictionary<string, ISftpFile>> GetRemoteFileMetadataAsync(
-            ISftpClient sftpClient,
+            IFileTransferConnection connection,
             string remotePath,
             bool verbose = false)
         {
-            return await Task.Run(() =>
-                   {
-                       var files = new Dictionary<string, ISftpFile>();
+            var files = new Dictionary<string, ISftpFile>();
 
-                       if (!await connection.ExistsAsync(remotePath))
-                       {
-                           return files;
-                       }
+            if (!await connection.ExistsAsync(remotePath))
+            {
+                return files;
+            }
 
-                       GetRemoteFilesRecursive(sftpClient, remotePath, remotePath, files, verbose);
-                       return files;
-                   });
+            await GetRemoteFilesRecursiveAsync(connection, remotePath, remotePath, files, verbose);
+            return files;
         }
 
         /// <summary>
         /// Recursively enumerates remote files and populates the provided dictionary with relative paths.
         /// </summary>
-        /// <param name="sftpClient">Connected SFTP client.</param>
+        /// <param name="connection">File transfer connection.</param>
         /// <param name="currentPath">Current directory being enumerated.</param>
         /// <param name="basePath">Base path used to calculate relative paths.</param>
         /// <param name="files">Dictionary to populate with relative path => file metadata.</param>
         /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
-        private static void GetRemoteFilesRecursive(
-            ISftpClient sftpClient,
+        private static async Task GetRemoteFilesRecursiveAsync(
+            IFileTransferConnection connection,
             string currentPath,
             string basePath,
             Dictionary<string, ISftpFile> files,
@@ -388,7 +385,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
                 if (item.IsDirectory)
                 {
-                    GetRemoteFilesRecursive(sftpClient, item.FullName, basePath, files, verbose);
+                    await GetRemoteFilesRecursiveAsync(connection, item.FullName, basePath, files, verbose);
                 }
                 else
                 {
@@ -751,11 +748,11 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                             remoteTask.StartTask();
 
                             // Get remote file metadata
-                            var remoteFiles = await GetRemoteFileMetadataAsync(sftpClient, remotePath, settings.Verbose);
+                            var remoteFiles = await GetRemoteFileMetadataAsync(connection, remotePath, settings.Verbose);
                             remoteTask.Value = 50;
 
                             // Download hash manifest if it exists
-                            var remoteHashes = await DownloadHashManifestAsync(sftpClient, remotePath, settings.Verbose);
+                            var remoteHashes = await DownloadHashManifestAsync(connection, remotePath, settings.Verbose);
                             remoteTask.Value = 100;
                             remoteTask.StopTask();
 
@@ -893,13 +890,10 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                                     using var fileStream = File.OpenRead(localPath);
                                     var fileSize = fileStream.Length;
 
-                                    await Task.Run(() =>
+                                    await connection.UploadFileAsync(fileStream, remoteFilePath, true, uploaded =>
                                     {
-                                        await connection.UploadFileAsync(fileStream, remoteFilePath, true, uploaded =>
-                                        {
-                                            var percentage = (((double)uploaded) / fileSize) * 100;
-                                            uploadTask.Value = percentage;
-                                        });
+                                        var percentage = (((double)uploaded) / fileSize) * 100;
+                                        uploadTask.Value = percentage;
                                     });
 
                                     var sourceLastWriteTimeUtc = File.GetLastWriteTimeUtc(localPath);
@@ -942,7 +936,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                             var remoteDir = Path.GetDirectoryName(remoteFilePath)?.Replace('\\', '/');
                             if (!string.IsNullOrEmpty(remoteDir))
                             {
-                                EnsureRemoteDirectoryExists(sftpClient, remoteDir);
+                                await EnsureRemoteDirectoryExistsAsync(connection, remoteDir);
                             }
 
                             await semaphore.WaitAsync();
@@ -992,7 +986,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                     newHashes[relativePath] = hash;
                 }
 
-                await UploadHashManifestAsync(sftpClient, remotePath, newHashes, settings.Verbose);
+                await UploadHashManifestAsync(connection, remotePath, newHashes, settings.Verbose);
 
                 // Configure IP table BEFORE program registration if not disabled and this is an LPZ program
                 List<IpTable.Entry>? ipTableEntries = null;
@@ -1061,13 +1055,10 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                                     using var zigFileStream = File.OpenRead(zigFilePath);
                                     var zigFileSize = zigFileStream.Length;
 
-                                    await Task.Run(() =>
+                                    await connection.UploadFileAsync(zigFileStream, remoteZigPath, true, uploaded =>
                                     {
-                                        sftpClient.UploadFile(zigFileStream, remoteZigPath, uploaded =>
-                                        {
-                                            var percentage = (((double)uploaded) / zigFileSize) * 100;
-                                            zigUploadTask.Value = percentage;
-                                        });
+                                        var percentage = (((double)uploaded) / zigFileSize) * 100;
+                                        zigUploadTask.Value = percentage;
                                     });
 
                                     zigUploadTask.Value = 100;
@@ -1129,7 +1120,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <param name="hashes">Dictionary of file path to hash mappings.</param>
         /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
         private static async Task UploadHashManifestAsync(
-            ISftpClient sftpClient,
+            IFileTransferConnection connection,
             string remotePath,
             Dictionary<string, string> hashes,
             bool verbose = false)
@@ -1141,21 +1132,18 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 AnsiConsole.MarkupLine($"[dim]Uploading hash manifest with {hashes.Count} entries to '{remoteHashPath.EscapeMarkup()}'[/]");
             }
 
-            await Task.Run(() =>
+            using var memoryStream = new MemoryStream();
+            using (var writer = new StreamWriter(memoryStream, Encoding.UTF8, leaveOpen: true))
             {
-                using var memoryStream = new MemoryStream();
-                using (var writer = new StreamWriter(memoryStream, Encoding.UTF8, leaveOpen: true))
+                foreach (var kvp in hashes.OrderBy(k => k.Key))
                 {
-                    foreach (var kvp in hashes.OrderBy(k => k.Key))
-                    {
-                        writer.WriteLine($"{kvp.Key}={kvp.Value}");
-                    }
-                    writer.Flush();
+                    writer.WriteLine($"{kvp.Key}={kvp.Value}");
                 }
+                writer.Flush();
+            }
 
-                memoryStream.Position = 0;
-                await connection.UploadFileAsync(memoryStream, remoteHashPath, true);
-            });
+            memoryStream.Position = 0;
+            await connection.UploadFileAsync(memoryStream, remoteHashPath, true);
 
             if (verbose)
             {
@@ -1326,18 +1314,15 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                         var uploadTask = ctx.AddTask($"[green]Uploading to {displayName}[/]");
 
                         // Ensure remote directory exists
-                        EnsureRemoteDirectoryExists(sftpClient, remotePath);
+                        await EnsureRemoteDirectoryExistsAsync(connection, remotePath);
 
                         using var fileStream = File.OpenRead(settings.ProgramFile);
                         var fileSize = fileStream.Length;
 
-                        await Task.Run(() =>
+                        await connection.UploadFileAsync(fileStream, remoteFilePath, true, uploaded =>
                         {
-                            sftpClient.UploadFile(fileStream, remoteFilePath, uploaded =>
-                            {
-                                var percentage = (((double)uploaded) / fileSize) * 100;
-                                uploadTask.Value = percentage;
-                            });
+                            var percentage = (((double)uploaded) / fileSize) * 100;
+                            uploadTask.Value = percentage;
                         });
 
                         uploadTask.Value = 100;
@@ -1354,13 +1339,10 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                             using var zigFileStream = File.OpenRead(zigFilePath);
                             var zigFileSize = zigFileStream.Length;
 
-                            await Task.Run(() =>
+                            await connection.UploadFileAsync(zigFileStream, remoteZigPath, true, uploaded =>
                             {
-                                sftpClient.UploadFile(zigFileStream, remoteZigPath, uploaded =>
-                                {
-                                    var percentage = (((double)uploaded) / zigFileSize) * 100;
-                                    zigUploadTask.Value = percentage;
-                                });
+                                var percentage = (((double)uploaded) / zigFileSize) * 100;
+                                zigUploadTask.Value = percentage;
                             });
 
                             zigUploadTask.Value = 100;
