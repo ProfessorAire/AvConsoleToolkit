@@ -32,6 +32,8 @@ namespace AvConsoleToolkit.Ssh
         private SftpClient? sftpClient;
         private ShellStream? shellStream;
         private bool disposed;
+        private bool isReconnecting;
+        private Task? reconnectionTask;
 
         public event EventHandler? ShellDisconnected;
         public event EventHandler? ShellReconnected;
@@ -229,10 +231,14 @@ namespace AvConsoleToolkit.Ssh
                 {
                     lock (this.lockObject)
                     {
+                        this.disposed = true;
                         this.CleanupShellStream();
                         this.CleanupSshClient();
                         this.CleanupSftpClient();
                     }
+                    
+                    // Wait for reconnection task to complete (with timeout)
+                    this.reconnectionTask?.Wait(TimeSpan.FromSeconds(5));
                 }
 
                 this.disposed = true;
@@ -482,6 +488,9 @@ namespace AvConsoleToolkit.Ssh
                 
                 // Fire disconnection event
                 Task.Run(() => this.ShellDisconnected?.Invoke(this, EventArgs.Empty));
+                
+                // Start automatic reconnection
+                this.StartReconnection();
             }
         }
 
@@ -503,7 +512,121 @@ namespace AvConsoleToolkit.Ssh
                 
                 // Fire disconnection event
                 Task.Run(() => this.FileTransferDisconnected?.Invoke(this, EventArgs.Empty));
+                
+                // Start automatic reconnection
+                this.StartReconnection();
             }
+        }
+
+        private void StartReconnection()
+        {
+            // Only start one reconnection task at a time
+            if (this.isReconnecting || this.disposed)
+            {
+                return;
+            }
+
+            this.isReconnecting = true;
+            
+            // Start reconnection task in the background
+            this.reconnectionTask = Task.Run(async () =>
+            {
+                int attemptCount = 0;
+                int maxAttempts = 10;
+                int[] backoffDelays = { 1000, 2000, 3000, 5000, 5000, 10000, 10000, 15000, 15000, 30000 };
+
+                while (attemptCount < maxAttempts && !this.disposed)
+                {
+                    try
+                    {
+                        attemptCount++;
+                        
+                        // Write reconnecting status
+                        AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Reconnecting));
+                        AnsiConsole.WriteLine();
+                        
+                        // Wait before attempting reconnection (exponential backoff)
+                        if (attemptCount > 1)
+                        {
+                            int delayIndex = Math.Min(attemptCount - 1, backoffDelays.Length - 1);
+                            await Task.Delay(backoffDelays[delayIndex]);
+                        }
+
+                        // Attempt to reconnect
+                        bool sshClientNeeded = false;
+                        bool sftpClientNeeded = false;
+
+                        lock (this.lockObject)
+                        {
+                            // Determine what needs to be reconnected
+                            sshClientNeeded = this.sshClient != null;
+                            sftpClientNeeded = this.sftpClient != null;
+                        }
+
+                        // Reconnect SSH client if it was previously connected
+                        if (sshClientNeeded)
+                        {
+                            try
+                            {
+                                await this.EnsureSshClientAsync(CancellationToken.None);
+                                
+                                // Write success status
+                                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Connected));
+                                AnsiConsole.WriteLine();
+                                
+                                // Fire reconnected event
+                                this.ShellReconnected?.Invoke(this, EventArgs.Empty);
+                            }
+                            catch
+                            {
+                                // Continue to next attempt
+                                continue;
+                            }
+                        }
+
+                        // Reconnect SFTP client if it was previously connected
+                        if (sftpClientNeeded)
+                        {
+                            try
+                            {
+                                await this.EnsureSftpClientAsync(CancellationToken.None);
+                                
+                                // Write success status
+                                AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, ConnectionStatus.Connected));
+                                AnsiConsole.WriteLine();
+                                
+                                // Fire reconnected event
+                                this.FileTransferReconnected?.Invoke(this, EventArgs.Empty);
+                            }
+                            catch
+                            {
+                                // Continue to next attempt
+                                continue;
+                            }
+                        }
+
+                        // If we got here, reconnection was successful
+                        lock (this.lockObject)
+                        {
+                            this.isReconnecting = false;
+                        }
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log error and continue to next attempt
+                        AnsiConsole.MarkupLine($"[red]Reconnection attempt {attemptCount} failed: {ex.Message}[/]");
+                    }
+                }
+
+                // All reconnection attempts failed
+                lock (this.lockObject)
+                {
+                    this.isReconnecting = false;
+                }
+                
+                AnsiConsole.MarkupLine($"[red]Failed to reconnect to {this.hostAddress} after {maxAttempts} attempts[/]");
+            });
         }
 
         private void CleanupShellStream()
