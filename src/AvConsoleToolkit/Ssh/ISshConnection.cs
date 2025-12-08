@@ -25,12 +25,5 @@ namespace AvConsoleToolkit.Ssh
         /// Gets a value indicating whether the connection is established.
         /// </summary>
         new bool IsConnected { get; }
-
-        /// <summary>
-        /// Gets the shell stream for internal use by commands that need direct access.
-        /// </summary>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>The shell stream instance.</returns>
-        internal Task<IShellStream> GetShellStreamInternalAsync(CancellationToken cancellationToken = default);
     }
 }

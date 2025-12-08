@@ -25,9 +25,26 @@ namespace AvConsoleToolkit.Ssh
     public interface IFileTransferConnection : IDisposable
     {
         /// <summary>
+        /// Occurs when the file transfer connection is disconnected.
+        /// </summary>
+        event EventHandler? FileTransferDisconnected;
+
+        /// <summary>
+        /// Occurs when the file transfer connection is reconnected after a disconnection.
+        /// </summary>
+        event EventHandler? FileTransferReconnected;
+
+        /// <summary>
         /// Gets a value indicating whether the connection is established.
         /// </summary>
         bool IsConnected { get; }
+
+        /// <summary>
+        /// Explicitly establishes the file transfer connection.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        Task ConnectFileTransferAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Checks whether a file or directory exists on the remote server.

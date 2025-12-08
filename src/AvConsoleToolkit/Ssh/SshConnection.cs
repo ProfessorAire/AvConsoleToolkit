@@ -29,8 +29,13 @@ namespace AvConsoleToolkit.Ssh
         
         private SshClient? sshClient;
         private SftpClient? sftpClient;
-        private IShellStream? shellStream;
+        private ShellStream? shellStream;
         private bool disposed;
+
+        public event EventHandler? ShellDisconnected;
+        public event EventHandler? ShellReconnected;
+        public event EventHandler? FileTransferDisconnected;
+        public event EventHandler? FileTransferReconnected;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SshConnection"/> class with password authentication.
@@ -93,6 +98,16 @@ namespace AvConsoleToolkit.Ssh
             }
         }
 
+        public async Task ConnectShellAsync(CancellationToken cancellationToken = default)
+        {
+            await this.EnsureShellStreamAsync(cancellationToken);
+        }
+
+        public async Task ConnectFileTransferAsync(CancellationToken cancellationToken = default)
+        {
+            await this.EnsureSftpClientAsync(cancellationToken);
+        }
+
         public async Task<string> ReadAsync(CancellationToken cancellationToken = default)
         {
             var stream = await this.EnsureShellStreamAsync(cancellationToken);
@@ -113,7 +128,8 @@ namespace AvConsoleToolkit.Ssh
             bool writeReceivedData = true)
         {
             var stream = await this.EnsureShellStreamAsync(cancellationToken);
-            return await stream.WaitForCommandCompletionAsync(successPatterns, failurePatterns, cancellationToken, timeoutMs, writeReceivedData);
+            var wrapper = new ShellStreamWrapper(stream);
+            return await wrapper.WaitForCommandCompletionAsync(successPatterns, failurePatterns, cancellationToken, timeoutMs, writeReceivedData);
         }
 
         public async Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default)
@@ -152,11 +168,6 @@ namespace AvConsoleToolkit.Ssh
             await Task.Run(() => client.SetLastWriteTimeUtc(remotePath, lastWriteTime), cancellationToken);
         }
 
-        Task<IShellStream> ISshConnection.GetShellStreamInternalAsync(CancellationToken cancellationToken)
-        {
-            return this.EnsureShellStreamAsync(cancellationToken);
-        }
-
         public void Dispose()
         {
             this.Dispose(true);
@@ -185,6 +196,8 @@ namespace AvConsoleToolkit.Ssh
         {
             this.ThrowIfDisposed();
 
+            bool wasDisconnected = false;
+
             lock (this.lockObject)
             {
                 if (this.sshClient != null && this.sshClient.IsConnected)
@@ -194,16 +207,27 @@ namespace AvConsoleToolkit.Ssh
 
                 if (this.sshClient != null && !this.sshClient.IsConnected)
                 {
+                    wasDisconnected = true;
                     this.CleanupSshClient();
+                    this.ShellDisconnected?.Invoke(this, EventArgs.Empty);
                 }
             }
 
-            return await this.ConnectSshClientAsync(cancellationToken);
+            var client = await this.ConnectSshClientAsync(cancellationToken);
+
+            if (wasDisconnected)
+            {
+                this.ShellReconnected?.Invoke(this, EventArgs.Empty);
+            }
+
+            return client;
         }
 
         private async Task<SftpClient> EnsureSftpClientAsync(CancellationToken cancellationToken)
         {
             this.ThrowIfDisposed();
+
+            bool wasDisconnected = false;
 
             lock (this.lockObject)
             {
@@ -214,22 +238,39 @@ namespace AvConsoleToolkit.Ssh
 
                 if (this.sftpClient != null && !this.sftpClient.IsConnected)
                 {
+                    wasDisconnected = true;
                     this.CleanupSftpClient();
+                    this.FileTransferDisconnected?.Invoke(this, EventArgs.Empty);
                 }
             }
 
-            return await this.ConnectSftpClientAsync(cancellationToken);
+            var client = await this.ConnectSftpClientAsync(cancellationToken);
+
+            if (wasDisconnected)
+            {
+                this.FileTransferReconnected?.Invoke(this, EventArgs.Empty);
+            }
+
+            return client;
         }
 
-        private async Task<IShellStream> EnsureShellStreamAsync(CancellationToken cancellationToken)
+        private async Task<ShellStream> EnsureShellStreamAsync(CancellationToken cancellationToken)
         {
             this.ThrowIfDisposed();
 
+            bool wasReconnecting = false;
+
             lock (this.lockObject)
             {
-                if (this.shellStream != null)
+                if (this.shellStream != null && this.shellStream.CanRead)
                 {
                     return this.shellStream;
+                }
+
+                if (this.shellStream != null && !this.shellStream.CanRead)
+                {
+                    this.CleanupShellStream();
+                    wasReconnecting = true;
                 }
             }
 
@@ -244,11 +285,16 @@ namespace AvConsoleToolkit.Ssh
                 AnsiConsole.WriteLine();
             }
 
-            var stream = new ShellStreamWrapper(client.CreateShellStream("xterm", 80, 24, 800, 600, 1024));
+            var stream = client.CreateShellStream("xterm", 80, 24, 800, 600, 1024);
 
             lock (this.lockObject)
             {
                 this.shellStream = stream;
+            }
+
+            if (wasReconnecting)
+            {
+                this.ShellReconnected?.Invoke(this, EventArgs.Empty);
             }
 
             return stream;

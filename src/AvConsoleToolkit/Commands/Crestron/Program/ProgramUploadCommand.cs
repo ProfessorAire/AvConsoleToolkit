@@ -184,7 +184,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>True if IP table was configured successfully; false on error.</returns>
         private static async Task<bool> ConfigureIpTableAsync(
-            Ssh.IShellStream shellStream,
+            Ssh.IShellConnection shellStream,
             List<IpTable.Entry> entries,
             int slot,
             bool verbose,
@@ -526,7 +526,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <param name="tempDirectory">Temporary directory where package contents were extracted.</param>
         /// <param name="cancellationToken">Cancellation token to observe.</param>
         /// <returns>0 on success, non-zero on failure.</returns>
-        private static async Task<int> RegisterProgram(Ssh.IShellStream shellStream, int slot, string extension, string tempDirectory, CancellationToken cancellationToken)
+        private static async Task<int> RegisterProgram(Ssh.IShellConnection shellStream, int slot, string extension, string tempDirectory, CancellationToken cancellationToken)
         {
             var success = false;
             if (extension == ".lpz")
@@ -838,13 +838,10 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 var uploadAllFiles = settings.KillProgram || isClz && !settings.ChangedOnly;
                 AnsiConsole.MarkupLine($"[yellow]{changes.Count} file(s) {(uploadAllFiles ? "to upload" : "have changed")}.[/]");
 
-                // Get shell stream for console commands
-                var shellStream = await connection.GetShellStreamInternalAsync(cancellationToken);
-
                 if (settings.KillProgram)
                 {
                     // Kill program if requested
-                    if (!await ConsoleCommands.KillProgramAsync(shellStream, settings.Slot, cancellationToken))
+                    if (!await ConsoleCommands.KillProgramAsync(connection, settings.Slot, cancellationToken))
                     {
                         AnsiConsole.MarkupLine("[red]Failed to kill program before uploading files.[/]");
                         return 1;
@@ -855,7 +852,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 else
                 {
                     // Stop program
-                    if (!await ConsoleCommands.StopProgramAsync(shellStream, settings.Slot, cancellationToken))
+                    if (!await ConsoleCommands.StopProgramAsync(connection, settings.Slot, cancellationToken))
                     {
                         AnsiConsole.MarkupLine("[red]Failed to stop program before uploading files.[/]");
                         return 1;
@@ -1017,7 +1014,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
                     if (ipTableEntries != null && ipTableEntries.Count > 0)
                     {
-                        var ipTableResult = await ConfigureIpTableAsync(shellStream, ipTableEntries, settings.Slot, settings.Verbose, cancellationToken);
+                        var ipTableResult = await ConfigureIpTableAsync(connection, ipTableEntries, settings.Slot, settings.Verbose, cancellationToken);
                         if (!ipTableResult)
                         {
                             AnsiConsole.MarkupLine("[yellow]IP table configuration had errors, but continuing...[/]");
@@ -1027,7 +1024,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
 
                 if (extension is ".lpz" or ".cpz")
                 {
-                    var registrationResult = await RegisterProgram(shellStream, settings.Slot, extension, tempDirectory, cancellationToken);
+                    var registrationResult = await RegisterProgram(connection, settings.Slot, extension, tempDirectory, cancellationToken);
                     if (registrationResult != 0)
                     {
                         AnsiConsole.MarkupLine("[red]Program upload failed due to registration error.[/]");
@@ -1086,7 +1083,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 if (!settings.DoNotStart)
                 {
                     // Execute progres command
-                    var progresSuccess = await ConsoleCommands.RestartProgramAsync(shellStream, settings.Slot, cancellationToken);
+                    var progresSuccess = await ConsoleCommands.RestartProgramAsync(connection, settings.Slot, cancellationToken);
 
                     if (progresSuccess)
                     {
@@ -1164,12 +1161,11 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             CancellationToken cancellationToken)
         {
             var connection = ConnectionFactory.Instance.GetSshConnection(settings.Host, 22, settings.Username, settings.Password);
-            var shellStream = await connection.GetShellStreamInternalAsync(cancellationToken);
 
             // Kill program if requested
             if (settings.KillProgram)
             {
-                if (!await ConsoleCommands.KillProgramAsync(shellStream, settings.Slot, cancellationToken))
+                if (!await ConsoleCommands.KillProgramAsync(connection, settings.Slot, cancellationToken))
                 {
                     AnsiConsole.MarkupLine("[red]Error: Failed to kill program before uploading.[/]");
                     return 1;
@@ -1358,7 +1354,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 // Configure IP table BEFORE loading the program
                 if (!settings.NoIpTable && ipTableEntries != null && ipTableEntries.Count > 0 && extension == ".lpz")
                 {
-                    var ipTableResult = await ConfigureIpTableAsync(shellStream, ipTableEntries, settings.Slot, settings.Verbose, cancellationToken);
+                    var ipTableResult = await ConfigureIpTableAsync(connection, ipTableEntries, settings.Slot, settings.Verbose, cancellationToken);
                     if (!ipTableResult && settings.Verbose)
                     {
                         AnsiConsole.MarkupLine("[yellow]Warning: IP table configuration had errors, but continuing...[/]");
@@ -1368,7 +1364,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 result = await AnsiConsole.Status().Spinner(Spinner.Known.BouncingBall).Start("Loading program...", async ctx =>
                 {
                     // Execute progload command.
-                    if (!await ConsoleCommands.ProgramLoadAsync(shellStream, settings.Slot, settings.DoNotStart, cancellationToken))
+                    if (!await ConsoleCommands.ProgramLoadAsync(connection, settings.Slot, settings.DoNotStart, cancellationToken))
                     {
                         AnsiConsole.MarkupLine("[red]Error: Failed to load program after upload.[/]");
                         return 1;

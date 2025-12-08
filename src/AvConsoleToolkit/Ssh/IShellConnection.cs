@@ -24,6 +24,16 @@ namespace AvConsoleToolkit.Ssh
     public interface IShellConnection : IDisposable
     {
         /// <summary>
+        /// Occurs when the shell connection is disconnected.
+        /// </summary>
+        event EventHandler? ShellDisconnected;
+
+        /// <summary>
+        /// Occurs when the shell connection is reconnected after a disconnection.
+        /// </summary>
+        event EventHandler? ShellReconnected;
+
+        /// <summary>
         /// Gets a value indicating whether the connection is established.
         /// </summary>
         bool IsConnected { get; }
@@ -32,6 +42,13 @@ namespace AvConsoleToolkit.Ssh
         /// Gets a value indicating whether data is available to read from the shell stream.
         /// </summary>
         bool DataAvailable { get; }
+
+        /// <summary>
+        /// Explicitly establishes the shell connection.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        Task ConnectShellAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Reads data from the shell stream.

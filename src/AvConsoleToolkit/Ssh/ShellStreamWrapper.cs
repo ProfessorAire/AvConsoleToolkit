@@ -1,7 +1,7 @@
 // <copyright file="ShellStreamWrapper.cs">
 // The MIT License
-// Copyright © Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
+// Copyright ï¿½ Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ï¿½Softwareï¿½),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -21,19 +21,14 @@ using Spectre.Console;
 namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
-    /// Provides a wrapper for <see cref="ShellStream"/> to implement <see cref="IShellStream"/> for testability and abstraction.
+    /// Provides a wrapper for <see cref="ShellStream"/> to add async command completion waiting functionality.
     /// </summary>
-    public class ShellStreamWrapper : IShellStream
+    internal class ShellStreamWrapper
     {
         /// <summary>
         /// The underlying <see cref="ShellStream"/> instance.
         /// </summary>
         private readonly ShellStream shellStream;
-
-        /// <summary>
-        /// Indicates whether the object has been disposed.
-        /// </summary>
-        private bool disposed;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ShellStreamWrapper"/> class.
@@ -45,23 +40,6 @@ namespace AvConsoleToolkit.Ssh
             this.shellStream = shellStream ?? throw new ArgumentNullException(nameof(shellStream));
         }
 
-        /// <inheritdoc/>
-        public bool DataAvailable => this.shellStream.DataAvailable;
-
-        /// <inheritdoc/>
-        public void Dispose()
-        {
-            this.Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        /// <inheritdoc/>
-        public string Read()
-        {
-            return this.shellStream.Read();
-        }
-
-        /// <inheritdoc/>
         public async Task<bool> WaitForCommandCompletionAsync(
             IEnumerable<string>? successPatterns,
             IEnumerable<string>? failurePatterns,
@@ -117,29 +95,6 @@ namespace AvConsoleToolkit.Ssh
             }
 
             return false;
-        }
-
-        /// <inheritdoc/>
-        public void WriteLine(string line)
-        {
-            this.shellStream.WriteLine(line);
-        }
-
-        /// <summary>
-        /// Releases the unmanaged resources used by the <see cref="ShellStreamWrapper"/> and optionally releases the managed resources.
-        /// </summary>
-        /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!this.disposed)
-            {
-                if (disposing)
-                {
-                    this.shellStream?.Dispose();
-                }
-
-                this.disposed = true;
-            }
         }
     }
 }

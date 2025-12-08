@@ -167,7 +167,6 @@ namespace AvConsoleToolkit.Commands
                     return 1;
                 }
 
-                AnsiConsole.MarkupLine($"[green]Connected to {host.EscapeMarkup()}[/]");
                 AnsiConsole.MarkupLine("[dim]Press Ctrl+X to exit[/]");
                 AnsiConsole.WriteLine();
 

@@ -39,7 +39,7 @@ namespace AvConsoleToolkit.Crestron
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="slot"/> is less than 1 or greater than 10.</exception>
         /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is cancelled.</exception>
         public static async Task<bool> AddIpTableEntryAsync(
-            Ssh.IShellStream stream,
+            Ssh.IShellConnection stream,
             int slot,
             IpTable.Entry entry,
             CancellationToken cancellationToken = default)
@@ -70,7 +70,7 @@ namespace AvConsoleToolkit.Crestron
             }
 
             var addPeerCommand = commandBuilder.ToString();
-            stream.WriteLine(addPeerCommand);
+            await stream.WriteLineAsync(addPeerCommand);
             cancellationToken.ThrowIfCancellationRequested();
 
             IEnumerable<string> successPatterns = ["Master List set.  Restart program to take effect"];
@@ -89,7 +89,7 @@ namespace AvConsoleToolkit.Crestron
         /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="slot"/> is less than 1 or greater than 10.</exception>
         /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is cancelled.</exception>
-        public static async Task<bool> ClearIpTableAsync(Ssh.IShellStream stream, int slot, CancellationToken cancellationToken)
+        public static async Task<bool> ClearIpTableAsync(Ssh.IShellConnection stream, int slot, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(slot);
@@ -97,7 +97,7 @@ namespace AvConsoleToolkit.Crestron
 
             var clearCommand = $"ipt -p:{slot} -C";
             AnsiConsole.MarkupLine($"[yellow]Executing:[/] {clearCommand}");
-            stream.WriteLine(clearCommand);
+            await stream.WriteLineAsync(clearCommand);
             cancellationToken.ThrowIfCancellationRequested();
 
             AnsiConsole.MarkupLine("[cyan]Clearing IP table...[/]");
@@ -127,7 +127,7 @@ namespace AvConsoleToolkit.Crestron
         /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="slot"/> is less than 1 or greater than 10.</exception>
         /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is cancelled.</exception>
-        public static async Task<bool> KillProgramAsync(Ssh.IShellStream stream, int slot, CancellationToken cancellationToken)
+        public static async Task<bool> KillProgramAsync(Ssh.IShellConnection stream, int slot, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(slot);
@@ -136,7 +136,7 @@ namespace AvConsoleToolkit.Crestron
             var killCommand = $"killprog -p:{slot}";
             AnsiConsole.MarkupLine($"[yellow]Executing:[/] {killCommand}");
 
-            stream.WriteLine(killCommand);
+            await stream.WriteLineAsync(killCommand);
             cancellationToken.ThrowIfCancellationRequested();
 
             AnsiConsole.MarkupLine("[cyan]Waiting for killprog to complete.[/]");
@@ -156,7 +156,7 @@ namespace AvConsoleToolkit.Crestron
         /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="slot"/> is less than 1 or greater than 10.</exception>
         /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is cancelled.</exception>
-        public static async Task<bool> ProgramLoadAsync(Ssh.IShellStream stream, int slot, bool doNotStart, CancellationToken cancellationToken)
+        public static async Task<bool> ProgramLoadAsync(Ssh.IShellConnection stream, int slot, bool doNotStart, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(slot);
@@ -164,7 +164,7 @@ namespace AvConsoleToolkit.Crestron
 
             var progLoadCommand = $"progload -p:{slot}{(doNotStart ? " -D" : string.Empty)}";
             AnsiConsole.MarkupLine($"[yellow]Executing:[/] {progLoadCommand}");
-            stream.WriteLine(progLoadCommand);
+            await stream.WriteLineAsync(progLoadCommand);
             AnsiConsole.MarkupLine("[cyan]Waiting for program to load...[/]");
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -182,7 +182,7 @@ namespace AvConsoleToolkit.Crestron
         /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="slot"/> is less than 1 or greater than 10.</exception>
         /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is cancelled.</exception>
-        public static async Task<bool> RegisterProgramAsync(Ssh.IShellStream stream, int slot, CancellationToken cancellationToken)
+        public static async Task<bool> RegisterProgramAsync(Ssh.IShellConnection stream, int slot, CancellationToken cancellationToken)
         {
             return await RegisterProgramAsync(stream, slot, null, cancellationToken);
         }
@@ -198,7 +198,7 @@ namespace AvConsoleToolkit.Crestron
         /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="slot"/> is less than 1 or greater than 10.</exception>
         /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is cancelled.</exception>
-        public static async Task<bool> RegisterProgramAsync(Ssh.IShellStream stream, int slot, string? programEntryPoint, CancellationToken cancellationToken)
+        public static async Task<bool> RegisterProgramAsync(Ssh.IShellConnection stream, int slot, string? programEntryPoint, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(slot);
@@ -207,8 +207,8 @@ namespace AvConsoleToolkit.Crestron
             AnsiConsole.MarkupLine("[cyan]Registering program...[/]");
             var registerCommand = $"progreg -p:{slot}{(!string.IsNullOrWhiteSpace(programEntryPoint) ? $" -C:{programEntryPoint}" : string.Empty)}";
             AnsiConsole.MarkupLine($"[yellow]Executing:[/] {registerCommand}");
-            stream.WriteLine(registerCommand);
-            stream.WriteLine("progreg");
+            await stream.WriteLineAsync(registerCommand);
+            await stream.WriteLineAsync("progreg");
 
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -236,7 +236,7 @@ namespace AvConsoleToolkit.Crestron
         /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="slot"/> is less than 1 or greater than 10.</exception>
         /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is cancelled.</exception>
-        public static async Task<bool> RestartProgramAsync(Ssh.IShellStream stream, int slot, CancellationToken cancellationToken)
+        public static async Task<bool> RestartProgramAsync(Ssh.IShellConnection stream, int slot, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(slot);
@@ -245,7 +245,7 @@ namespace AvConsoleToolkit.Crestron
             var startCommand = $"progres -p:{slot}";
             AnsiConsole.MarkupLine($"[yellow]Executing:[/] {startCommand}");
 
-            stream.WriteLine(startCommand);
+            await stream.WriteLineAsync(startCommand);
             cancellationToken.ThrowIfCancellationRequested();
 
             AnsiConsole.MarkupLine("[cyan]Waiting for program to start...[/]");
@@ -274,7 +274,7 @@ namespace AvConsoleToolkit.Crestron
         /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="slot"/> is less than 1 or greater than 10.</exception>
         /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is cancelled.</exception>
-        public static async Task<bool> StopProgramAsync(Ssh.IShellStream stream, int slot, CancellationToken cancellationToken)
+        public static async Task<bool> StopProgramAsync(Ssh.IShellConnection stream, int slot, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(slot);
@@ -282,7 +282,7 @@ namespace AvConsoleToolkit.Crestron
 
             var stopCommand = $"stopprog -p:{slot} -V -K";
             AnsiConsole.MarkupLine($"[yellow]Executing:[/] {stopCommand}");
-            stream.WriteLine(stopCommand);
+            await stream.WriteLineAsync(stopCommand);
             AnsiConsole.MarkupLine("[cyan]Waiting for program to stop...[/]");
             cancellationToken.ThrowIfCancellationRequested();
 
