@@ -873,6 +873,12 @@ namespace AvConsoleToolkit.Commands
             Console.CursorVisible = false;
             var components = new List<IRenderable>();
 
+            // Don't render the prompt if disconnected
+            if (this.isDisconnected)
+            {
+                return new Markup(string.Empty);
+            }
+
             // Build the prompt line with cursor position and selection highlighting
             var promptPrefix = $"{Environment.NewLine}{this.Prompt ?? "ACT>"} ";
             var markup = new StringBuilder(promptPrefix.EscapeMarkup());

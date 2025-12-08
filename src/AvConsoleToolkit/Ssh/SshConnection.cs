@@ -610,20 +610,29 @@ namespace AvConsoleToolkit.Ssh
                     {
                         attemptCount++;
                         
-                        // Write reconnecting status
-                        AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Reconnecting));
+                        // Write reconnecting status with attempt information
+                        if (isInfiniteAttempts)
+                        {
+                            AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Reconnecting, attemptCount, -1));
+                        }
+                        else
+                        {
+                            AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Reconnecting, attemptCount, maxAttempts));
+                        }
                         AnsiConsole.WriteLine();
                         
                         // Wait before attempting reconnection (exponential backoff)
+                        // Skip delay on first attempt for immediate reconnection
                         if (attemptCount > 1)
                         {
-                            int delayIndex = Math.Min(attemptCount - 1, backoffDelays.Length - 1);
+                            int delayIndex = Math.Min(attemptCount - 2, backoffDelays.Length - 1);
                             await Task.Delay(backoffDelays[delayIndex]);
                         }
 
                         // Attempt to reconnect
                         bool sshClientNeeded = false;
                         bool sftpClientNeeded = false;
+                        bool connectionSucceeded = false;
 
                         lock (this.lockObject)
                         {
@@ -638,17 +647,13 @@ namespace AvConsoleToolkit.Ssh
                             try
                             {
                                 await this.EnsureSshClientAsync(CancellationToken.None);
-                                
-                                // Write success status
-                                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Connected));
-                                AnsiConsole.WriteLine();
-                                
-                                // Fire reconnected event
-                                this.ShellReconnected?.Invoke(this, EventArgs.Empty);
+                                connectionSucceeded = true;
                             }
                             catch
                             {
-                                // Continue to next attempt
+                                // Write connection failed status
+                                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.ConnectionFailed));
+                                AnsiConsole.WriteLine();
                                 continue;
                             }
                         }
@@ -659,32 +664,46 @@ namespace AvConsoleToolkit.Ssh
                             try
                             {
                                 await this.EnsureSftpClientAsync(CancellationToken.None);
-                                
-                                // Write success status
-                                AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, ConnectionStatus.Connected));
-                                AnsiConsole.WriteLine();
-                                
-                                // Fire reconnected event
-                                this.FileTransferReconnected?.Invoke(this, EventArgs.Empty);
+                                connectionSucceeded = true;
                             }
                             catch
                             {
-                                // Continue to next attempt
+                                // Write connection failed status
+                                AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, ConnectionStatus.ConnectionFailed));
+                                AnsiConsole.WriteLine();
                                 continue;
                             }
                         }
 
                         // If we got here, reconnection was successful
-                        lock (this.lockObject)
+                        if (connectionSucceeded)
                         {
-                            this.isReconnecting = false;
+                            // Write success status
+                            AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Connected));
+                            AnsiConsole.WriteLine();
+                            
+                            // Fire reconnected events
+                            if (sshClientNeeded)
+                            {
+                                this.ShellReconnected?.Invoke(this, EventArgs.Empty);
+                            }
+                            if (sftpClientNeeded)
+                            {
+                                this.FileTransferReconnected?.Invoke(this, EventArgs.Empty);
+                            }
+                            
+                            lock (this.lockObject)
+                            {
+                                this.isReconnecting = false;
+                            }
+                            return;
                         }
-                        return;
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        // Log error and continue to next attempt
-                        AnsiConsole.MarkupLine($"[red]Reconnection attempt {attemptCount} failed: {ex.Message}[/]");
+                        // Write connection failed status
+                        AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.ConnectionFailed));
+                        AnsiConsole.WriteLine();
                     }
                 }
 

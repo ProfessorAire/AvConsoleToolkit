@@ -48,6 +48,11 @@ namespace AvConsoleToolkit.Ssh
         Reconnecting,
 
         /// <summary>
+        /// A connection attempt failed.
+        /// </summary>
+        ConnectionFailed,
+
+        /// <summary>
         /// The connection is being closed.
         /// </summary>
         Disconnecting,
@@ -61,6 +66,8 @@ namespace AvConsoleToolkit.Ssh
         private readonly string connectionType;
         private readonly string hostAddress;
         private readonly ConnectionStatus status;
+        private readonly int? currentAttempt;
+        private readonly int? maxAttempts;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConnectionStatusRenderable"/> class.
@@ -68,11 +75,15 @@ namespace AvConsoleToolkit.Ssh
         /// <param name="connectionType">The type of connection (e.g., "SSH", "Telnet").</param>
         /// <param name="hostAddress">The host address being connected to.</param>
         /// <param name="status">The current status of the connection.</param>
-        public ConnectionStatusRenderable(string connectionType, string hostAddress, ConnectionStatus status)
+        /// <param name="currentAttempt">The current attempt number (for reconnecting or connection failed status).</param>
+        /// <param name="maxAttempts">The maximum number of attempts (use -1 for unlimited, null if not applicable).</param>
+        public ConnectionStatusRenderable(string connectionType, string hostAddress, ConnectionStatus status, int? currentAttempt = null, int? maxAttempts = null)
         {
             this.connectionType = connectionType ?? throw new ArgumentNullException(nameof(connectionType));
             this.hostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
             this.status = status;
+            this.currentAttempt = currentAttempt;
+            this.maxAttempts = maxAttempts;
         }
 
         /// <inheritdoc/>
@@ -98,12 +109,30 @@ namespace AvConsoleToolkit.Ssh
                 ConnectionStatus.Connecting => "Connecting...",
                 ConnectionStatus.Connected => "Connected",
                 ConnectionStatus.LostConnection => "Lost Connection",
-                ConnectionStatus.Reconnecting => "Reconnecting...",
+                ConnectionStatus.Reconnecting => this.GetReconnectingText(),
+                ConnectionStatus.ConnectionFailed => "Connection Failed",
                 ConnectionStatus.Disconnecting => "Disconnecting...",
                 _ => "Unknown"
             };
 
             return $"{this.connectionType} ({this.hostAddress}): {statusText}";
+        }
+
+        private string GetReconnectingText()
+        {
+            if (this.currentAttempt == null)
+            {
+                return "Reconnecting...";
+            }
+
+            if (this.maxAttempts == null || this.maxAttempts <= 0)
+            {
+                // Unlimited attempts or not specified
+                return $"Reconnecting ({this.currentAttempt})";
+            }
+
+            // Show attempt count with max attempts
+            return $"Reconnecting ({this.currentAttempt} of {this.maxAttempts})";
         }
 
         private Color GetStatusColor()
@@ -115,6 +144,7 @@ namespace AvConsoleToolkit.Ssh
                 ConnectionStatus.Connected => Color.Green,
                 ConnectionStatus.LostConnection => Color.Red,
                 ConnectionStatus.Reconnecting => Color.Orange1,
+                ConnectionStatus.ConnectionFailed => Color.Red,
                 ConnectionStatus.Disconnecting => Color.Yellow,
                 _ => Color.White
             };
