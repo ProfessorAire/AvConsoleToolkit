@@ -397,6 +397,9 @@ namespace AvConsoleToolkit.Ssh
             }
 
             client.KeepAliveInterval = TimeSpan.FromSeconds(3);
+            
+            // Subscribe to error event to detect disconnections
+            client.ErrorOccurred += this.OnSshClientError;
 
             lock (this.lockObject)
             {
@@ -438,6 +441,9 @@ namespace AvConsoleToolkit.Ssh
                 throw new InvalidOperationException("Either privateKeyPath or username/password must be provided");
             }
 
+            // Subscribe to error event to detect disconnections
+            client.ErrorOccurred += this.OnSftpClientError;
+            
             lock (this.lockObject)
             {
                 this.sftpClient = client;
@@ -453,6 +459,51 @@ namespace AvConsoleToolkit.Ssh
             }
 
             return client;
+        }
+
+        private void OnSshClientError(object? sender, Renci.SshNet.Common.ExceptionEventArgs e)
+        {
+            lock (this.lockObject)
+            {
+                if (this.disposed || this.sshClient == null)
+                {
+                    return;
+                }
+                
+                // Write disconnection status
+                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.LostConnection));
+                AnsiConsole.WriteLine();
+                
+                // Clean up the shell stream and clients
+                this.CleanupShellStream();
+                
+                // Unsubscribe from the event before cleanup
+                this.sshClient.ErrorOccurred -= this.OnSshClientError;
+                
+                // Fire disconnection event
+                Task.Run(() => this.ShellDisconnected?.Invoke(this, EventArgs.Empty));
+            }
+        }
+
+        private void OnSftpClientError(object? sender, Renci.SshNet.Common.ExceptionEventArgs e)
+        {
+            lock (this.lockObject)
+            {
+                if (this.disposed || this.sftpClient == null)
+                {
+                    return;
+                }
+                
+                // Write disconnection status
+                AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, ConnectionStatus.LostConnection));
+                AnsiConsole.WriteLine();
+                
+                // Unsubscribe from the event before cleanup
+                this.sftpClient.ErrorOccurred -= this.OnSftpClientError;
+                
+                // Fire disconnection event
+                Task.Run(() => this.FileTransferDisconnected?.Invoke(this, EventArgs.Empty));
+            }
         }
 
         private void CleanupShellStream()
@@ -480,6 +531,9 @@ namespace AvConsoleToolkit.Ssh
 
                 try
                 {
+                    // Unsubscribe from error event
+                    this.sshClient.ErrorOccurred -= this.OnSshClientError;
+                    
                     if (this.sshClient.IsConnected)
                     {
                         this.sshClient.Disconnect();
@@ -502,6 +556,9 @@ namespace AvConsoleToolkit.Ssh
             {
                 try
                 {
+                    // Unsubscribe from error event
+                    this.sftpClient.ErrorOccurred -= this.OnSftpClientError;
+                    
                     if (this.sftpClient.IsConnected)
                     {
                         this.sftpClient.Disconnect();
