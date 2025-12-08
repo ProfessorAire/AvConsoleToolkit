@@ -68,6 +68,10 @@ namespace AvConsoleToolkit.Commands
         private bool isDisconnected;
 
         private bool shouldExitLiveMode;
+        
+        // Delay in milliseconds before re-entering live mode after reconnection
+        // This allows connection status messages to finish printing cleanly
+        private const int ReconnectionPromptDelayMs = 200;
 
         /// <summary>
         /// Gets the command to send to the remote device to exit the session.
@@ -1501,7 +1505,7 @@ namespace AvConsoleToolkit.Commands
                         // and to ensure we don't inject the prompt between connection status messages
                         if (!sessionToken.IsCancellationRequested && !this.isDisconnected)
                         {
-                            await Task.Delay(200, sessionToken);
+                            await Task.Delay(ReconnectionPromptDelayMs, sessionToken);
                         }
                         
                         // After reconnection, re-enter live mode (without showing initial prompt)
