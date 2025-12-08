@@ -67,7 +67,7 @@ namespace AvConsoleToolkit.Commands
 
         private bool isDisconnected;
 
-        private bool isReconnecting;
+        private bool shouldExitLiveMode;
 
         /// <summary>
         /// Gets the command to send to the remote device to exit the session.
@@ -335,13 +335,25 @@ namespace AvConsoleToolkit.Commands
         private void OnShellDisconnected(object? sender, EventArgs e)
         {
             this.isDisconnected = true;
-            this.isReconnecting = false;
+            this.shouldExitLiveMode = true;
         }
 
-        private void OnShellReconnected(object? sender, EventArgs e)
+        private async void OnShellReconnected(object? sender, EventArgs e)
         {
+            // Call OnConnectedAsync again before resuming
+            try
+            {
+                if (this.sessionCancellation != null && !this.sessionCancellation.Token.IsCancellationRequested)
+                {
+                    await this.OnConnectedAsync(this.sessionCancellation.Token);
+                }
+            }
+            catch
+            {
+                // Ignore errors during reconnection initialization
+            }
+            
             this.isDisconnected = false;
-            this.isReconnecting = false;
         }
 
         private async Task CleanupAsync()
@@ -858,19 +870,6 @@ namespace AvConsoleToolkit.Commands
             Console.CursorVisible = false;
             var components = new List<IRenderable>();
 
-            // Don't show prompt when disconnected
-            if (this.isDisconnected)
-            {
-                if (this.isReconnecting)
-                {
-                    return new Markup($"{Environment.NewLine}[yellow]Reconnecting...[/]");
-                }
-                else
-                {
-                    return new Markup($"{Environment.NewLine}[yellow]Connection lost - waiting for reconnection...[/]");
-                }
-            }
-
             // Build the prompt line with cursor position and selection highlighting
             var promptPrefix = $"{Environment.NewLine}{this.Prompt ?? "ACT>"} ";
             var markup = new StringBuilder(promptPrefix.EscapeMarkup());
@@ -1146,7 +1145,8 @@ namespace AvConsoleToolkit.Commands
                         .StartAsync(async ctx =>
                         {
                             while (!sessionToken.IsCancellationRequested &&
-                                   !this.isExecutingNestedCommand)
+                                   !this.isExecutingNestedCommand &&
+                                   !this.shouldExitLiveMode)
                             {
                                 // Check for new output from device
                                 string newOutput;
@@ -1464,8 +1464,27 @@ namespace AvConsoleToolkit.Commands
                             }
                         });
 
+                    // If we exited because of disconnection, wait for reconnection
+                    if (this.shouldExitLiveMode)
+                    {
+                        this.shouldExitLiveMode = false;
+                        inLiveMode = false;
+                        
+                        // Wait for reconnection
+                        while (this.isDisconnected && !sessionToken.IsCancellationRequested)
+                        {
+                            await Task.Delay(100, sessionToken);
+                        }
+                        
+                        // After reconnection, re-enter live mode
+                        if (!sessionToken.IsCancellationRequested)
+                        {
+                            inLiveMode = true;
+                            initial = true;
+                        }
+                    }
                     // If we exited because of nested command execution, handle it
-                    if (this.isExecutingNestedCommand && this.pendingNestedCommand != null)
+                    else if (this.isExecutingNestedCommand && this.pendingNestedCommand != null)
                     {
                         // Clear buffer immediately to prevent any accumulated output from showing
                         lock (this.outputBuffer)

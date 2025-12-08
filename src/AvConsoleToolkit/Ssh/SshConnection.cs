@@ -255,6 +255,11 @@ namespace AvConsoleToolkit.Ssh
                 if (this.sshClient != null && !this.sshClient.IsConnected)
                 {
                     wasDisconnected = true;
+                    
+                    // Write disconnection status
+                    AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.LostConnection));
+                    AnsiConsole.WriteLine();
+                    
                     this.CleanupSshClient();
                     this.ShellDisconnected?.Invoke(this, EventArgs.Empty);
                 }
@@ -286,6 +291,11 @@ namespace AvConsoleToolkit.Ssh
                 if (this.sftpClient != null && !this.sftpClient.IsConnected)
                 {
                     wasDisconnected = true;
+                    
+                    // Write disconnection status
+                    AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, ConnectionStatus.LostConnection));
+                    AnsiConsole.WriteLine();
+                    
                     this.CleanupSftpClient();
                     this.FileTransferDisconnected?.Invoke(this, EventArgs.Empty);
                 }
@@ -316,8 +326,15 @@ namespace AvConsoleToolkit.Ssh
 
                 if (this.shellStream != null && !this.shellStream.CanRead)
                 {
+                    // Write disconnection status
+                    AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.LostConnection));
+                    AnsiConsole.WriteLine();
+                    
                     this.CleanupShellStream();
                     wasReconnecting = true;
+                    
+                    // Fire disconnection event
+                    this.ShellDisconnected?.Invoke(this, EventArgs.Empty);
                 }
             }
 
@@ -325,8 +342,17 @@ namespace AvConsoleToolkit.Ssh
             
             if (!client.IsConnected)
             {
-                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Connecting));
-                AnsiConsole.WriteLine();
+                if (wasReconnecting)
+                {
+                    AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Reconnecting));
+                    AnsiConsole.WriteLine();
+                }
+                else
+                {
+                    AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Connecting));
+                    AnsiConsole.WriteLine();
+                }
+                
                 await client.ConnectAsync(cancellationToken);
                 AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Connected));
                 AnsiConsole.WriteLine();
@@ -370,7 +396,7 @@ namespace AvConsoleToolkit.Ssh
                 throw new InvalidOperationException("Either privateKeyPath or username/password must be provided");
             }
 
-            client.KeepAliveInterval = TimeSpan.FromSeconds(10);
+            client.KeepAliveInterval = TimeSpan.FromSeconds(3);
 
             lock (this.lockObject)
             {
