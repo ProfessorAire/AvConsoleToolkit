@@ -336,6 +336,12 @@ namespace AvConsoleToolkit.Commands
         {
             this.isDisconnected = true;
             this.shouldExitLiveMode = true;
+            
+            // Clear the output buffer to prevent showing stale output after disconnection
+            lock (this.outputBuffer)
+            {
+                this.outputBuffer.Clear();
+            }
         }
 
         private async void OnShellReconnected(object? sender, EventArgs e)
@@ -351,6 +357,12 @@ namespace AvConsoleToolkit.Commands
             catch
             {
                 // Ignore errors during reconnection initialization
+            }
+            
+            // Clear the output buffer to prevent showing buffered output from before/during reconnection
+            lock (this.outputBuffer)
+            {
+                this.outputBuffer.Clear();
             }
             
             this.isDisconnected = false;
@@ -1485,11 +1497,18 @@ namespace AvConsoleToolkit.Commands
                             await Task.Delay(100, sessionToken);
                         }
                         
-                        // After reconnection, re-enter live mode
+                        // After reconnection, wait a bit to let status messages finish printing
+                        // and to ensure we don't inject the prompt between connection status messages
+                        if (!sessionToken.IsCancellationRequested && !this.isDisconnected)
+                        {
+                            await Task.Delay(200, sessionToken);
+                        }
+                        
+                        // After reconnection, re-enter live mode (without showing initial prompt)
                         if (!sessionToken.IsCancellationRequested)
                         {
                             inLiveMode = true;
-                            initial = true;
+                            initial = false; // Don't show prompt immediately - wait for first output or user input
                         }
                     }
                     // If we exited because of nested command execution, handle it
