@@ -285,9 +285,9 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                        var hashes = new Dictionary<string, string>();
                        using var reader = new StreamReader(memoryStream, Encoding.UTF8);
 
-                       while (!reader.EndOfStream)
+                       string? line;
+                       while ((line = await reader.ReadLineAsync()) != null)
                        {
-                           var line = reader.ReadLine();
                            if (string.IsNullOrWhiteSpace(line))
                            {
                                continue;

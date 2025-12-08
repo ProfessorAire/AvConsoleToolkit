@@ -1,6 +1,6 @@
 // <copyright file="CrestronPassThroughCommand.cs">
 // The MIT License
-// Copyright © Christopher McNeely
+// Copyright ï¿½ Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -93,10 +93,14 @@ namespace AvConsoleToolkit.Commands.Crestron
         /// <returns>A task representing the asynchronous operation.</returns>
         protected override async Task OnConnectedAsync(CancellationToken cancellationToken)
         {
-            // Wait a moment for the device to be ready
-            //await Task.Delay(100, cancellationToken);
+            // Some Crestron 3-Series devices require an initial carriage return to start sending data
+            // Send a newline to trigger the initial prompt and header
+            if (this.SshConnection != null)
+            {
+                await this.SshConnection.WriteLineAsync(string.Empty, cancellationToken);
+            }
 
-            // Could send any Crestron-specific initialization commands here if needed
+            // Could send any other Crestron-specific initialization commands here if needed
             // For example: Set terminal type, configure display options, etc.
         }
     }

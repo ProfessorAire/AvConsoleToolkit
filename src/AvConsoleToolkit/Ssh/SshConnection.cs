@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Renci.SshNet;
@@ -128,8 +129,54 @@ namespace AvConsoleToolkit.Ssh
             bool writeReceivedData = true)
         {
             var stream = await this.EnsureShellStreamAsync(cancellationToken);
-            var wrapper = new ShellStreamWrapper(stream);
-            return await wrapper.WaitForCommandCompletionAsync(successPatterns, failurePatterns, cancellationToken, timeoutMs, writeReceivedData);
+            var output = new StringBuilder();
+            var startTime = DateTime.UtcNow;
+
+            while ((DateTime.UtcNow - startTime).TotalMilliseconds < timeoutMs)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (stream.DataAvailable)
+                {
+                    var data = stream.Read();
+                    output.Append(data);
+
+                    if (writeReceivedData)
+                    {
+                        // Print output as it's received
+                        AnsiConsole.Write(data);
+                    }
+
+                    var currentOutput = output.ToString();
+
+                    // Check for failure patterns first
+                    if (failurePatterns != null)
+                    {
+                        foreach (var pattern in failurePatterns)
+                        {
+                            if (currentOutput.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return false;
+                            }
+                        }
+                    }
+
+                    // Check for success patterns
+                    if (successPatterns != null)
+                    {
+                        foreach (var pattern in successPatterns)
+                        {
+                            if (currentOutput.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                await Task.Delay(100, cancellationToken);
+            }
+
+            return false;
         }
 
         public async Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default)

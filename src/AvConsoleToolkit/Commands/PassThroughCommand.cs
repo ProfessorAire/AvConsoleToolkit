@@ -65,6 +65,10 @@ namespace AvConsoleToolkit.Commands
 
         private string originalTypedValue = string.Empty;
 
+        private bool isDisconnected;
+
+        private bool isReconnecting;
+
         /// <summary>
         /// Gets the command to send to the remote device to exit the session.
         /// Override this in derived classes to specify device-specific exit commands.
@@ -328,6 +332,18 @@ namespace AvConsoleToolkit.Commands
             return Task.CompletedTask;
         }
 
+        private void OnShellDisconnected(object? sender, EventArgs e)
+        {
+            this.isDisconnected = true;
+            this.isReconnecting = false;
+        }
+
+        private void OnShellReconnected(object? sender, EventArgs e)
+        {
+            this.isDisconnected = false;
+            this.isReconnecting = false;
+        }
+
         private async Task CleanupAsync()
         {
             // Cancel session if still running
@@ -360,9 +376,12 @@ namespace AvConsoleToolkit.Commands
                     {
                         this.sshConnection = Ssh.ConnectionFactory.Instance.GetSshConnection(host, 22, username, password);
                         
-                        // Some Crestron devices require an initial carriage return to start sending data
-                        // Send a newline to trigger the initial prompt and header
-                        await this.sshConnection.WriteLineAsync(string.Empty, cancellationToken);
+                        // Explicitly establish the shell connection
+                        await this.sshConnection.ConnectShellAsync(cancellationToken);
+                        
+                        // Subscribe to connection events for handling disconnection/reconnection
+                        this.sshConnection.ShellDisconnected += this.OnShellDisconnected;
+                        this.sshConnection.ShellReconnected += this.OnShellReconnected;
                         
                         await this.OnConnectedAsync(cancellationToken);
                         ctx.Status("Connected");
@@ -839,6 +858,19 @@ namespace AvConsoleToolkit.Commands
             Console.CursorVisible = false;
             var components = new List<IRenderable>();
 
+            // Don't show prompt when disconnected
+            if (this.isDisconnected)
+            {
+                if (this.isReconnecting)
+                {
+                    return new Markup($"{Environment.NewLine}[yellow]Reconnecting...[/]");
+                }
+                else
+                {
+                    return new Markup($"{Environment.NewLine}[yellow]Connection lost - waiting for reconnection...[/]");
+                }
+            }
+
             // Build the prompt line with cursor position and selection highlighting
             var promptPrefix = $"{Environment.NewLine}{this.Prompt ?? "ACT>"} ";
             var markup = new StringBuilder(promptPrefix.EscapeMarkup());
@@ -992,57 +1024,46 @@ namespace AvConsoleToolkit.Commands
             this.sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var sessionToken = this.sessionCancellation.Token;
 
-            // Flag to track if we need to reconnect
-            bool needsReconnect = false;
-
-            // Start background task to read from SSH with reconnection detection
+            // Start background task to read from SSH
             var readTask = Task.Run(async () =>
             {
                 while (!sessionToken.IsCancellationRequested)
                 {
                     try
                     {
-                        while (!sessionToken.IsCancellationRequested && this.sshConnection?.IsConnected == true)
+                        // Wait if disconnected
+                        while (this.isDisconnected && !sessionToken.IsCancellationRequested)
                         {
-                            // Pause reading during nested command execution
-                            if (this.isExecutingNestedCommand)
-                            {
-                                await Task.Delay(100, sessionToken);
-                                continue;
-                            }
-
-                            if (this.sshConnection.DataAvailable)
-                            {
-                                var data = await this.sshConnection.ReadAsync();
-                                lock (this.outputBuffer)
-                                {
-                                    if (this.Prompt is null)
-                                    {
-                                        var match = this.PromptRegex.Match(data);
-                                        if (match.Success)
-                                        {
-                                            this.Prompt = match.Groups[1].Value;
-                                        }
-                                    }
-
-                                    this.outputBuffer.Append(data);
-                                }
-                            }
-                            else
-                            {
-                                await Task.Delay(50, sessionToken);
-                            }
+                            await Task.Delay(100, sessionToken);
                         }
 
-                        // Connection lost - signal reconnection needed
-                        if (!sessionToken.IsCancellationRequested && this.sshConnection?.IsConnected == false)
+                        // Pause reading during nested command execution
+                        if (this.isExecutingNestedCommand)
                         {
-                            needsReconnect = true;
-                            // Wait for reconnection to complete
-                            while (needsReconnect && !sessionToken.IsCancellationRequested)
+                            await Task.Delay(100, sessionToken);
+                            continue;
+                        }
+
+                        if (this.sshConnection?.IsConnected == true && this.sshConnection.DataAvailable)
+                        {
+                            var data = await this.sshConnection.ReadAsync(sessionToken);
+                            lock (this.outputBuffer)
                             {
-                                await Task.Delay(100, sessionToken);
+                                if (this.Prompt is null)
+                                {
+                                    var match = this.PromptRegex.Match(data);
+                                    if (match.Success)
+                                    {
+                                        this.Prompt = match.Groups[1].Value;
+                                    }
+                                }
+
+                                this.outputBuffer.Append(data);
                             }
+                        }
+                        else
+                        {
+                            await Task.Delay(50, sessionToken);
                         }
                     }
                     catch (OperationCanceledException)
@@ -1052,16 +1073,8 @@ namespace AvConsoleToolkit.Commands
                     }
                     catch (Exception)
                     {
-                        // Connection error - signal reconnection needed
-                        if (!sessionToken.IsCancellationRequested)
-                        {
-                            needsReconnect = true;
-                            // Wait for reconnection to complete
-                            while (needsReconnect && !sessionToken.IsCancellationRequested)
-                            {
-                                await Task.Delay(100, sessionToken);
-                            }
-                        }
+                        // Connection error - wait for reconnection
+                        await Task.Delay(100, sessionToken);
                     }
                 }
             }, sessionToken);
@@ -1125,34 +1138,7 @@ namespace AvConsoleToolkit.Commands
             
             while (!sessionToken.IsCancellationRequested && !this.isExecutingNestedCommand)
             {
-                // Check if reconnection is needed
-                if (needsReconnect)
-                {
-                    // Exit Live display to show reconnection messages
-                    inLiveMode = false;
-                    
-                    AnsiConsole.WriteLine();
-                    AnsiConsole.MarkupLine("[yellow]Connection lost - attempting to reconnect...[/]");
-                    
-                    // Attempt reconnection
-                    var reconnected = await this.ReconnectAsync(sessionToken);
-                    
-                    if (reconnected)
-                    {
-                        AnsiConsole.MarkupLine("[green]Successfully reconnected![/]");
-                        AnsiConsole.WriteLine();
-                        needsReconnect = false;
-                        inLiveMode = true;
-                        initial = true;
-                    }
-                    else
-                    {
-                        // Reconnection failed, session will terminate
-                        return;
-                    }
-                }
-
-                if (inLiveMode && this.sshConnection?.IsConnected == true)
+                if (inLiveMode)
                 {
                     // Start Live display
                     await AnsiConsole.Live(this.RenderPrompt())
@@ -1160,9 +1146,7 @@ namespace AvConsoleToolkit.Commands
                         .StartAsync(async ctx =>
                         {
                             while (!sessionToken.IsCancellationRequested &&
-                                   this.sshConnection?.IsConnected == true &&
-                                   !this.isExecutingNestedCommand &&
-                                   !needsReconnect)
+                                   !this.isExecutingNestedCommand)
                             {
                                 // Check for new output from device
                                 string newOutput;
@@ -1224,16 +1208,22 @@ namespace AvConsoleToolkit.Commands
                                     initial = false;
                                 }
 
-                                // Check for keyboard input
+                                // Check for keyboard input (only process if not disconnected)
                                 if (Console.KeyAvailable)
                                 {
                                     var keyInfo = Console.ReadKey(intercept: true);
 
-                                    // Handle Ctrl+X for exit
+                                    // Handle Ctrl+X for exit (always allow exit)
                                     if (keyInfo.Key == ConsoleKey.X && keyInfo.Modifiers == ConsoleModifiers.Control)
                                     {
                                         await this.ExitSessionAsync();
                                         return; // Exit the Live context
+                                    }
+
+                                    // Ignore all other input when disconnected
+                                    if (this.isDisconnected)
+                                    {
+                                        continue;
                                     }
 
                                     // Handle Alt+X to delete selected history item
