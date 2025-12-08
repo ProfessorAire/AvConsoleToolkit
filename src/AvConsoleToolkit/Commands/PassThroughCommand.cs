@@ -388,6 +388,9 @@ namespace AvConsoleToolkit.Commands
                     {
                         this.sshConnection = Ssh.ConnectionFactory.Instance.GetSshConnection(host, 22, username, password);
                         
+                        // Set the maximum reconnection attempts from settings
+                        this.sshConnection.MaxReconnectionAttempts = Configuration.AppConfig.Settings.PassThrough.NumberOfReconnectionAttempts;
+                        
                         // Explicitly establish the shell connection
                         await this.sshConnection.ConnectShellAsync(cancellationToken);
                         

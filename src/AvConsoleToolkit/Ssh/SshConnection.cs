@@ -41,6 +41,13 @@ namespace AvConsoleToolkit.Ssh
         public event EventHandler? FileTransferReconnected;
 
         /// <summary>
+        /// Gets or sets the maximum number of reconnection attempts.
+        /// A value of 0 means no automatic reconnection (default).
+        /// A value of -1 means unlimited reconnection attempts.
+        /// </summary>
+        public int MaxReconnectionAttempts { get; set; } = 0;
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="SshConnection"/> class with password authentication.
         /// </summary>
         /// <param name="hostAddress">The host address to connect to.</param>
@@ -526,16 +533,23 @@ namespace AvConsoleToolkit.Ssh
                 return;
             }
 
+            // Check if automatic reconnection is disabled
+            if (this.MaxReconnectionAttempts == 0)
+            {
+                return;
+            }
+
             this.isReconnecting = true;
             
             // Start reconnection task in the background
             this.reconnectionTask = Task.Run(async () =>
             {
                 int attemptCount = 0;
-                int maxAttempts = 10;
-                int[] backoffDelays = { 1000, 2000, 3000, 5000, 5000, 10000, 10000, 15000, 15000, 30000 };
+                int maxAttempts = this.MaxReconnectionAttempts;
+                bool isInfiniteAttempts = maxAttempts < 0;
+                int[] backoffDelays = { 1000, 1000, 2000, 3000, 5000, 5000, 10000 };
 
-                while (attemptCount < maxAttempts && !this.disposed)
+                while ((isInfiniteAttempts || attemptCount < maxAttempts) && !this.disposed)
                 {
                     try
                     {

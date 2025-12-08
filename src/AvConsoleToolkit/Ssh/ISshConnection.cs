@@ -25,5 +25,12 @@ namespace AvConsoleToolkit.Ssh
         /// Gets a value indicating whether the connection is established.
         /// </summary>
         new bool IsConnected { get; }
+
+        /// <summary>
+        /// Gets or sets the maximum number of reconnection attempts.
+        /// A value of 0 means no automatic reconnection.
+        /// A value of -1 means unlimited reconnection attempts.
+        /// </summary>
+        int MaxReconnectionAttempts { get; set; }
     }
 }
