@@ -1,7 +1,7 @@
 // <copyright file="ListConfigCommand.cs">
 // The MIT License
 // Copyright © Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -43,7 +43,7 @@ namespace AvConsoleToolkit.Commands.Config
         /// <exception cref="UnauthorizedAccessException">Insufficient permissions while accessing configuration file locations.</exception>
         public override int Execute(CommandContext context, ListConfigSettings settings, CancellationToken cancellationToken)
         {
-            var config = Configuration.AppConfig.Settings;
+            var config = AppConfig.Settings;
             var output = new StringBuilder();
             var globalProperties = new List<(string Name, string Value)>();
             var sections = new Dictionary<string, List<(string Name, string Value)>>();

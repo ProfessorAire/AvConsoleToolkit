@@ -1,7 +1,7 @@
 // <copyright file="ToolboxAddressBook.cs">
 // The MIT License
 // Copyright © Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”),
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -219,6 +219,11 @@ namespace AvConsoleToolkit.Crestron
         public class Entry
         {
             /// <summary>
+            /// Gets or sets the comment or note associated with this entry.
+            /// </summary>
+            public string? Comment { get; set; }
+
+            /// <summary>
             /// Gets or sets the device name associated with this entry.
             /// </summary>
             public string? DeviceName { get; set; }
@@ -237,11 +242,6 @@ namespace AvConsoleToolkit.Crestron
             /// Gets or sets the username used to connect to the device.
             /// </summary>
             public string? Username { get; set; }
-
-            /// <summary>
-            /// Gets or sets the comment or note associated with this entry.
-            /// </summary>
-            public string? Comment { get; set; }
         }
     }
 }

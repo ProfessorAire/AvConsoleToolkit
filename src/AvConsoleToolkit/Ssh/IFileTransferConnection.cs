@@ -47,28 +47,12 @@ namespace AvConsoleToolkit.Ssh
         Task ConnectFileTransferAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Checks whether a file or directory exists on the remote server.
-        /// </summary>
-        /// <param name="path">The path to check.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>True if the path exists; otherwise, false.</returns>
-        Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default);
-
-        /// <summary>
         /// Creates a directory on the remote server.
         /// </summary>
         /// <param name="path">The path of the directory to create.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
         Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Lists the contents of a directory on the remote server.
-        /// </summary>
-        /// <param name="path">The path of the directory to list.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>An enumerable collection of file system entries.</returns>
-        Task<IEnumerable<ISftpFile>> ListDirectoryAsync(string path, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Downloads a file from the remote server.
@@ -80,15 +64,20 @@ namespace AvConsoleToolkit.Ssh
         Task DownloadFileAsync(string remotePath, Stream destination, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Uploads a file to the remote server.
+        /// Checks whether a file or directory exists on the remote server.
         /// </summary>
-        /// <param name="source">The source stream.</param>
-        /// <param name="remotePath">The remote file path.</param>
-        /// <param name="canOverride">Whether to overwrite an existing file.</param>
-        /// <param name="uploadCallback">Optional callback for tracking upload progress.</param>
+        /// <param name="path">The path to check.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        Task UploadFileAsync(Stream source, string remotePath, bool canOverride, Action<ulong>? uploadCallback = null, CancellationToken cancellationToken = default);
+        /// <returns>True if the path exists; otherwise, false.</returns>
+        Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Lists the contents of a directory on the remote server.
+        /// </summary>
+        /// <param name="path">The path of the directory to list.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>An enumerable collection of file system entries.</returns>
+        Task<IEnumerable<ISftpFile>> ListDirectoryAsync(string path, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Sets the last write time of a file on the remote server.
@@ -98,5 +87,16 @@ namespace AvConsoleToolkit.Ssh
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
         Task SetLastWriteTimeUtcAsync(string remotePath, DateTime lastWriteTime, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Uploads a file to the remote server.
+        /// </summary>
+        /// <param name="source">The source stream.</param>
+        /// <param name="remotePath">The remote file path.</param>
+        /// <param name="canOverride">Whether to overwrite an existing file.</param>
+        /// <param name="uploadCallback">Optional callback for tracking upload progress.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        Task UploadFileAsync(Stream source, string remotePath, bool canOverride, Action<ulong>? uploadCallback = null, CancellationToken cancellationToken = default);
     }
 }

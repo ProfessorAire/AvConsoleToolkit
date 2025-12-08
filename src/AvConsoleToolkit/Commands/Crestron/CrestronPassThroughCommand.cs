@@ -1,6 +1,6 @@
 // <copyright file="CrestronPassThroughCommand.cs">
 // The MIT License
-// Copyright � Christopher McNeely
+// Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -14,7 +14,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Spectre.Console;
 
 namespace AvConsoleToolkit.Commands.Crestron
 {
@@ -25,14 +24,14 @@ namespace AvConsoleToolkit.Commands.Crestron
     public sealed class CrestronPassThroughCommand : PassThroughCommand<PassThroughSettings>
     {
         /// <summary>
-        /// Gets the Crestron exit command ("bye").
-        /// </summary>
-        protected override string ExitCommand => "bye";
-
-        /// <summary>
         /// Gets the command branch for Crestron commands ("crestron").
         /// </summary>
         protected override string CommandBranch => "crestron";
+
+        /// <summary>
+        /// Gets the Crestron exit command ("bye").
+        /// </summary>
+        protected override string ExitCommand => "bye";
 
         /// <summary>
         /// Gets command mappings for Crestron devices, merging default Unix-like aliases with user-configured mappings.
@@ -78,7 +77,7 @@ namespace AvConsoleToolkit.Commands.Crestron
         /// <param name="keyInfo">The console key information.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>False to allow base class to handle tab completion.</returns>
-        protected override Task<bool> HandleSpecialKeyAsync(System.ConsoleKeyInfo keyInfo, CancellationToken cancellationToken)
+        protected override Task<bool> HandleSpecialKeyAsync(ConsoleKeyInfo keyInfo, CancellationToken cancellationToken)
         {
             // For Crestron, we want the default tab completion behavior
             // which sends the current buffer + tab to the device
@@ -97,7 +96,7 @@ namespace AvConsoleToolkit.Commands.Crestron
             // Send a newline to trigger the initial prompt and header
             if (this.SshConnection != null)
             {
-                await this.SshConnection.WriteLineAsync(string.Empty, cancellationToken);
+                await this.SshConnection.WriteLineAsync("echo off", cancellationToken);
             }
 
             // Could send any other Crestron-specific initialization commands here if needed

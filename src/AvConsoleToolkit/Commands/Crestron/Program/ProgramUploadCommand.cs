@@ -1,6 +1,6 @@
 // <copyright file="ProgramUploadCommand.cs">
 // The MIT License
-// Copyright � Christopher McNeely
+// Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -23,7 +23,6 @@ using System.Threading.Tasks;
 using System.Xml;
 using AvConsoleToolkit.Crestron;
 using AvConsoleToolkit.Ssh;
-using Renci.SshNet;
 using Renci.SshNet.Sftp;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -184,7 +183,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>True if IP table was configured successfully; false on error.</returns>
         private static async Task<bool> ConfigureIpTableAsync(
-            Ssh.IShellConnection shellStream,
+            IShellConnection shellStream,
             List<IpTable.Entry> entries,
             int slot,
             bool verbose,
@@ -526,7 +525,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <param name="tempDirectory">Temporary directory where package contents were extracted.</param>
         /// <param name="cancellationToken">Cancellation token to observe.</param>
         /// <returns>0 on success, non-zero on failure.</returns>
-        private static async Task<int> RegisterProgram(Ssh.IShellConnection shellStream, int slot, string extension, string tempDirectory, CancellationToken cancellationToken)
+        private static async Task<int> RegisterProgram(IShellConnection shellStream, int slot, string extension, string tempDirectory, CancellationToken cancellationToken)
         {
             var success = false;
             if (extension == ".lpz")
@@ -830,7 +829,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 if (changes.Count == 0 && !settings.KillProgram)
                 {
                     AnsiConsole.MarkupLine("[green]No files have changed. Upload skipped.[/]");
-                    
+
                     return 0;
                 }
 

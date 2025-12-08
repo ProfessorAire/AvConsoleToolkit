@@ -28,6 +28,13 @@ namespace AvConsoleToolkit.Commands
         public string? Address { get; set; }
 
         /// <summary>
+        /// Gets or sets a value indicating whether automatic reconnection should be disabled.
+        /// </summary>
+        [CommandOption("-n|--no-reconnect")]
+        [Description("Disable automatic reconnection on connection loss")]
+        public bool NoReconnect { get; set; }
+
+        /// <summary>
         /// Gets or sets the password for SSH authentication.
         /// </summary>
         [CommandOption("-p|--password <PASSWORD>")]
@@ -47,12 +54,5 @@ namespace AvConsoleToolkit.Commands
         [CommandOption("-v|--verbose")]
         [Description("Show verbose diagnostic output")]
         public bool Verbose { get; set; }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether automatic reconnection should be disabled.
-        /// </summary>
-        [CommandOption("-n|--no-reconnect")]
-        [Description("Disable automatic reconnection on connection loss")]
-        public bool NoReconnect { get; set; }
     }
 }

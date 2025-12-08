@@ -38,65 +38,65 @@ namespace AvConsoleToolkit.Commands.AddressBook
         public override async Task<int> ExecuteAsync(CommandContext context, AddressBookListSettings settings, CancellationToken cancellationToken)
         {
             return await Task.Run(() =>
-            {
-                var config = Configuration.AppConfig.Settings;
-                var addressBookLocations = config.Connection.AddressBooksLocation;
+                   {
+                       var config = Configuration.AppConfig.Settings;
+                       var addressBookLocations = config.Connection.AddressBooksLocation;
 
-                if (string.IsNullOrWhiteSpace(addressBookLocations))
-                {
-                    AnsiConsole.MarkupLine("[red]No address book locations configured. Use 'config set Connection AddressBooksLocation <path>' to configure.[/]");
-                    return 1;
-                }
+                       if (string.IsNullOrWhiteSpace(addressBookLocations))
+                       {
+                           AnsiConsole.MarkupLine("[red]No address book locations configured. Use 'config set Connection AddressBooksLocation <path>' to configure.[/]");
+                           return 1;
+                       }
 
-                // Split multiple locations
-                var locations = addressBookLocations
+                       // Split multiple locations
+                       var locations = addressBookLocations
                     .Split([';', ','], StringSplitOptions.RemoveEmptyEntries)
                     .Select(loc => loc.Trim())
                     .Where(loc => !string.IsNullOrWhiteSpace(loc));
 
-                var allEntries = new List<(ToolboxAddressBook.Entry Entry, string SourceFile)>();
+                       var allEntries = new List<(ToolboxAddressBook.Entry Entry, string SourceFile)>();
 
-                foreach (var location in locations)
-                {
-                    // Check if location is a directory
-                    if (Directory.Exists(location))
-                    {
-                        // Search for .xadr files
-                        var xadrFiles = Directory.GetFiles(location, "*.xadr", SearchOption.AllDirectories);
-                        foreach (var file in xadrFiles)
-                        {
-                            var entries = ReadAllEntriesFromFile(file);
-                            allEntries.AddRange(entries.Select(e => (e, file)));
-                        }
-                    }
-                    else if (File.Exists(location) && location.EndsWith(".xadr", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var entries = ReadAllEntriesFromFile(location);
-                        allEntries.AddRange(entries.Select(e => (e, location)));
-                    }
-                }
+                       foreach (var location in locations)
+                       {
+                           // Check if location is a directory
+                           if (Directory.Exists(location))
+                           {
+                               // Search for .xadr files
+                               var xadrFiles = Directory.GetFiles(location, "*.xadr", SearchOption.AllDirectories);
+                               foreach (var file in xadrFiles)
+                               {
+                                   var entries = ReadAllEntriesFromFile(file);
+                                   allEntries.AddRange(entries.Select(e => (e, file)));
+                               }
+                           }
+                           else if (File.Exists(location) && location.EndsWith(".xadr", StringComparison.OrdinalIgnoreCase))
+                           {
+                               var entries = ReadAllEntriesFromFile(location);
+                               allEntries.AddRange(entries.Select(e => (e, location)));
+                           }
+                       }
 
-                if (allEntries.Count == 0)
-                {
-                    AnsiConsole.MarkupLine("[yellow]No address book entries found.[/]");
-                    return 0;
-                }
+                       if (allEntries.Count == 0)
+                       {
+                           AnsiConsole.MarkupLine("[yellow]No address book entries found.[/]");
+                           return 0;
+                       }
 
-                // Display entries
-                var table = new Table();
-                table.Border(TableBorder.Rounded);
-                table.AddColumn("[yellow]Device Name[/]");
-                table.AddColumn("[green]Host Address[/]");
-                table.AddColumn("[cyan]Username[/]");
-                table.AddColumn("[blue]Password[/]");
-                table.AddColumn("[magenta]Comment[/]");
+                       // Display entries
+                       var table = new Table();
+                       table.Border(TableBorder.Rounded);
+                       table.AddColumn("[yellow]Device Name[/]");
+                       table.AddColumn("[green]Host Address[/]");
+                       table.AddColumn("[cyan]Username[/]");
+                       table.AddColumn("[blue]Password[/]");
+                       table.AddColumn("[magenta]Comment[/]");
 
-                if (settings.Detailed)
-                {
-                    table.AddColumn("[dim]Source File[/]");
-                }
+                       if (settings.Detailed)
+                       {
+                           table.AddColumn("[dim]Source File[/]");
+                       }
 
-                foreach (var (entry, sourceFile) in allEntries.OrderBy(e => e.Entry.DeviceName))
+                       foreach (var (entry, sourceFile) in allEntries.OrderBy(e => e.Entry.DeviceName))
                 {
                     var deviceName = !string.IsNullOrWhiteSpace(entry.DeviceName) ? entry.DeviceName.EscapeMarkup() : "[dim]<unknown>[/]";
                     var ipAddress = !string.IsNullOrWhiteSpace(entry.HostAddress) ? entry.HostAddress : "[dim]<none>[/]";
@@ -115,11 +115,52 @@ namespace AvConsoleToolkit.Commands.AddressBook
                     }
                 }
 
-                AnsiConsole.Write(table);
-                AnsiConsole.MarkupLine($"\n[dim]Total entries: {allEntries.Count}[/]");
+                       AnsiConsole.Write(table);
+                       AnsiConsole.MarkupLine($"\n[dim]Total entries: {allEntries.Count}[/]");
 
-                return 0;
-            }, cancellationToken);
+                       return 0;
+                   }, cancellationToken);
+        }
+
+        /// <summary>
+        /// Parses a ComSpec entry value.
+        /// Format: "auto 10.20.0.22;username user;password pass;console secondary"
+        /// </summary>
+        private static ToolboxAddressBook.Entry? ParseComSpecEntry(string deviceName, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var entry = new ToolboxAddressBook.Entry { DeviceName = deviceName };
+
+            // Split by semicolon
+            var parts = value.Split(';');
+
+            foreach (var part in parts)
+            {
+                var trimmed = part.Trim();
+
+                if (trimmed.StartsWith("auto ", StringComparison.OrdinalIgnoreCase))
+                {
+                    entry.HostAddress = trimmed[5..].Trim();
+                }
+                else if (trimmed.StartsWith("ssh ", StringComparison.OrdinalIgnoreCase))
+                {
+                    entry.HostAddress = trimmed[4..].Trim();
+                }
+                else if (trimmed.StartsWith("username ", StringComparison.OrdinalIgnoreCase))
+                {
+                    entry.Username = trimmed[9..].Trim();
+                }
+                else if (trimmed.StartsWith("password ", StringComparison.OrdinalIgnoreCase))
+                {
+                    entry.Password = trimmed[9..].Trim();
+                }
+            }
+
+            return entry;
         }
 
         /// <summary>
@@ -162,47 +203,6 @@ namespace AvConsoleToolkit.Commands.AddressBook
             }
 
             return entries;
-        }
-
-        /// <summary>
-        /// Parses a ComSpec entry value.
-        /// Format: "auto 10.20.0.22;username user;password pass;console secondary"
-        /// </summary>
-        private static ToolboxAddressBook.Entry? ParseComSpecEntry(string deviceName, string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return null;
-            }
-
-            var entry = new ToolboxAddressBook.Entry { DeviceName = deviceName };
-
-            // Split by semicolon
-            var parts = value.Split(';');
-
-            foreach (var part in parts)
-            {
-                var trimmed = part.Trim();
-
-                if (trimmed.StartsWith("auto ", StringComparison.OrdinalIgnoreCase))
-                {
-                    entry.HostAddress = trimmed[5..].Trim();
-                }
-                else if (trimmed.StartsWith("ssh ", StringComparison.OrdinalIgnoreCase))
-                {
-                    entry.HostAddress = trimmed[4..].Trim();
-                }
-                else if (trimmed.StartsWith("username ", StringComparison.OrdinalIgnoreCase))
-                {
-                    entry.Username = trimmed[9..].Trim();
-                }
-                else if (trimmed.StartsWith("password ", StringComparison.OrdinalIgnoreCase))
-                {
-                    entry.Password = trimmed[9..].Trim();
-                }
-            }
-
-            return entry;
         }
     }
 }

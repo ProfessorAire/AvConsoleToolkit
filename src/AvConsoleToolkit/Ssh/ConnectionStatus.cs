@@ -1,4 +1,4 @@
-// <copyright file="IConnectionFactory.cs">
+// <copyright file="ConnectionStatus.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -13,33 +13,43 @@
 namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
-    /// Factory for creating and caching SSH connections.
+    /// Status of a connection.
     /// </summary>
-    public interface IConnectionFactory
+    public enum ConnectionStatus
     {
         /// <summary>
-        /// Gets an SSH connection with SSH key authentication.
-        /// Attempts to authenticate using the user's local SSH key.
+        /// The connection is not established.
         /// </summary>
-        /// <param name="hostAddress">The host address to connect to.</param>
-        /// <param name="port">The port to connect on.</param>
-        /// <param name="username">The username for authentication.</param>
-        /// <returns>An SSH connection instance.</returns>
-        ISshConnection GetSshConnection(string hostAddress, int port, string username);
+        NotConnected,
 
         /// <summary>
-        /// Gets an SSH connection with password authentication.
+        /// The connection is being established.
         /// </summary>
-        /// <param name="hostAddress">The host address to connect to.</param>
-        /// <param name="port">The port to connect on.</param>
-        /// <param name="username">The username for authentication.</param>
-        /// <param name="password">The password for authentication.</param>
-        /// <returns>An SSH connection instance.</returns>
-        ISshConnection GetSshConnection(string hostAddress, int port, string username, string password);
+        Connecting,
 
         /// <summary>
-        /// Releases all cached connections.
+        /// The connection has been established.
         /// </summary>
-        void ReleaseAll();
+        Connected,
+
+        /// <summary>
+        /// The connection was lost.
+        /// </summary>
+        LostConnection,
+
+        /// <summary>
+        /// The connection is being re-established.
+        /// </summary>
+        Reconnecting,
+
+        /// <summary>
+        /// A connection attempt failed.
+        /// </summary>
+        ConnectionFailed,
+
+        /// <summary>
+        /// The connection is being closed.
+        /// </summary>
+        Disconnecting,
     }
 }

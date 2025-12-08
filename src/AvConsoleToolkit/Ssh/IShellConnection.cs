@@ -34,14 +34,14 @@ namespace AvConsoleToolkit.Ssh
         event EventHandler? ShellReconnected;
 
         /// <summary>
-        /// Gets a value indicating whether the connection is established.
-        /// </summary>
-        bool IsConnected { get; }
-
-        /// <summary>
         /// Gets a value indicating whether data is available to read from the shell stream.
         /// </summary>
         bool DataAvailable { get; }
+
+        /// <summary>
+        /// Gets a value indicating whether the connection is established.
+        /// </summary>
+        bool IsConnected { get; }
 
         /// <summary>
         /// Explicitly establishes the shell connection.
@@ -56,14 +56,6 @@ namespace AvConsoleToolkit.Ssh
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>The data read from the stream.</returns>
         Task<string> ReadAsync(CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Writes a line to the shell stream.
-        /// </summary>
-        /// <param name="line">The line to write.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        Task WriteLineAsync(string line, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Asynchronously waits for the completion of a command executed on the shell stream.
@@ -84,5 +76,13 @@ namespace AvConsoleToolkit.Ssh
             CancellationToken cancellationToken,
             int timeoutMs = 15000,
             bool writeReceivedData = true);
+
+        /// <summary>
+        /// Writes a line to the shell stream.
+        /// </summary>
+        /// <param name="line">The line to write.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        Task WriteLineAsync(string line, CancellationToken cancellationToken = default);
     }
 }

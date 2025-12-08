@@ -1,6 +1,6 @@
 // <copyright file="PassThroughCommand.cs">
 // The MIT License
-// Copyright � Christopher McNeely
+// Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -13,12 +13,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Renci.SshNet;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Spectre.Console.Rendering;
@@ -33,51 +31,41 @@ namespace AvConsoleToolkit.Commands
     public abstract partial class PassThroughCommand<TSettings> : AsyncCommand<TSettings>
         where TSettings : PassThroughSettings
     {
+        private readonly StringBuilder outputBuffer = new();
+
         private CommandHistory? commandHistory;
 
         private string currentLine = string.Empty;
 
+        private int cursorBlinkCounter = 0;
+
         private int cursorPosition = 0;
-
-        private int selectionStart = -1;
-
-        private int selectionEnd = -1;
-
-        private Ssh.ISshConnection? sshConnection;
-
-        private bool isExecutingNestedCommand;
-
-        private string? pendingNestedCommand;
-
-        private readonly StringBuilder outputBuffer = new();
-
-        private CancellationTokenSource? sessionCancellation;
-
-        private bool showingHistoryMenu;
-
-        private int historyMenuSelectedIndex;
 
         private List<(string Command, int MatchIndex)>? historyMenuItems;
 
-        private bool showCursor = true;
-
-        private int cursorBlinkCounter = 0;
-
-        private string originalTypedValue = string.Empty;
+        private int historyMenuSelectedIndex;
 
         private bool isDisconnected;
 
-        private bool shouldExitLiveMode;
-        
-        // Delay in milliseconds before re-entering live mode after reconnection
-        // This allows connection status messages to finish printing cleanly
-        private const int ReconnectionPromptDelayMs = 200;
+        private bool isExecutingNestedCommand;
 
-        /// <summary>
-        /// Gets the command to send to the remote device to exit the session.
-        /// Override this in derived classes to specify device-specific exit commands.
-        /// </summary>
-        protected abstract string ExitCommand { get; }
+        private string originalTypedValue = string.Empty;
+
+        private string? pendingNestedCommand;
+
+        private int selectionEnd = -1;
+
+        private int selectionStart = -1;
+
+        private CancellationTokenSource? sessionCancellation;
+
+        private bool shouldExitLiveMode;
+
+        private bool showCursor = true;
+
+        private bool showingHistoryMenu;
+
+        private Ssh.ISshConnection? sshConnection;
 
         /// <summary>
         /// Gets the command branch prefix for nested commands (e.g., "crestron").
@@ -86,25 +74,21 @@ namespace AvConsoleToolkit.Commands
         protected abstract string CommandBranch { get; }
 
         /// <summary>
-        /// Gets a dictionary of command mappings for the device.
-        /// The key is the command to map from (e.g., "ls"), and the value is the command to map to (e.g., "dir").
-        /// Commands are matched case-insensitively as the first word in the command line.
-        /// Override this in derived classes to provide device-specific command aliases.
-        /// </summary>
-        /// <returns>A dictionary of command mappings, or null/empty if no mappings are needed.</returns>
-        protected virtual IReadOnlyDictionary<string, string>? GetCommandMappings() => null;
-
-        /// <summary>
-        /// Gets the current SSH connection.
-        /// This allows derived classes to share the connection with nested commands.
-        /// </summary>
-        protected Ssh.ISshConnection? SshConnection => this.sshConnection;
-
-        /// <summary>
         /// Gets the current settings for the pass-through command.
         /// This allows derived classes to access connection parameters.
         /// </summary>
         protected TSettings? CurrentSettings { get; private set; }
+
+        /// <summary>
+        /// Gets the command to send to the remote device to exit the session.
+        /// Override this in derived classes to specify device-specific exit commands.
+        /// </summary>
+        protected abstract string ExitCommand { get; }
+
+        /// <summary>
+        /// Gets the device prompt, or <see langword="null"/> if none has been determined.
+        /// </summary>
+        protected string? Prompt { get; private set; }
 
         /// <summary>
         /// Gets the Regex used to identify the device prompt.
@@ -113,9 +97,10 @@ namespace AvConsoleToolkit.Commands
         protected partial Regex PromptRegex { get; }
 
         /// <summary>
-        /// Gets the device prompt, or <see langword="null"/> if none has been determined.
+        /// Gets the current SSH connection.
+        /// This allows derived classes to share the connection with nested commands.
         /// </summary>
-        protected string? Prompt { get; private set; }
+        protected Ssh.ISshConnection? SshConnection => this.sshConnection;
 
         /// <summary>
         /// Executes the pass-through command, establishing an SSH connection and entering interactive mode.
@@ -203,6 +188,56 @@ namespace AvConsoleToolkit.Commands
         }
 
         /// <summary>
+        /// Parses a command line string into an array of arguments, respecting quotes.
+        /// </summary>
+        /// <param name="commandLine">The command line to parse.</param>
+        /// <returns>Array of parsed arguments.</returns>
+        protected static string[] ParseCommandLine(string commandLine)
+        {
+            var parts = new List<string>();
+            var current = new StringBuilder();
+            var inQuotes = false;
+
+            for (var i = 0; i < commandLine.Length; i++)
+            {
+                var c = commandLine[i];
+
+                if (c == '"')
+                {
+                    inQuotes = !inQuotes;
+                }
+                else if (char.IsWhiteSpace(c) && !inQuotes)
+                {
+                    if (current.Length > 0)
+                    {
+                        parts.Add(current.ToString());
+                        current.Clear();
+                    }
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+
+            if (current.Length > 0)
+            {
+                parts.Add(current.ToString());
+            }
+
+            return parts.ToArray();
+        }
+
+        /// <summary>
+        /// Gets a dictionary of command mappings for the device.
+        /// The key is the command to map from (e.g., "ls"), and the value is the command to map to (e.g., "dir").
+        /// Commands are matched case-insensitively as the first word in the command line.
+        /// Override this in derived classes to provide device-specific command aliases.
+        /// </summary>
+        /// <returns>A dictionary of command mappings, or null/empty if no mappings are needed.</returns>
+        protected virtual IReadOnlyDictionary<string, string>? GetCommandMappings() => null;
+
+        /// <summary>
         /// Gets the maximum number of commands to keep in history.
         /// Override this to customize history size per device type.
         /// </summary>
@@ -273,47 +308,6 @@ namespace AvConsoleToolkit.Commands
         }
 
         /// <summary>
-        /// Parses a command line string into an array of arguments, respecting quotes.
-        /// </summary>
-        /// <param name="commandLine">The command line to parse.</param>
-        /// <returns>Array of parsed arguments.</returns>
-        protected static string[] ParseCommandLine(string commandLine)
-        {
-            var parts = new System.Collections.Generic.List<string>();
-            var current = new System.Text.StringBuilder();
-            var inQuotes = false;
-
-            for (int i = 0; i < commandLine.Length; i++)
-            {
-                var c = commandLine[i];
-
-                if (c == '"')
-                {
-                    inQuotes = !inQuotes;
-                }
-                else if (char.IsWhiteSpace(c) && !inQuotes)
-                {
-                    if (current.Length > 0)
-                    {
-                        parts.Add(current.ToString());
-                        current.Clear();
-                    }
-                }
-                else
-                {
-                    current.Append(c);
-                }
-            }
-
-            if (current.Length > 0)
-            {
-                parts.Add(current.ToString());
-            }
-
-            return parts.ToArray();
-        }
-
-        /// <summary>
         /// Handles special key sequences like tab completion.
         /// Override this to implement device-specific behavior.
         /// </summary>
@@ -336,40 +330,47 @@ namespace AvConsoleToolkit.Commands
             return Task.CompletedTask;
         }
 
-        private void OnShellDisconnected(object? sender, EventArgs e)
+        /// <summary>
+        /// Applies command mappings to the given command if any are configured.
+        /// </summary>
+        /// <param name="command">The original command entered by the user.</param>
+        /// <returns>The mapped command, or the original command if no mapping applies.</returns>
+        private string ApplyCommandMapping(string command)
         {
-            this.isDisconnected = true;
-            this.shouldExitLiveMode = true;
-            
-            // Clear the output buffer to prevent showing stale output after disconnection
-            lock (this.outputBuffer)
+            var mappings = this.GetCommandMappings();
+            if (mappings == null || mappings.Count == 0)
             {
-                this.outputBuffer.Clear();
+                return command;
             }
-        }
 
-        private async void OnShellReconnected(object? sender, EventArgs e)
-        {
-            // Call OnConnectedAsync again before resuming
-            try
+            // Extract the first word (the command name)
+            var parts = command.Split([' ', '\t'], 2, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
             {
-                if (this.sessionCancellation != null && !this.sessionCancellation.Token.IsCancellationRequested)
+                return command;
+            }
+
+            var commandName = parts[0];
+            var arguments = parts.Length > 1 ? parts[1] : string.Empty;
+
+            // Check if there's a mapping for this command (case-insensitive)
+            var mapping = mappings.FirstOrDefault(kvp =>
+                string.Equals(kvp.Key, commandName, StringComparison.OrdinalIgnoreCase));
+
+            if (mapping.Key != null)
+            {
+                // Build the mapped command
+                if (string.IsNullOrEmpty(arguments))
                 {
-                    await this.OnConnectedAsync(this.sessionCancellation.Token);
+                    return mapping.Value;
+                }
+                else
+                {
+                    return $"{mapping.Value} {arguments}";
                 }
             }
-            catch
-            {
-                // Ignore errors during reconnection initialization
-            }
-            
-            // Clear the output buffer to prevent showing buffered output from before/during reconnection
-            lock (this.outputBuffer)
-            {
-                this.outputBuffer.Clear();
-            }
-            
-            this.isDisconnected = false;
+
+            return command;
         }
 
         private async Task CleanupAsync()
@@ -383,15 +384,6 @@ namespace AvConsoleToolkit.Commands
                 await this.commandHistory.SaveAsync();
             }
 
-            // Release connections through SshManager
-            if (this.CurrentSettings != null &&
-                !string.IsNullOrEmpty(this.CurrentSettings.Address) &&
-                !string.IsNullOrEmpty(this.CurrentSettings.Username))
-            {
-                // Note: We don't release here because the connection might be reused
-                // Connections will be cleaned up when the application exits
-            }
-
             this.sessionCancellation?.Dispose();
         }
 
@@ -403,17 +395,17 @@ namespace AvConsoleToolkit.Commands
                     .StartAsync("Connecting to device...", async ctx =>
                     {
                         this.sshConnection = Ssh.ConnectionFactory.Instance.GetSshConnection(host, 22, username, password);
-                        
+
                         // Set the maximum reconnection attempts from settings
                         this.sshConnection.MaxReconnectionAttempts = Configuration.AppConfig.Settings.PassThrough.NumberOfReconnectionAttempts;
-                        
+
                         // Explicitly establish the shell connection
                         await this.sshConnection.ConnectShellAsync(cancellationToken);
-                        
+
                         // Subscribe to connection events for handling disconnection/reconnection
                         this.sshConnection.ShellDisconnected += this.OnShellDisconnected;
                         this.sshConnection.ShellReconnected += this.OnShellReconnected;
-                        
+
                         await this.OnConnectedAsync(cancellationToken);
                         ctx.Status("Connected");
                     });
@@ -491,120 +483,6 @@ namespace AvConsoleToolkit.Commands
             }
         }
 
-        private void HandleLeftArrow(bool shift)
-        {
-            if (this.showingHistoryMenu)
-            {
-                return;
-            }
-
-            if (shift)
-            {
-                // Shift+Left: extend or create selection
-                if (this.selectionStart == -1)
-                {
-                    this.selectionStart = this.cursorPosition;
-                }
-                this.cursorPosition = Math.Max(0, this.cursorPosition - 1);
-                this.selectionEnd = this.cursorPosition;
-                if (this.selectionStart == this.selectionEnd)
-                {
-                    this.selectionStart = -1;
-                    this.selectionEnd = -1;
-                }
-            }
-            else
-            {
-                // Left: move cursor left
-                this.cursorPosition = Math.Max(0, this.cursorPosition - 1);
-                this.selectionStart = -1;
-                this.selectionEnd = -1;
-            }
-        }
-
-        private void HandleRightArrow(bool shift)
-        {
-            if (this.showingHistoryMenu)
-            {
-                return;
-            }
-
-            if (shift)
-            {
-                // Shift+Right: extend or create selection
-                if (this.selectionStart == -1)
-                {
-                    this.selectionStart = this.cursorPosition;
-                }
-                this.cursorPosition = Math.Min(this.currentLine.Length, this.cursorPosition + 1);
-                this.selectionEnd = this.cursorPosition;
-                if (this.selectionStart == this.selectionEnd)
-                {
-                    this.selectionStart = -1;
-                    this.selectionEnd = -1;
-                }
-            }
-            else
-            {
-                // Right: move cursor right
-                this.cursorPosition = Math.Min(this.currentLine.Length, this.cursorPosition + 1);
-                this.selectionStart = -1;
-                this.selectionEnd = -1;
-            }
-        }
-
-        private void HandleHome(bool shift)
-        {
-            if (shift)
-            {
-                // Shift+Home: extend or create selection to start of line
-                if (this.selectionStart == -1)
-                {
-                    this.selectionStart = this.cursorPosition;
-                }
-                this.cursorPosition = 0;
-                this.selectionEnd = this.cursorPosition;
-                if (this.selectionStart == this.selectionEnd)
-                {
-                    this.selectionStart = -1;
-                    this.selectionEnd = -1;
-                }
-            }
-            else
-            {
-                // Home: move cursor to start of line
-                this.cursorPosition = 0;
-                this.selectionStart = -1;
-                this.selectionEnd = -1;
-            }
-        }
-
-        private void HandleEnd(bool shift)
-        {
-            if (shift)
-            {
-                // Shift+End: extend or create selection to end of line
-                if (this.selectionStart == -1)
-                {
-                    this.selectionStart = this.cursorPosition;
-                }
-                this.cursorPosition = this.currentLine.Length;
-                this.selectionEnd = this.cursorPosition;
-                if (this.selectionStart == this.selectionEnd)
-                {
-                    this.selectionStart = -1;
-                    this.selectionEnd = -1;
-                }
-            }
-            else
-            {
-                // End: move cursor to end of line
-                this.cursorPosition = this.currentLine.Length;
-                this.selectionStart = -1;
-                this.selectionEnd = -1;
-            }
-        }
-
         private void HandleDownArrow()
         {
             if (this.commandHistory == null)
@@ -668,6 +546,136 @@ namespace AvConsoleToolkit.Commands
             }
         }
 
+        private void HandleEnd(bool shift)
+        {
+            if (shift)
+            {
+                // Shift+End: extend or create selection to end of line
+                if (this.selectionStart == -1)
+                {
+                    this.selectionStart = this.cursorPosition;
+                }
+                this.cursorPosition = this.currentLine.Length;
+                this.selectionEnd = this.cursorPosition;
+                if (this.selectionStart == this.selectionEnd)
+                {
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
+                }
+            }
+            else
+            {
+                // End: move cursor to end of line
+                this.cursorPosition = this.currentLine.Length;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+        }
+
+        private void HandleEscape()
+        {
+            if (this.showingHistoryMenu || this.historyMenuItems != null && this.historyMenuItems.Count > 0)
+            {
+                this.HideHistoryMenu();
+                this.historyMenuItems = null;
+            }
+            else
+            {
+                this.currentLine = string.Empty;
+                this.cursorPosition = 0;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+        }
+
+        private void HandleHome(bool shift)
+        {
+            if (shift)
+            {
+                // Shift+Home: extend or create selection to start of line
+                if (this.selectionStart == -1)
+                {
+                    this.selectionStart = this.cursorPosition;
+                }
+                this.cursorPosition = 0;
+                this.selectionEnd = this.cursorPosition;
+                if (this.selectionStart == this.selectionEnd)
+                {
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
+                }
+            }
+            else
+            {
+                // Home: move cursor to start of line
+                this.cursorPosition = 0;
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+        }
+
+        private void HandleLeftArrow(bool shift)
+        {
+            if (this.showingHistoryMenu)
+            {
+                return;
+            }
+
+            if (shift)
+            {
+                // Shift+Left: extend or create selection
+                if (this.selectionStart == -1)
+                {
+                    this.selectionStart = this.cursorPosition;
+                }
+                this.cursorPosition = Math.Max(0, this.cursorPosition - 1);
+                this.selectionEnd = this.cursorPosition;
+                if (this.selectionStart == this.selectionEnd)
+                {
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
+                }
+            }
+            else
+            {
+                // Left: move cursor left
+                this.cursorPosition = Math.Max(0, this.cursorPosition - 1);
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+        }
+
+        private void HandleRightArrow(bool shift)
+        {
+            if (this.showingHistoryMenu)
+            {
+                return;
+            }
+
+            if (shift)
+            {
+                // Shift+Right: extend or create selection
+                if (this.selectionStart == -1)
+                {
+                    this.selectionStart = this.cursorPosition;
+                }
+                this.cursorPosition = Math.Min(this.currentLine.Length, this.cursorPosition + 1);
+                this.selectionEnd = this.cursorPosition;
+                if (this.selectionStart == this.selectionEnd)
+                {
+                    this.selectionStart = -1;
+                    this.selectionEnd = -1;
+                }
+            }
+            else
+            {
+                // Right: move cursor right
+                this.cursorPosition = Math.Min(this.currentLine.Length, this.cursorPosition + 1);
+                this.selectionStart = -1;
+                this.selectionEnd = -1;
+            }
+        }
+
         private void HandleUpArrow()
         {
             if (this.commandHistory == null)
@@ -724,49 +732,6 @@ namespace AvConsoleToolkit.Commands
             }
         }
 
-        private void ShowHistoryMenu()
-        {
-            if (this.commandHistory == null)
-            {
-                return;
-            }
-
-            // Check if history is enabled in settings
-            if (!Configuration.AppConfig.Settings.PassThrough.UseHistoryForPassThrough)
-            {
-                this.historyMenuItems = null;
-                return;
-            }
-
-            // If search text is empty, close the history menu
-            if (string.IsNullOrWhiteSpace(this.currentLine))
-            {
-                this.historyMenuItems = null;
-                this.showingHistoryMenu = false;
-                this.historyMenuSelectedIndex = -1;
-                return;
-            }
-
-            // Store the original typed value before activating menu
-            if (!this.showingHistoryMenu && (this.historyMenuItems == null || this.historyMenuItems.Count == 0))
-            {
-                this.originalTypedValue = this.currentLine;
-            }
-
-            // Get matching history items with match position information
-            this.historyMenuItems = this.commandHistory.SearchByPrefix(this.currentLine, 5);
-            
-            if (this.historyMenuItems.Count == 0)
-            {
-                this.historyMenuItems = null;
-                return;
-            }
-
-            // Menu is not "active" until user presses down arrow
-            this.showingHistoryMenu = false;
-            this.historyMenuSelectedIndex = -1;
-        }
-
         private void HideHistoryMenu()
         {
             this.showingHistoryMenu = false;
@@ -775,113 +740,28 @@ namespace AvConsoleToolkit.Commands
             this.originalTypedValue = string.Empty;
         }
 
-        private void HandleEscape()
+        private void OnShellDisconnected(object? sender, EventArgs e)
         {
-            if (this.showingHistoryMenu || (this.historyMenuItems != null && this.historyMenuItems.Count > 0))
-            {
-                this.HideHistoryMenu();
-                this.historyMenuItems = null;
-            }
-            else
-            {
-                this.currentLine = string.Empty;
-                this.cursorPosition = 0;
-                this.selectionStart = -1;
-                this.selectionEnd = -1;
-            }
+            this.isDisconnected = true;
+            this.shouldExitLiveMode = true;
         }
 
-        private async Task SubmitCommandAsync(string command, CancellationToken cancellationToken)
+        private async void OnShellReconnected(object? sender, EventArgs e)
         {
-            if (this.sshConnection == null || string.IsNullOrWhiteSpace(command))
+            // Call OnConnectedAsync again before resuming
+            try
             {
-                // Just return, prompt will update naturally
-                return;
-            }
-
-            // Clear the live prompt before executing command
-            AnsiConsole.Write("\r");
-            AnsiConsole.Write(new string(' ', command.Length + 10));
-            AnsiConsole.Write("\r");
-
-            // Check if user manually typed the exit command
-            if (command.Equals(this.ExitCommand, StringComparison.OrdinalIgnoreCase) || command.Equals("exit", StringComparison.OrdinalIgnoreCase))
-            {
-                await this.ExitSessionAsync();
-                return;
-            }
-
-            // Check for nested command
-            if (command.StartsWith(':'))
-            {
-                var nestedCommand = command[1..].Trim();
-                this.commandHistory?.AddCommand(command);
-
-                // Don't echo the command - the nested command will handle its own output
-                // This prevents duplicate command lines in the output
-
-                // Queue the nested command for execution AFTER Live display exits
-                this.pendingNestedCommand = nestedCommand;
-
-                // Set flag to trigger Live display exit
-                this.isExecutingNestedCommand = true;
-
-                // Return immediately - Live display will exit, then command will execute
-                return;
-            }
-
-            // Apply command mappings if available
-            var mappedCommand = this.ApplyCommandMapping(command);
-
-            // Echo the original command (not the mapped one) for user clarity
-            AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
-
-            // Send the mapped command to device
-            await this.sshConnection.WriteLineAsync(mappedCommand);
-            this.commandHistory?.AddCommand(command);
-        }
-
-        /// <summary>
-        /// Applies command mappings to the given command if any are configured.
-        /// </summary>
-        /// <param name="command">The original command entered by the user.</param>
-        /// <returns>The mapped command, or the original command if no mapping applies.</returns>
-        private string ApplyCommandMapping(string command)
-        {
-            var mappings = this.GetCommandMappings();
-            if (mappings == null || mappings.Count == 0)
-            {
-                return command;
-            }
-
-            // Extract the first word (the command name)
-            var parts = command.Split([' ', '\t'], 2, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0)
-            {
-                return command;
-            }
-
-            var commandName = parts[0];
-            var arguments = parts.Length > 1 ? parts[1] : string.Empty;
-
-            // Check if there's a mapping for this command (case-insensitive)
-            var mapping = mappings.FirstOrDefault(kvp => 
-                string.Equals(kvp.Key, commandName, StringComparison.OrdinalIgnoreCase));
-
-            if (mapping.Key != null)
-            {
-                // Build the mapped command
-                if (string.IsNullOrEmpty(arguments))
+                if (this.sessionCancellation != null && !this.sessionCancellation.Token.IsCancellationRequested)
                 {
-                    return mapping.Value;
-                }
-                else
-                {
-                    return $"{mapping.Value} {arguments}";
+                    await this.OnConnectedAsync(this.sessionCancellation.Token);
                 }
             }
+            catch
+            {
+                // Ignore errors during reconnection initialization
+            }
 
-            return command;
+            this.isDisconnected = false;
         }
 
         private IRenderable RenderPrompt()
@@ -900,15 +780,15 @@ namespace AvConsoleToolkit.Commands
             var markup = new StringBuilder(promptPrefix.EscapeMarkup());
 
             // Build the command line with cursor and selection highlighting
-            for (int i = 0; i < this.currentLine.Length; i++)
+            for (var i = 0; i < this.currentLine.Length; i++)
             {
                 var character = this.currentLine[i];
-                
+
                 // Check if this position is within selection
                 var isInSelection = this.selectionStart >= 0 && this.selectionEnd >= 0 &&
                                    i >= Math.Min(this.selectionStart, this.selectionEnd) &&
                                    i < Math.Max(this.selectionStart, this.selectionEnd);
-                
+
                 // Check if this is the cursor position
                 var isCursorPosition = i == this.cursorPosition;
 
@@ -958,7 +838,7 @@ namespace AvConsoleToolkit.Commands
 
                     // Build the markup with highlighting
                     var historyMarkup = new StringBuilder();
-                    
+
                     if (isSelected)
                     {
                         // Selected: white on grey for entire row
@@ -974,13 +854,13 @@ namespace AvConsoleToolkit.Commands
                     if (matchIndex >= 0 && matchIndex < command.Length)
                     {
                         var searchLength = Math.Min(this.currentLine.Length, command.Length - matchIndex);
-                        
+
                         // Add text before match
                         if (matchIndex > 0)
                         {
                             historyMarkup.Append(command.Substring(0, matchIndex).EscapeMarkup());
                         }
-                        
+
                         // Add highlighted match
                         if (isSelected)
                         {
@@ -997,7 +877,7 @@ namespace AvConsoleToolkit.Commands
                             historyMarkup.Append(command.Substring(matchIndex, searchLength).EscapeMarkup());
                             historyMarkup.Append("[/]");
                         }
-                        
+
                         // Add text after match
                         if (matchIndex + searchLength < command.Length)
                         {
@@ -1016,7 +896,7 @@ namespace AvConsoleToolkit.Commands
                     {
                         historyMarkup.Append(new string(' ', maxWidth - currentLength));
                     }
-                    
+
                     if (isSelected)
                     {
                         historyMarkup.Append("[/]"); // Close [white on grey]
@@ -1124,12 +1004,12 @@ namespace AvConsoleToolkit.Commands
                 if (this.Prompt != null)
                 {
                     var outputToWrite = lastOutput;
-                    
+
                     // Remove all instances of the prompt (with and without trailing space)
                     var promptWithSpace = $"{this.Prompt} ";
                     outputToWrite = outputToWrite.Replace(promptWithSpace, string.Empty);
                     outputToWrite = outputToWrite.Replace(this.Prompt, string.Empty);
-                    
+
                     // Clean up any resulting multiple consecutive newlines
                     while (outputToWrite.Contains("\n\n\n"))
                     {
@@ -1139,17 +1019,17 @@ namespace AvConsoleToolkit.Commands
                     {
                         outputToWrite = outputToWrite.Replace("\r\n\r\n\r\n", "\r\n\r\n");
                     }
-                    
+
                     // Trim trailing whitespace
                     outputToWrite = outputToWrite.TrimEnd('\r', '\n', ' ', '\t');
                     if (!string.IsNullOrEmpty(outputToWrite))
                     {
                         outputToWrite += Environment.NewLine;
                     }
-                    
+
                     lastOutput = outputToWrite;
                 }
-                
+
                 if (!string.IsNullOrEmpty(lastOutput))
                 {
                     AnsiConsole.Write(lastOutput);
@@ -1159,7 +1039,7 @@ namespace AvConsoleToolkit.Commands
             // Main input loop with live prompt display
             var inLiveMode = true;
             var initial = true;
-            
+
             while (!sessionToken.IsCancellationRequested && !this.isExecutingNestedCommand)
             {
                 if (inLiveMode)
@@ -1199,7 +1079,7 @@ namespace AvConsoleToolkit.Commands
                                         var promptWithSpace = $"{this.Prompt} ";
                                         outputToWrite = outputToWrite.Replace(promptWithSpace, string.Empty);
                                         outputToWrite = outputToWrite.Replace(this.Prompt, string.Empty);
-                                        
+
                                         // Clean up any resulting multiple consecutive newlines
                                         while (outputToWrite.Contains("\n\n\n"))
                                         {
@@ -1209,7 +1089,7 @@ namespace AvConsoleToolkit.Commands
                                         {
                                             outputToWrite = outputToWrite.Replace("\r\n\r\n\r\n", "\r\n\r\n");
                                         }
-                                        
+
                                         // Trim trailing whitespace and ensure single trailing newline
                                         outputToWrite = outputToWrite.TrimEnd('\r', '\n', ' ', '\t');
                                         if (!string.IsNullOrEmpty(outputToWrite))
@@ -1255,18 +1135,17 @@ namespace AvConsoleToolkit.Commands
                                     if (keyInfo.Key == ConsoleKey.X && keyInfo.Modifiers == ConsoleModifiers.Alt)
                                     {
                                         if (this.showingHistoryMenu && this.historyMenuItems != null && 
-                                            this.historyMenuSelectedIndex >= 0 && this.historyMenuSelectedIndex < this.historyMenuItems.Count)
+                                            this.historyMenuSelectedIndex >= 0 && this.historyMenuSelectedIndex <
+                                            this.historyMenuItems.Count)
                                         {
                                             // Get the selected command
                                             var commandToDelete = this.historyMenuItems[this.historyMenuSelectedIndex].Command;
-                                            
 
                                             // Remove from history
                                             if (this.commandHistory?.RemoveCommand(commandToDelete) == true)
                                             {
                                                 // Refresh the history menu
                                                 this.ShowHistoryMenu();
-                                                
 
                                                 // Adjust selected index if needed
                                                 if (this.historyMenuItems == null || this.historyMenuItems.Count == 0)
@@ -1285,7 +1164,6 @@ namespace AvConsoleToolkit.Commands
                                                     // Keep menu active at current (or adjusted) index
                                                     this.showingHistoryMenu = true;
                                                 }
-                                                
 
                                                 // Update display
                                                 ctx.UpdateTarget(this.RenderPrompt());
@@ -1302,33 +1180,29 @@ namespace AvConsoleToolkit.Commands
                                     }
 
                                     // Handle special keys
-                                    bool needsUpdate = true;
+                                    var needsUpdate = true;
                                     switch (keyInfo.Key)
                                     {
                                         case ConsoleKey.Enter:
-                                            if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuSelectedIndex >= 0)
+                                            if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuSelectedIndex >=
+                                                0)
                                             {
                                                 // Get the selected command
                                                 var selectedCommand = this.historyMenuItems[this.historyMenuSelectedIndex].Command;
-                                                
 
                                                 // Clear the history menu display immediately
                                                 this.HideHistoryMenu();
                                                 this.historyMenuItems = null;
-                                                
 
                                                 // Clear currentLine BEFORE submitting (otherwise SubmitCommandAsync uses wrong length for clearing)
                                                 this.currentLine = string.Empty;
-                                                
 
                                                 // Force update to hide the menu
                                                 ctx.UpdateTarget(this.RenderPrompt());
-                                                
 
                                                 // Now submit the selected command directly
                                                 await this.SubmitCommandAsync(selectedCommand, sessionToken);
                                                 this.commandHistory?.ResetPosition();
-                                                
 
                                                 // Check if we just queued a nested command for execution
                                                 if (this.isExecutingNestedCommand)
@@ -1336,7 +1210,6 @@ namespace AvConsoleToolkit.Commands
                                                     // Exit Live context - nested command will execute after this returns
                                                     return;
                                                 }
-                                                
 
                                                 needsUpdate = false; // Already updated above
                                             }
@@ -1362,8 +1235,10 @@ namespace AvConsoleToolkit.Commands
 
                                         case ConsoleKey.Backspace:
                                             this.HandleBackspace();
+
                                             // Refresh history matches
                                             this.ShowHistoryMenu();
+
                                             // Reset cursor blink on input
                                             this.showCursor = true;
                                             this.cursorBlinkCounter = 0;
@@ -1371,8 +1246,10 @@ namespace AvConsoleToolkit.Commands
 
                                         case ConsoleKey.Delete:
                                             this.HandleDelete();
+
                                             // Refresh history matches
                                             this.ShowHistoryMenu();
+
                                             // Reset cursor blink on input
                                             this.showCursor = true;
                                             this.cursorBlinkCounter = 0;
@@ -1380,6 +1257,7 @@ namespace AvConsoleToolkit.Commands
 
                                         case ConsoleKey.UpArrow:
                                             this.HandleUpArrow();
+
                                             // Reset cursor blink on navigation
                                             this.showCursor = true;
                                             this.cursorBlinkCounter = 0;
@@ -1387,6 +1265,7 @@ namespace AvConsoleToolkit.Commands
 
                                         case ConsoleKey.DownArrow:
                                             this.HandleDownArrow();
+
                                             // Reset cursor blink on navigation
                                             this.showCursor = true;
                                             this.cursorBlinkCounter = 0;
@@ -1394,6 +1273,7 @@ namespace AvConsoleToolkit.Commands
 
                                         case ConsoleKey.LeftArrow:
                                             this.HandleLeftArrow(keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift));
+
                                             // Reset cursor blink on navigation
                                             this.showCursor = true;
                                             this.cursorBlinkCounter = 0;
@@ -1401,6 +1281,7 @@ namespace AvConsoleToolkit.Commands
 
                                         case ConsoleKey.RightArrow:
                                             this.HandleRightArrow(keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift));
+
                                             // Reset cursor blink on navigation
                                             this.showCursor = true;
                                             this.cursorBlinkCounter = 0;
@@ -1408,6 +1289,7 @@ namespace AvConsoleToolkit.Commands
 
                                         case ConsoleKey.Home:
                                             this.HandleHome(keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift));
+
                                             // Reset cursor blink
                                             this.showCursor = true;
                                             this.cursorBlinkCounter = 0;
@@ -1415,6 +1297,7 @@ namespace AvConsoleToolkit.Commands
 
                                         case ConsoleKey.End:
                                             this.HandleEnd(keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift));
+
                                             // Reset cursor blink
                                             this.showCursor = true;
                                             this.cursorBlinkCounter = 0;
@@ -1422,17 +1305,19 @@ namespace AvConsoleToolkit.Commands
 
                                         case ConsoleKey.Escape:
                                             this.HandleEscape();
+
                                             // Reset cursor blink
                                             this.showCursor = true;
                                             this.cursorBlinkCounter = 0;
                                             break;
 
                                         case ConsoleKey.Tab:
+
                                             // Check if derived class wants to handle it
                                             if (!await this.HandleSpecialKeyAsync(keyInfo, sessionToken))
                                             {
                                                 // Default: send to device
-                                                await this.sshConnection.WriteLineAsync(this.currentLine + "\t");
+                                                await this.sshConnection.WriteLineAsync($"{this.currentLine}\t");
                                             }
                                             needsUpdate = false;
                                             break;
@@ -1451,12 +1336,14 @@ namespace AvConsoleToolkit.Commands
                                                     this.selectionStart = -1;
                                                     this.selectionEnd = -1;
                                                 }
-                                                
+
                                                 // Insert character at cursor position
                                                 this.currentLine = this.currentLine.Insert(this.cursorPosition, keyInfo.KeyChar.ToString());
                                                 this.cursorPosition++;
+
                                                 // Refresh history matches automatically
                                                 this.ShowHistoryMenu();
+
                                                 // Reset cursor blink on input
                                                 this.showCursor = true;
                                                 this.cursorBlinkCounter = 0;
@@ -1483,7 +1370,7 @@ namespace AvConsoleToolkit.Commands
                                         this.cursorBlinkCounter = 0;
                                         ctx.UpdateTarget(this.RenderPrompt());
                                     }
-                                    
+
                                     await Task.Delay(50, sessionToken);
                                 }
                             }
@@ -1494,20 +1381,13 @@ namespace AvConsoleToolkit.Commands
                     {
                         this.shouldExitLiveMode = false;
                         inLiveMode = false;
-                        
+
                         // Wait for reconnection
                         while (this.isDisconnected && !sessionToken.IsCancellationRequested)
                         {
                             await Task.Delay(100, sessionToken);
                         }
-                        
-                        // After reconnection, wait a bit to let status messages finish printing
-                        // and to ensure we don't inject the prompt between connection status messages
-                        if (!sessionToken.IsCancellationRequested && !this.isDisconnected)
-                        {
-                            await Task.Delay(ReconnectionPromptDelayMs, sessionToken);
-                        }
-                        
+
                         // After reconnection, re-enter live mode (without showing initial prompt)
                         if (!sessionToken.IsCancellationRequested)
                         {
@@ -1515,6 +1395,7 @@ namespace AvConsoleToolkit.Commands
                             initial = false; // Don't show prompt immediately - wait for first output or user input
                         }
                     }
+
                     // If we exited because of nested command execution, handle it
                     else if (this.isExecutingNestedCommand && this.pendingNestedCommand != null)
                     {
@@ -1526,7 +1407,7 @@ namespace AvConsoleToolkit.Commands
 
                         inLiveMode = false;
                         initial = true;
-                        
+
                         // Execute nested command
                         var commandToExecute = this.pendingNestedCommand;
                         this.pendingNestedCommand = null;
@@ -1580,85 +1461,97 @@ namespace AvConsoleToolkit.Commands
             }
         }
 
-        private async Task<bool> ReconnectAsync(CancellationToken cancellationToken)
+        private void ShowHistoryMenu()
         {
-            if (this.CurrentSettings == null || string.IsNullOrEmpty(this.CurrentSettings.Address))
+            if (this.commandHistory == null)
             {
-                return false;
+                return;
             }
 
-            // Check if reconnection is disabled
-            if (this.CurrentSettings.NoReconnect)
+            // Check if history is enabled in settings
+            if (!Configuration.AppConfig.Settings.PassThrough.UseHistoryForPassThrough)
             {
-                AnsiConsole.MarkupLine("[red]Automatic reconnection is disabled. Session terminated.[/]");
-                this.sessionCancellation?.Cancel();
-                return false;
+                this.historyMenuItems = null;
+                return;
             }
 
-            // Get configured max retries (-1 means infinite)
-            var maxRetries = Configuration.AppConfig.Settings.PassThrough.NumberOfReconnectionAttempts;
-            var isInfiniteRetries = maxRetries < 0;
-            
-            int retryCount = 0;
-            int delayMs = 500;
-
-            while ((isInfiniteRetries || retryCount < maxRetries) && !cancellationToken.IsCancellationRequested)
+            // If search text is empty, close the history menu
+            if (string.IsNullOrWhiteSpace(this.currentLine))
             {
-                try
-                {
-                    await Task.Delay(delayMs, cancellationToken);
-                    
-                    if (isInfiniteRetries)
-                    {
-                        AnsiConsole.MarkupLine($"[yellow]Reconnection attempt {retryCount + 1}...[/]");
-                    }
-                    else
-                    {
-                        AnsiConsole.MarkupLine($"[yellow]Reconnection attempt {retryCount + 1}/{maxRetries}...[/]");
-                    }
-
-                    // Attempt to reconnect
-                    var reconnected = await this.ConnectAsync(
-                        this.CurrentSettings.Address,
-                        this.CurrentSettings.Username!,
-                        this.CurrentSettings.Password!,
-                        cancellationToken);
-
-                    if (reconnected)
-                    {
-                        return true;
-                    }
-
-                    retryCount++;
-                    
-                    // Cap exponential backoff at 10 seconds
-                    delayMs = Math.Min(delayMs * 2, 10000);
-                }
-                catch (Exception ex)
-                {
-                    retryCount++;
-                    AnsiConsole.MarkupLine($"[red]Reconnection failed: {ex.Message}[/]");
-
-                    if (!isInfiniteRetries && retryCount >= maxRetries)
-                    {
-                        AnsiConsole.MarkupLine("[red]Maximum reconnection attempts reached. Session terminated.[/]");
-                        this.sessionCancellation?.Cancel();
-                        return false;
-                    }
-
-                    // Cap exponential backoff at 30 seconds
-                    delayMs = Math.Min(delayMs * 2, 30000);
-                }
+                this.historyMenuItems = null;
+                this.showingHistoryMenu = false;
+                this.historyMenuSelectedIndex = -1;
+                return;
             }
-            
-            // If we exit the loop without success (non-infinite retries exhausted)
-            if (!isInfiniteRetries)
+
+            // Store the original typed value before activating menu
+            if (!this.showingHistoryMenu && (this.historyMenuItems == null || this.historyMenuItems.Count == 0))
             {
-                AnsiConsole.MarkupLine("[red]Maximum reconnection attempts reached. Session terminated.[/]");
-                this.sessionCancellation?.Cancel();
+                this.originalTypedValue = this.currentLine;
             }
-            
-            return false;
+
+            // Get matching history items with match position information
+            this.historyMenuItems = this.commandHistory.SearchByPrefix(this.currentLine, 5);
+
+            if (this.historyMenuItems.Count == 0)
+            {
+                this.historyMenuItems = null;
+                return;
+            }
+
+            // Menu is not "active" until user presses down arrow
+            this.showingHistoryMenu = false;
+            this.historyMenuSelectedIndex = -1;
+        }
+
+        private async Task SubmitCommandAsync(string command, CancellationToken cancellationToken)
+        {
+            if (this.sshConnection == null || string.IsNullOrWhiteSpace(command))
+            {
+                // Just return, prompt will update naturally
+                return;
+            }
+
+            // Clear the live prompt before executing command
+            AnsiConsole.Write("\r");
+            AnsiConsole.Write(new string(' ', command.Length + 10));
+            AnsiConsole.Write("\r");
+
+            // Check if user manually typed the exit command
+            if (command.Equals(this.ExitCommand, StringComparison.OrdinalIgnoreCase) || command.Equals("exit", StringComparison.OrdinalIgnoreCase))
+            {
+                await this.ExitSessionAsync();
+                return;
+            }
+
+            // Check for nested command
+            if (command.StartsWith(':'))
+            {
+                var nestedCommand = command[1..].Trim();
+                this.commandHistory?.AddCommand(command);
+
+                // Don't echo the command - the nested command will handle its own output
+                // This prevents duplicate command lines in the output
+
+                // Queue the nested command for execution AFTER Live display exits
+                this.pendingNestedCommand = nestedCommand;
+
+                // Set flag to trigger Live display exit
+                this.isExecutingNestedCommand = true;
+
+                // Return immediately - Live display will exit, then command will execute
+                return;
+            }
+
+            // Apply command mappings if available
+            var mappedCommand = this.ApplyCommandMapping(command);
+
+            // Echo the original command (not the mapped one) for user clarity
+            AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
+
+            // Send the mapped command to device
+            await this.sshConnection.WriteLineAsync(mappedCommand);
+            this.commandHistory?.AddCommand(command);
         }
     }
 }

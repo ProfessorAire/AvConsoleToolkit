@@ -18,56 +18,19 @@ using Spectre.Console.Rendering;
 namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
-    /// Status of a connection.
-    /// </summary>
-    public enum ConnectionStatus
-    {
-        /// <summary>
-        /// The connection is not established.
-        /// </summary>
-        NotConnected,
-
-        /// <summary>
-        /// The connection is being established.
-        /// </summary>
-        Connecting,
-
-        /// <summary>
-        /// The connection has been established.
-        /// </summary>
-        Connected,
-
-        /// <summary>
-        /// The connection was lost.
-        /// </summary>
-        LostConnection,
-
-        /// <summary>
-        /// The connection is being re-established.
-        /// </summary>
-        Reconnecting,
-
-        /// <summary>
-        /// A connection attempt failed.
-        /// </summary>
-        ConnectionFailed,
-
-        /// <summary>
-        /// The connection is being closed.
-        /// </summary>
-        Disconnecting,
-    }
-
-    /// <summary>
     /// Provides information about a connection's status.
     /// </summary>
     public class ConnectionStatusRenderable : IRenderable
     {
         private readonly string connectionType;
-        private readonly string hostAddress;
-        private readonly ConnectionStatus status;
+
         private readonly int? currentAttempt;
+
+        private readonly string hostAddress;
+
         private readonly int? maxAttempts;
+
+        private readonly ConnectionStatus status;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConnectionStatusRenderable"/> class.
@@ -101,23 +64,6 @@ namespace AvConsoleToolkit.Ssh
             yield return new Segment(text, new Style(color));
         }
 
-        private string GetStatusText()
-        {
-            var statusText = this.status switch
-            {
-                ConnectionStatus.NotConnected => "Not Connected",
-                ConnectionStatus.Connecting => "Connecting...",
-                ConnectionStatus.Connected => "Connected",
-                ConnectionStatus.LostConnection => "Lost Connection",
-                ConnectionStatus.Reconnecting => this.GetReconnectingText(),
-                ConnectionStatus.ConnectionFailed => "Connection Failed",
-                ConnectionStatus.Disconnecting => "Disconnecting...",
-                _ => "Unknown"
-            };
-
-            return $"{this.connectionType} ({this.hostAddress}): {statusText}";
-        }
-
         private string GetReconnectingText()
         {
             if (this.currentAttempt == null)
@@ -148,6 +94,23 @@ namespace AvConsoleToolkit.Ssh
                 ConnectionStatus.Disconnecting => Color.Yellow,
                 _ => Color.White
             };
+        }
+
+        private string GetStatusText()
+        {
+            var statusText = this.status switch
+            {
+                ConnectionStatus.NotConnected => "Not Connected",
+                ConnectionStatus.Connecting => "Connecting...",
+                ConnectionStatus.Connected => "Connected",
+                ConnectionStatus.LostConnection => "Lost Connection",
+                ConnectionStatus.Reconnecting => this.GetReconnectingText(),
+                ConnectionStatus.ConnectionFailed => "Connection Failed",
+                ConnectionStatus.Disconnecting => "Disconnecting...",
+                _ => "Unknown"
+            };
+
+            return $"{this.connectionType} ({this.hostAddress}): {statusText}";
         }
     }
 }

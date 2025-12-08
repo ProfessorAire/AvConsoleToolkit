@@ -23,7 +23,9 @@ namespace AvConsoleToolkit.Ssh
     public class ConnectionFactory : IConnectionFactory
     {
         private static readonly Lazy<ConnectionFactory> LazyInstance = new(() => new ConnectionFactory());
+
         private readonly Dictionary<string, ISshConnection> connectionCache = [];
+
         private readonly Lock lockObject = new();
 
         /// <summary>
@@ -37,39 +39,6 @@ namespace AvConsoleToolkit.Ssh
         /// Gets the singleton instance of the connection factory.
         /// </summary>
         public static ConnectionFactory Instance => LazyInstance.Value;
-
-        /// <inheritdoc/>
-        public ISshConnection GetSshConnection(string hostAddress, int port, string username, string password)
-        {
-            if (string.IsNullOrEmpty(hostAddress))
-            {
-                throw new ArgumentNullException(nameof(hostAddress));
-            }
-
-            if (string.IsNullOrEmpty(username))
-            {
-                throw new ArgumentNullException(nameof(username));
-            }
-
-            if (string.IsNullOrEmpty(password))
-            {
-                throw new ArgumentNullException(nameof(password));
-            }
-
-            var key = this.GetConnectionKey(hostAddress, port, username);
-
-            lock (this.lockObject)
-            {
-                if (this.connectionCache.TryGetValue(key, out var existingConnection))
-                {
-                    return existingConnection;
-                }
-
-                var connection = new SshConnection(hostAddress, port, username, password);
-                this.connectionCache[key] = connection;
-                return connection;
-            }
-        }
 
         /// <inheritdoc/>
         public ISshConnection GetSshConnection(string hostAddress, int port, string username)
@@ -110,6 +79,39 @@ namespace AvConsoleToolkit.Ssh
                 }
 
                 var connection = new SshConnection(hostAddress, port, username, privateKeyPath, usePrivateKey: true);
+                this.connectionCache[key] = connection;
+                return connection;
+            }
+        }
+
+        /// <inheritdoc/>
+        public ISshConnection GetSshConnection(string hostAddress, int port, string username, string password)
+        {
+            if (string.IsNullOrEmpty(hostAddress))
+            {
+                throw new ArgumentNullException(nameof(hostAddress));
+            }
+
+            if (string.IsNullOrEmpty(username))
+            {
+                throw new ArgumentNullException(nameof(username));
+            }
+
+            if (string.IsNullOrEmpty(password))
+            {
+                throw new ArgumentNullException(nameof(password));
+            }
+
+            var key = this.GetConnectionKey(hostAddress, port, username);
+
+            lock (this.lockObject)
+            {
+                if (this.connectionCache.TryGetValue(key, out var existingConnection))
+                {
+                    return existingConnection;
+                }
+
+                var connection = new SshConnection(hostAddress, port, username, password);
                 this.connectionCache[key] = connection;
                 return connection;
             }
