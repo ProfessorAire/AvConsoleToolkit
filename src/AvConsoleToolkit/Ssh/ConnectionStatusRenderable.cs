@@ -17,73 +17,72 @@ using Spectre.Console.Rendering;
 
 namespace AvConsoleToolkit.Ssh
 {
+    public class ConnectionStatusModel
+    {
+        public string HostAddress { get; set; } = string.Empty;
+
+        public int SftpAttempt { get; set; } = 0;
+
+        public int SftpMaxAttempts { get; set; } = 0;
+
+        public ConnectionStatus SftpState { get; set; } = ConnectionStatus.NotConnected;
+
+        public int SshAttempt { get; set; } = 0;
+
+        public int SshMaxAttempts { get; set; } = 0;
+
+        public ConnectionStatus SshState { get; set; } = ConnectionStatus.NotConnected;
+    }
+
     /// <summary>
-    /// Provides information about a connection's status.
+    /// Renders the status of both SSH and SFTP connections in a compact, live-updating format.
     /// </summary>
     public class ConnectionStatusRenderable : IRenderable
     {
-        private readonly string connectionType;
+        private static readonly string[] SpinnerFrames = new[] { "|", "/", "-", "\\" };
 
-        private readonly int? currentAttempt;
+        private readonly ConnectionStatusModel model;
 
-        private readonly string hostAddress;
+        private readonly bool showSpinner;
 
-        private readonly int? maxAttempts;
-
-        private readonly ConnectionStatus status;
+        private readonly int spinnerIndex;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConnectionStatusRenderable"/> class.
         /// </summary>
-        /// <param name="connectionType">The type of connection (e.g., "SSH", "Telnet").</param>
-        /// <param name="hostAddress">The host address being connected to.</param>
-        /// <param name="status">The current status of the connection.</param>
-        /// <param name="currentAttempt">The current attempt number (for reconnecting or connection failed status).</param>
-        /// <param name="maxAttempts">The maximum number of attempts (use -1 for unlimited, null if not applicable).</param>
-        public ConnectionStatusRenderable(string connectionType, string hostAddress, ConnectionStatus status, int? currentAttempt = null, int? maxAttempts = null)
+        /// <param name="model">The status model containing SSH and SFTP status.</param>
+        /// <param name="showSpinner">Whether to show a spinner for active states.</param>
+        /// <param name="spinnerIndex">The spinner frame index (for animation).</param>
+        public ConnectionStatusRenderable(ConnectionStatusModel model, bool showSpinner = true, int spinnerIndex = 0)
         {
-            this.connectionType = connectionType ?? throw new ArgumentNullException(nameof(connectionType));
-            this.hostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
-            this.status = status;
-            this.currentAttempt = currentAttempt;
-            this.maxAttempts = maxAttempts;
+            this.model = model ?? throw new ArgumentNullException(nameof(model));
+            this.showSpinner = showSpinner;
+            this.spinnerIndex = spinnerIndex;
         }
 
-        /// <inheritdoc/>
         public Measurement Measure(RenderOptions options, int maxWidth)
         {
-            var text = this.GetStatusText();
-            return new Measurement(text.Length, text.Length);
+            var sshText = this.GetStatusText("SSH", this.model.HostAddress, this.model.SshState, this.model.SshAttempt, this.model.SshMaxAttempts, this.showSpinner && IsActive(this.model.SshState));
+            var sftpText = this.GetStatusText("SFTP", this.model.HostAddress, this.model.SftpState, this.model.SftpAttempt, this.model.SftpMaxAttempts, this.showSpinner && IsActive(this.model.SftpState));
+            var maxLen = Math.Max(sshText.Length, sftpText.Length);
+            return new Measurement(maxLen, maxLen);
         }
 
-        /// <inheritdoc/>
         public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
         {
-            var color = this.GetStatusColor();
-            var text = this.GetStatusText();
-            yield return new Segment(text, new Style(color));
+            yield return new Segment(this.GetStatusText("SSH", this.model.HostAddress, this.model.SshState, this.model.SshAttempt, this.model.SshMaxAttempts, this.showSpinner && IsActive(this.model.SshState)), new Style(this.GetStatusColor(this.model.SshState)));
+            yield return Segment.LineBreak;
+            yield return new Segment(this.GetStatusText("SFTP", this.model.HostAddress, this.model.SftpState, this.model.SftpAttempt, this.model.SftpMaxAttempts, this.showSpinner && IsActive(this.model.SftpState)), new Style(this.GetStatusColor(this.model.SftpState)));
         }
 
-        private string GetReconnectingText()
+        private static bool IsActive(ConnectionStatus status)
         {
-            if (this.currentAttempt == null)
-            {
-                return "Reconnecting...";
-            }
-
-            if (this.maxAttempts == null || this.maxAttempts <= 0)
-            {
-                // Unlimited attempts or not specified
-                return $"Reconnecting ({this.currentAttempt})";
-            }
-
-            // Show attempt count with max attempts
-            return $"Reconnecting ({this.currentAttempt} of {this.maxAttempts})";
+            return status == ConnectionStatus.Connecting || status == ConnectionStatus.Reconnecting;
         }
 
-        private Color GetStatusColor()
+        private Color GetStatusColor(ConnectionStatus status)
         {
-            return this.status switch
+            return status switch
             {
                 ConnectionStatus.NotConnected => Color.Grey,
                 ConnectionStatus.Connecting => Color.Yellow,
@@ -96,21 +95,20 @@ namespace AvConsoleToolkit.Ssh
             };
         }
 
-        private string GetStatusText()
+        private string GetStatusText(string type, string host, ConnectionStatus status, int attempt, int maxAttempts, bool spinner)
         {
-            var statusText = this.status switch
+            string statusText = status switch
             {
                 ConnectionStatus.NotConnected => "Not Connected",
-                ConnectionStatus.Connecting => "Connecting...",
+                ConnectionStatus.Connecting => $"Connecting...{(spinner ? $" {SpinnerFrames[this.spinnerIndex % SpinnerFrames.Length]}" : string.Empty)}",
                 ConnectionStatus.Connected => "Connected",
-                ConnectionStatus.LostConnection => "Lost Connection",
-                ConnectionStatus.Reconnecting => this.GetReconnectingText(),
-                ConnectionStatus.ConnectionFailed => "Connection Failed",
+                ConnectionStatus.LostConnection => "Lost Connection...Reconnecting",
+                ConnectionStatus.Reconnecting => $"Connection Failed...Reconnecting ({attempt}{(maxAttempts > 0 ? $" of {maxAttempts}" : string.Empty)}){(spinner ? $" {SpinnerFrames[this.spinnerIndex % SpinnerFrames.Length]}" : string.Empty)}",
+                ConnectionStatus.ConnectionFailed => $"Connection Failed{(maxAttempts > 0 ? $" ({attempt} of {maxAttempts})" : string.Empty)}",
                 ConnectionStatus.Disconnecting => "Disconnecting...",
                 _ => "Unknown"
             };
-
-            return $"{this.connectionType} ({this.hostAddress}): {statusText}";
+            return $"{type,-5} ({host}): {statusText}";
         }
     }
 }

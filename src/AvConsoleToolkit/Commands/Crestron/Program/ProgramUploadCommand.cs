@@ -632,7 +632,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         {
             // First, analyze files without SSH connection - only need SFTP for listing
             var connection = ConnectionFactory.Instance.GetSshConnection(settings.Host, 22, settings.Username, settings.Password);
-
+            await connection.ConnectFileTransferAsync(cancellationToken);
             var analysisResult = await AnsiConsole.Progress()
                 .AutoClear(false)
                 .Columns([
@@ -836,6 +836,8 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
                 var isClz = extension == ".clz";
                 var uploadAllFiles = settings.KillProgram || isClz && !settings.ChangedOnly;
                 AnsiConsole.MarkupLine($"[yellow]{changes.Count} file(s) {(uploadAllFiles ? "to upload" : "have changed")}.[/]");
+
+                await connection.ConnectShellAsync(cancellationToken);
 
                 if (settings.KillProgram)
                 {

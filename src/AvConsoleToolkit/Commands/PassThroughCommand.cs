@@ -391,27 +391,22 @@ namespace AvConsoleToolkit.Commands
         {
             try
             {
-                await AnsiConsole.Status()
-                    .StartAsync("Connecting to device...", async ctx =>
-                    {
-                        this.sshConnection = Ssh.ConnectionFactory.Instance.GetSshConnection(host, 22, username, password);
+                this.sshConnection = Ssh.ConnectionFactory.Instance.GetSshConnection(host, 22, username, password);
 
-                        // Set the maximum reconnection attempts from settings
-                        this.sshConnection.MaxReconnectionAttempts = Configuration.AppConfig.Settings.PassThrough.NumberOfReconnectionAttempts;
-                        
-                        // Subscribe to connection events for handling disconnection/reconnection
-                        this.sshConnection.ShellDisconnected += this.OnShellDisconnected;
-                        this.sshConnection.ShellReconnected += this.OnShellReconnected;
+                // Set the maximum reconnection attempts from settings
+                this.sshConnection.MaxReconnectionAttempts = Configuration.AppConfig.Settings.PassThrough.NumberOfReconnectionAttempts;
 
-                        // Explicitly establish the shell connection
-                        if (!await this.sshConnection.ConnectShellAsync(cancellationToken))
-                        {
-                            return;
-                        }
+                // Subscribe to connection events for handling disconnection/reconnection
+                this.sshConnection.ShellDisconnected += this.OnShellDisconnected;
+                this.sshConnection.ShellReconnected += this.OnShellReconnected;
 
-                        await this.OnConnectedAsync(cancellationToken);
-                        ctx.Status("Connected");
-                    });
+                // Explicitly establish the shell connection
+                if (!await this.sshConnection.ConnectShellAsync(cancellationToken))
+                {
+                    return false;
+                }
+
+                await this.OnConnectedAsync(cancellationToken);
 
                 return this.sshConnection?.IsConnected ?? false;
             }
