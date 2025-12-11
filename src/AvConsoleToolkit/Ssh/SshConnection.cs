@@ -39,7 +39,7 @@ namespace AvConsoleToolkit.Ssh
 
         private readonly string? privateKeyPath;
 
-        private readonly ConnectionStatusModel statusModel = new();
+        private readonly ConnectionStatusModel statusModel;
 
         private readonly string? username;
 
@@ -87,6 +87,10 @@ namespace AvConsoleToolkit.Ssh
             this.password = password ?? throw new ArgumentNullException(nameof(password));
             this.privateKeyPath = null;
             this.verbose = verbose;
+            this.statusModel = new ConnectionStatusModel
+            {
+                HostAddress = hostAddress,
+            };
         }
 
         /// <summary>
@@ -111,6 +115,10 @@ namespace AvConsoleToolkit.Ssh
             this.privateKeyPath = privateKeyPath ?? throw new ArgumentNullException(nameof(privateKeyPath));
             this.password = null;
             this.verbose = verbose;
+            this.statusModel = new ConnectionStatusModel
+            {
+                HostAddress = hostAddress,
+            };
         }
 
         public event EventHandler? FileTransferDisconnected;

@@ -17,29 +17,12 @@ using Spectre.Console.Rendering;
 
 namespace AvConsoleToolkit.Ssh
 {
-    public class ConnectionStatusModel
-    {
-        public string HostAddress { get; set; } = string.Empty;
-
-        public int SftpAttempt { get; set; } = 0;
-
-        public int SftpMaxAttempts { get; set; } = 0;
-
-        public ConnectionStatus SftpState { get; set; } = ConnectionStatus.NotConnected;
-
-        public int SshAttempt { get; set; } = 0;
-
-        public int SshMaxAttempts { get; set; } = 0;
-
-        public ConnectionStatus SshState { get; set; } = ConnectionStatus.NotConnected;
-    }
-
     /// <summary>
     /// Renders the status of both SSH and SFTP connections in a compact, live-updating format.
     /// </summary>
     public class ConnectionStatusRenderable : IRenderable
     {
-        private static readonly string[] SpinnerFrames = new[] { "|", "/", "-", "\\" };
+        private static readonly string[] SpinnerFrames = ["|", "/", "-", "\\"];
 
         private readonly ConnectionStatusModel model;
 
@@ -60,6 +43,7 @@ namespace AvConsoleToolkit.Ssh
             this.spinnerIndex = spinnerIndex;
         }
 
+        /// <inheritdoc/>
         public Measurement Measure(RenderOptions options, int maxWidth)
         {
             var sshText = this.GetStatusText("SSH", this.model.HostAddress, this.model.SshState, this.model.SshAttempt, this.model.SshMaxAttempts, this.showSpinner && IsActive(this.model.SshState));
@@ -68,6 +52,7 @@ namespace AvConsoleToolkit.Ssh
             return new Measurement(maxLen, maxLen);
         }
 
+        /// <inheritdoc/>
         public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
         {
             yield return new Segment(this.GetStatusText("SSH", this.model.HostAddress, this.model.SshState, this.model.SshAttempt, this.model.SshMaxAttempts, this.showSpinner && IsActive(this.model.SshState)), new Style(this.GetStatusColor(this.model.SshState)));
