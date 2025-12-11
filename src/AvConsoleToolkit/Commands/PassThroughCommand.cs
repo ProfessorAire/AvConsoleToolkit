@@ -165,7 +165,6 @@ namespace AvConsoleToolkit.Commands
                 // Enter interactive mode
                 await this.RunInteractiveSessionAsync(cancellationToken);
 
-                AnsiConsole.WriteLine("Exiting Pass Through");
                 return 0;
             }
             catch (Exception ex)
@@ -1189,53 +1188,60 @@ namespace AvConsoleToolkit.Commands
                                     switch (keyInfo.Key)
                                     {
                                         case ConsoleKey.Enter:
-                                            if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuSelectedIndex >=
-                                                0)
+                                            try
                                             {
-                                                // Get the selected command
-                                                var selectedCommand = this.historyMenuItems[this.historyMenuSelectedIndex].Command;
-
-                                                // Clear the history menu display immediately
-                                                this.HideHistoryMenu();
-                                                this.historyMenuItems = null;
-
-                                                // Clear currentLine BEFORE submitting (otherwise SubmitCommandAsync uses wrong length for clearing)
-                                                this.currentLine = string.Empty;
-
-                                                // Force update to hide the menu
-                                                ctx.UpdateTarget(this.RenderPrompt());
-
-                                                // Now submit the selected command directly
-                                                await this.SubmitCommandAsync(selectedCommand, sessionToken);
-                                                this.commandHistory?.ResetPosition();
-
-                                                // Check if we just queued a nested command for execution
-                                                if (this.isExecutingNestedCommand)
+                                                if (this.showingHistoryMenu && this.historyMenuItems != null && this.historyMenuSelectedIndex >= 0)
                                                 {
-                                                    // Exit Live context - nested command will execute after this returns
-                                                    return;
+                                                    // Get the selected command
+                                                    var selectedCommand = this.historyMenuItems[this.historyMenuSelectedIndex].Command;
+
+                                                    // Clear the history menu display immediately
+                                                    this.HideHistoryMenu();
+                                                    this.historyMenuItems = null;
+
+                                                    // Clear currentLine BEFORE submitting (otherwise SubmitCommandAsync uses wrong length for clearing)
+                                                    this.currentLine = string.Empty;
+
+                                                    // Force update to hide the menu
+                                                    ctx.UpdateTarget(this.RenderPrompt());
+
+                                                    // Now submit the selected command directly
+                                                    await this.SubmitCommandAsync(selectedCommand, sessionToken);
+                                                    this.commandHistory?.ResetPosition();
+
+                                                    // Check if we just queued a nested command for execution
+                                                    if (this.isExecutingNestedCommand)
+                                                    {
+                                                        // Exit Live context - nested command will execute after this returns
+                                                        return;
+                                                    }
+
+                                                    needsUpdate = false; // Already updated above
                                                 }
-
-                                                needsUpdate = false; // Already updated above
-                                            }
-                                            else if (!string.IsNullOrWhiteSpace(this.currentLine))
-                                            {
-                                                await this.SubmitCommandAsync(this.currentLine, sessionToken);
-                                                this.currentLine = string.Empty;
-                                                this.commandHistory?.ResetPosition();
-                                                this.historyMenuItems = null;
-
-                                                // Check if we just queued a nested command for execution
-                                                if (this.isExecutingNestedCommand)
+                                                else if (!string.IsNullOrWhiteSpace(this.currentLine))
                                                 {
-                                                    // Exit Live context - nested command will execute after this returns
-                                                    return;
+                                                    await this.SubmitCommandAsync(this.currentLine, sessionToken);
+                                                    this.currentLine = string.Empty;
+                                                    this.commandHistory?.ResetPosition();
+                                                    this.historyMenuItems = null;
+
+                                                    // Check if we just queued a nested command for execution
+                                                    if (this.isExecutingNestedCommand)
+                                                    {
+                                                        // Exit Live context - nested command will execute after this returns
+                                                        return;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    needsUpdate = false;
                                                 }
                                             }
-                                            else
+                                            finally
                                             {
-                                                needsUpdate = false;
+                                                this.cursorPosition = 0;
                                             }
+
                                             break;
 
                                         case ConsoleKey.Backspace:
@@ -1360,7 +1366,7 @@ namespace AvConsoleToolkit.Commands
                                             break;
                                     }
 
-                                    if (needsUpdate)
+                                    if (needsUpdate && !this.isDisconnected)
                                     {
                                         ctx.UpdateTarget(this.RenderPrompt());
                                     }
