@@ -40,11 +40,12 @@ namespace AvConsoleToolkit.Ssh
         bool IsConnected { get; }
 
         /// <summary>
-        /// Explicitly establishes the file transfer connection.
+        /// Establishes a connection for file transfer operations asynchronously.
         /// </summary>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        Task ConnectFileTransferAsync(CancellationToken cancellationToken = default);
+        /// <param name="cancellationToken">A cancellation token that can be used to cancel the connection attempt.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if the
+        /// connection is established successfully; otherwise, <see langword="false"/>.</returns>
+        Task<bool> ConnectFileTransferAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Creates a directory on the remote server.

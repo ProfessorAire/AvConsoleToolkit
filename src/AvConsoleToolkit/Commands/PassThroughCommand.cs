@@ -13,6 +13,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -58,8 +59,6 @@ namespace AvConsoleToolkit.Commands
         private int selectionStart = -1;
 
         private CancellationTokenSource? sessionCancellation;
-
-        private bool shouldExitLiveMode;
 
         private bool showCursor = true;
 
@@ -166,6 +165,7 @@ namespace AvConsoleToolkit.Commands
                 // Enter interactive mode
                 await this.RunInteractiveSessionAsync(cancellationToken);
 
+                AnsiConsole.WriteLine("Exiting Pass Through");
                 return 0;
             }
             catch (Exception ex)
@@ -398,19 +398,22 @@ namespace AvConsoleToolkit.Commands
 
                         // Set the maximum reconnection attempts from settings
                         this.sshConnection.MaxReconnectionAttempts = Configuration.AppConfig.Settings.PassThrough.NumberOfReconnectionAttempts;
-
-                        // Explicitly establish the shell connection
-                        await this.sshConnection.ConnectShellAsync(cancellationToken);
-
+                        
                         // Subscribe to connection events for handling disconnection/reconnection
                         this.sshConnection.ShellDisconnected += this.OnShellDisconnected;
                         this.sshConnection.ShellReconnected += this.OnShellReconnected;
+
+                        // Explicitly establish the shell connection
+                        if (!await this.sshConnection.ConnectShellAsync(cancellationToken))
+                        {
+                            return;
+                        }
 
                         await this.OnConnectedAsync(cancellationToken);
                         ctx.Status("Connected");
                     });
 
-                return true;
+                return this.sshConnection?.IsConnected ?? false;
             }
             catch (Exception ex)
             {
@@ -743,7 +746,10 @@ namespace AvConsoleToolkit.Commands
         private void OnShellDisconnected(object? sender, EventArgs e)
         {
             this.isDisconnected = true;
-            this.shouldExitLiveMode = true;
+            while (this.liveDisplay != null)
+            {
+                Task.Delay(100).Wait();
+            }
         }
 
         private async void OnShellReconnected(object? sender, EventArgs e)
@@ -754,15 +760,16 @@ namespace AvConsoleToolkit.Commands
                 if (this.sessionCancellation != null && !this.sessionCancellation.Token.IsCancellationRequested)
                 {
                     await this.OnConnectedAsync(this.sessionCancellation.Token);
+                    this.isDisconnected = false;
                 }
             }
             catch
             {
                 // Ignore errors during reconnection initialization
             }
-
-            this.isDisconnected = false;
         }
+
+        LiveDisplay? liveDisplay;
 
         private IRenderable RenderPrompt()
         {
@@ -770,7 +777,7 @@ namespace AvConsoleToolkit.Commands
             var components = new List<IRenderable>();
 
             // Don't render the prompt if disconnected
-            if (this.isDisconnected)
+            if (this.isDisconnected || (!this.sshConnection?.IsConnected ?? true))
             {
                 return new Markup(string.Empty);
             }
@@ -939,6 +946,7 @@ namespace AvConsoleToolkit.Commands
                         while (this.isDisconnected && !sessionToken.IsCancellationRequested)
                         {
                             await Task.Delay(100, sessionToken);
+                            continue;
                         }
 
                         // Pause reading during nested command execution
@@ -983,7 +991,7 @@ namespace AvConsoleToolkit.Commands
                 }
             }, sessionToken);
 
-            // Wait for initial prompt - increased time for devices that send headers
+            // Wait for initial prompt
             while (this.Prompt == null)
             {
                 await Task.Delay(100, sessionToken);
@@ -1045,13 +1053,14 @@ namespace AvConsoleToolkit.Commands
                 if (inLiveMode)
                 {
                     // Start Live display
-                    await AnsiConsole.Live(this.RenderPrompt())
-                        .AutoClear(false)
-                        .StartAsync(async ctx =>
+                    this.liveDisplay = AnsiConsole.Live(this.RenderPrompt())
+                        .AutoClear(true);
+
+                    await this.liveDisplay.StartAsync(async ctx =>
                         {
                             while (!sessionToken.IsCancellationRequested &&
                                    !this.isExecutingNestedCommand &&
-                                   !this.shouldExitLiveMode)
+                                   !this.isDisconnected)
                             {
                                 // Check for new output from device
                                 string newOutput;
@@ -1128,13 +1137,14 @@ namespace AvConsoleToolkit.Commands
                                     // Ignore all other input when disconnected
                                     if (this.isDisconnected)
                                     {
+                                        //ctx.UpdateTarget(this.RenderPrompt());
                                         continue;
                                     }
 
                                     // Handle Alt+X to delete selected history item
                                     if (keyInfo.Key == ConsoleKey.X && keyInfo.Modifiers == ConsoleModifiers.Alt)
                                     {
-                                        if (this.showingHistoryMenu && this.historyMenuItems != null && 
+                                        if (this.showingHistoryMenu && this.historyMenuItems != null &&
                                             this.historyMenuSelectedIndex >= 0 && this.historyMenuSelectedIndex <
                                             this.historyMenuItems.Count)
                                         {
@@ -1362,13 +1372,23 @@ namespace AvConsoleToolkit.Commands
                                 }
                                 else
                                 {
-                                    // Blink cursor every ~500ms (10 iterations * 50ms)
-                                    this.cursorBlinkCounter++;
-                                    if (this.cursorBlinkCounter >= 10)
+                                    try
                                     {
-                                        this.showCursor = !this.showCursor;
-                                        this.cursorBlinkCounter = 0;
-                                        ctx.UpdateTarget(this.RenderPrompt());
+                                        // Blink cursor every ~500ms (10 iterations * 50ms)
+                                        if (!this.isDisconnected)
+                                        {
+                                            this.cursorBlinkCounter++;
+                                            if (this.cursorBlinkCounter >= 10)
+                                            {
+                                                this.showCursor = !this.showCursor;
+                                                this.cursorBlinkCounter = 0;
+                                                ctx.UpdateTarget(this.RenderPrompt());
+                                            }
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        // Ignore failures, because this happens on re-connections.
                                     }
 
                                     await Task.Delay(50, sessionToken);
@@ -1376,10 +1396,11 @@ namespace AvConsoleToolkit.Commands
                             }
                         });
 
+                    this.liveDisplay = null;
+
                     // If we exited because of disconnection, wait for reconnection
-                    if (this.shouldExitLiveMode)
+                    if (this.isDisconnected)
                     {
-                        this.shouldExitLiveMode = false;
                         inLiveMode = false;
 
                         // Wait for reconnection

@@ -44,11 +44,12 @@ namespace AvConsoleToolkit.Ssh
         bool IsConnected { get; }
 
         /// <summary>
-        /// Explicitly establishes the shell connection.
+        /// Asynchronously establishes a shell connection to the remote host.
         /// </summary>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        Task ConnectShellAsync(CancellationToken cancellationToken = default);
+        /// <param name="cancellationToken">A cancellation token that can be used to cancel the connection attempt.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if the shell
+        /// connection is established successfully; otherwise, <see langword="false"/>.</returns>
+        Task<bool> ConnectShellAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Reads data from the shell stream.

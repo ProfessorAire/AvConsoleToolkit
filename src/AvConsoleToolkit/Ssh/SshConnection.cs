@@ -12,6 +12,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -20,6 +21,7 @@ using System.Threading.Tasks;
 using Renci.SshNet;
 using Renci.SshNet.Sftp;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace AvConsoleToolkit.Ssh
 {
@@ -40,6 +42,8 @@ namespace AvConsoleToolkit.Ssh
 
         private readonly string? username;
 
+        private readonly bool verbose;
+
         private bool disposed;
 
         private bool isReconnecting;
@@ -48,9 +52,17 @@ namespace AvConsoleToolkit.Ssh
 
         private SftpClient? sftpClient;
 
+        private bool sftpClientNeeded;
+
         private ShellStream? shellStream;
 
         private SshClient? sshClient;
+
+        private bool sshClientNeeded;
+
+        private bool wasSftpConnected;
+
+        private bool wasSshConnected;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SshConnection"/> class with password authentication.
@@ -59,13 +71,15 @@ namespace AvConsoleToolkit.Ssh
         /// <param name="port">The port to connect on.</param>
         /// <param name="username">The username for authentication.</param>
         /// <param name="password">The password for authentication.</param>
-        public SshConnection(string hostAddress, int port, string username, string password)
+        /// <param name="verbose">A value indicating whether the connection should write verbose messages.</param>
+        public SshConnection(string hostAddress, int port, string username, string password, bool verbose = false)
         {
             this.hostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
             this.port = port;
             this.username = username ?? throw new ArgumentNullException(nameof(username));
             this.password = password ?? throw new ArgumentNullException(nameof(password));
             this.privateKeyPath = null;
+            this.verbose = verbose;
         }
 
         /// <summary>
@@ -76,7 +90,8 @@ namespace AvConsoleToolkit.Ssh
         /// <param name="username">The username for authentication.</param>
         /// <param name="privateKeyPath">The path to the private key file.</param>
         /// <param name="usePrivateKey">Must be true to use this constructor for private key authentication.</param>
-        public SshConnection(string hostAddress, int port, string username, string privateKeyPath, bool usePrivateKey)
+        /// <param name="verbose">A value indicating whether the connection should write verbose messages.</param>
+        public SshConnection(string hostAddress, int port, string username, string privateKeyPath, bool usePrivateKey, bool verbose = false)
         {
             if (!usePrivateKey)
             {
@@ -88,6 +103,7 @@ namespace AvConsoleToolkit.Ssh
             this.username = username ?? throw new ArgumentNullException(nameof(username));
             this.privateKeyPath = privateKeyPath ?? throw new ArgumentNullException(nameof(privateKeyPath));
             this.password = null;
+            this.verbose = verbose;
         }
 
         public event EventHandler? FileTransferDisconnected;
@@ -128,14 +144,64 @@ namespace AvConsoleToolkit.Ssh
         /// </summary>
         public int MaxReconnectionAttempts { get; set; } = 0;
 
-        public async Task ConnectFileTransferAsync(CancellationToken cancellationToken = default)
+        public async Task<bool> ConnectFileTransferAsync(CancellationToken cancellationToken = default)
         {
-            await this.EnsureSftpClientAsync(cancellationToken);
+            try
+            {
+                await this.EnsureSftpClientAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.ConnectionFailed));
+                AnsiConsole.WriteLine();
+                if (this.verbose)
+                {
+                    AnsiConsole.WriteException(ex);
+                }
+
+                if (this.MaxReconnectionAttempts == -1 || this.MaxReconnectionAttempts > 0)
+                {
+                    this.StartReconnection();
+                    if (this.reconnectionTask != null)
+                    {
+                        await this.reconnectionTask;
+                    }
+
+                    return this.sftpClient?.IsConnected ?? false;
+                }
+            }
+
+            return false;
         }
 
-        public async Task ConnectShellAsync(CancellationToken cancellationToken = default)
+        public async Task<bool> ConnectShellAsync(CancellationToken cancellationToken = default)
         {
-            await this.EnsureShellStreamAsync(cancellationToken);
+            try
+            {
+                await this.EnsureShellStreamAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.ConnectionFailed));
+                AnsiConsole.WriteLine();
+                if (this.verbose)
+                {
+                    AnsiConsole.WriteException(ex);
+                }
+
+                if (this.MaxReconnectionAttempts == -1 || this.MaxReconnectionAttempts > 0)
+                {
+                    this.StartReconnection();
+                    if (this.reconnectionTask != null)
+                    {
+                        await this.reconnectionTask;
+                    }
+
+                    return this.sshClient?.IsConnected ?? false;
+                }
+            }
+
+            return false;
         }
 
         public async Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
@@ -170,6 +236,7 @@ namespace AvConsoleToolkit.Ssh
 
         public async Task<string> ReadAsync(CancellationToken cancellationToken = default)
         {
+            Debug.WriteLine("ReadAsync");
             var stream = await this.EnsureShellStreamAsync(cancellationToken);
             return await Task.Run(() => stream.Read(), cancellationToken);
         }
@@ -391,6 +458,8 @@ namespace AvConsoleToolkit.Ssh
                     AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, ConnectionStatus.Connected));
                     AnsiConsole.WriteLine();
                 }
+
+                this.wasSftpConnected = true;
             }
 
             return client;
@@ -448,6 +517,8 @@ namespace AvConsoleToolkit.Ssh
                     AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Connected));
                     AnsiConsole.WriteLine();
                 }
+
+                this.wasSshConnected = true;
             }
 
             return client;
@@ -456,7 +527,7 @@ namespace AvConsoleToolkit.Ssh
         private async Task<SftpClient> EnsureSftpClientAsync(CancellationToken cancellationToken)
         {
             this.ThrowIfDisposed();
-
+            this.sftpClientNeeded = true;
             var wasDisconnected = false;
 
             lock (this.lockObject)
@@ -474,7 +545,7 @@ namespace AvConsoleToolkit.Ssh
                     // (ErrorOccurred handler already wrote the status)
                     if (!this.isReconnecting)
                     {
-                        AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, ConnectionStatus.LostConnection));
+                        AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, this.wasSftpConnected ? ConnectionStatus.LostConnection : ConnectionStatus.ConnectionFailed));
                         AnsiConsole.WriteLine();
                     }
 
@@ -500,17 +571,17 @@ namespace AvConsoleToolkit.Ssh
         private async Task<ShellStream> EnsureShellStreamAsync(CancellationToken cancellationToken)
         {
             this.ThrowIfDisposed();
-
+            this.sshClientNeeded = true;
             var wasReconnecting = false;
 
             lock (this.lockObject)
             {
-                if (this.shellStream != null && this.shellStream.CanRead)
+                if (this.shellStream != null && this.shellStream.CanWrite)
                 {
                     return this.shellStream;
                 }
 
-                if (this.shellStream != null && !this.shellStream.CanRead)
+                if (this.shellStream != null && !this.shellStream.CanWrite)
                 {
                     // Only write disconnection status if not already reconnecting
                     if (!this.isReconnecting)
@@ -521,13 +592,13 @@ namespace AvConsoleToolkit.Ssh
 
                     this.CleanupShellStream();
                     wasReconnecting = true;
-
-                    // Fire disconnection event only if not already reconnecting
-                    if (!this.isReconnecting)
-                    {
-                        this.ShellDisconnected?.Invoke(this, EventArgs.Empty);
-                    }
                 }
+            }
+
+            // Fire disconnection event only if not already reconnecting
+            if (!this.isReconnecting && wasReconnecting)
+            {
+                this.ShellDisconnected?.Invoke(this, EventArgs.Empty);
             }
 
             var client = await this.EnsureSshClientAsync(cancellationToken);
@@ -568,6 +639,7 @@ namespace AvConsoleToolkit.Ssh
 
             if (wasReconnecting && !this.isReconnecting)
             {
+                Debug.WriteLine("Ensure Shell Stream");
                 this.ShellReconnected?.Invoke(this, EventArgs.Empty);
             }
 
@@ -595,16 +667,11 @@ namespace AvConsoleToolkit.Ssh
                     // (ErrorOccurred handler already wrote the status)
                     if (!this.isReconnecting)
                     {
-                        AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.LostConnection));
+                        AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, this.wasSshConnected ? ConnectionStatus.LostConnection : ConnectionStatus.ConnectionFailed));
                         AnsiConsole.WriteLine();
                     }
 
                     this.CleanupSshClient();
-
-                    if (!this.isReconnecting)
-                    {
-                        this.ShellDisconnected?.Invoke(this, EventArgs.Empty);
-                    }
                 }
             }
 
@@ -633,10 +700,13 @@ namespace AvConsoleToolkit.Ssh
 
                 // Unsubscribe from the event before cleanup
                 this.sftpClient.ErrorOccurred -= this.OnSftpClientError;
+            }
 
-                // Fire disconnection event
-                Task.Run(() => this.FileTransferDisconnected?.Invoke(this, EventArgs.Empty));
+            // Fire disconnection event
+            this.FileTransferDisconnected?.Invoke(this, EventArgs.Empty);
 
+            lock (this.lockObject)
+            {
                 // Start automatic reconnection
                 this.StartReconnection();
             }
@@ -652,19 +722,28 @@ namespace AvConsoleToolkit.Ssh
                 }
 
                 // Write disconnection status
-                AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.LostConnection));
-                AnsiConsole.WriteLine();
+                try
+                {
+                    AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.LostConnection));
+                    AnsiConsole.WriteLine();
+                }
+                catch
+                {
+                }
 
                 // Clean up the shell stream and clients
                 this.CleanupShellStream();
 
                 // Unsubscribe from the event before cleanup
                 this.sshClient.ErrorOccurred -= this.OnSshClientError;
+            }
 
-                // Fire disconnection event
-                Task.Run(() => this.ShellDisconnected?.Invoke(this, EventArgs.Empty));
+            // Fire disconnection event
+            this.ShellDisconnected?.Invoke(this, EventArgs.Empty);
 
-                // Start automatic reconnection
+            // Start automatic reconnection
+            lock (this.lockObject)
+            {
                 this.StartReconnection();
             }
         }
@@ -672,6 +751,7 @@ namespace AvConsoleToolkit.Ssh
         private void StartReconnection()
         {
             // Only start one reconnection task at a time
+
             if (this.isReconnecting || this.disposed)
             {
                 return;
@@ -691,7 +771,7 @@ namespace AvConsoleToolkit.Ssh
                 var attemptCount = 0;
                 int maxAttempts = this.MaxReconnectionAttempts;
                 bool isInfiniteAttempts = maxAttempts < 0;
-                int[] backoffDelays = { 1000, 1000, 2000, 3000, 5000, 5000, 10000 };
+                int[] backoffDelays = [1000, 1000, 2000, 3000, 5000, 5000, 10000];
 
                 while ((isInfiniteAttempts || attemptCount < maxAttempts) && !this.disposed)
                 {
@@ -700,15 +780,19 @@ namespace AvConsoleToolkit.Ssh
                         attemptCount++;
 
                         // Write reconnecting status with attempt information
-                        if (isInfiniteAttempts)
+                        if (this.sshClientNeeded)
                         {
-                            AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Reconnecting, attemptCount, -1));
+                            var status = this.wasSshConnected ? ConnectionStatus.Reconnecting : ConnectionStatus.Connecting;
+                            AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, status, attemptCount, isInfiniteAttempts ? -1 : maxAttempts));
+                            AnsiConsole.WriteLine();
                         }
-                        else
+
+                        if (this.sftpClientNeeded)
                         {
-                            AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.Reconnecting, attemptCount, maxAttempts));
+                            var status = this.wasSftpConnected ? ConnectionStatus.Reconnecting : ConnectionStatus.Connecting;
+                            AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, status, attemptCount, isInfiniteAttempts ? -1 : maxAttempts));
+                            AnsiConsole.WriteLine();
                         }
-                        AnsiConsole.WriteLine();
 
                         // Wait before attempting reconnection (exponential backoff)
                         // Skip delay on first attempt for immediate reconnection
@@ -719,19 +803,10 @@ namespace AvConsoleToolkit.Ssh
                         }
 
                         // Attempt to reconnect
-                        var sshClientNeeded = false;
-                        var sftpClientNeeded = false;
                         var connectionSucceeded = false;
 
-                        lock (this.lockObject)
-                        {
-                            // Determine what needs to be reconnected
-                            sshClientNeeded = this.sshClient != null;
-                            sftpClientNeeded = this.sftpClient != null;
-                        }
-
                         // Reconnect SSH client if it was previously connected
-                        if (sshClientNeeded)
+                        if (this.sshClientNeeded)
                         {
                             try
                             {
@@ -748,7 +823,7 @@ namespace AvConsoleToolkit.Ssh
                         }
 
                         // Reconnect SFTP client if it was previously connected
-                        if (sftpClientNeeded)
+                        if (this.sftpClientNeeded)
                         {
                             try
                             {
@@ -772,11 +847,12 @@ namespace AvConsoleToolkit.Ssh
                             AnsiConsole.WriteLine();
 
                             // Fire reconnected events
-                            if (sshClientNeeded)
+                            if (this.sshClientNeeded)
                             {
                                 this.ShellReconnected?.Invoke(this, EventArgs.Empty);
                             }
-                            if (sftpClientNeeded)
+
+                            if (this.sftpClientNeeded)
                             {
                                 this.FileTransferReconnected?.Invoke(this, EventArgs.Empty);
                             }
@@ -791,8 +867,17 @@ namespace AvConsoleToolkit.Ssh
                     catch
                     {
                         // Write connection failed status
-                        AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.ConnectionFailed));
-                        AnsiConsole.WriteLine();
+                        if (this.sshClientNeeded)
+                        {
+                            AnsiConsole.Write(new ConnectionStatusRenderable("SSH", this.hostAddress, ConnectionStatus.ConnectionFailed));
+                            AnsiConsole.WriteLine();
+                        }
+
+                        if (this.sftpClientNeeded)
+                        {
+                            AnsiConsole.Write(new ConnectionStatusRenderable("SFTP", this.hostAddress, ConnectionStatus.ConnectionFailed));
+                            AnsiConsole.WriteLine();
+                        }
                     }
                 }
 
@@ -802,7 +887,7 @@ namespace AvConsoleToolkit.Ssh
                     this.isReconnecting = false;
                 }
 
-                AnsiConsole.MarkupLine($"[red]Failed to reconnect to {this.hostAddress} after {maxAttempts} attempts[/]");
+                AnsiConsole.MarkupLine($"[red]Failed to connect to {this.hostAddress} after {maxAttempts} attempts[/]");
             });
         }
 
