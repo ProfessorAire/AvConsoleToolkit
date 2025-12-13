@@ -59,7 +59,8 @@ namespace AvConsoleToolkit.Commands
         public int Count => this.commands.Count;
 
         /// <summary>
-        /// Adds a command to the history, avoiding sequential duplicates.
+        /// Adds a command to the history, ensuring each unique command appears only once.
+        /// If the command already exists in history, it is moved to the most recent position.
         /// </summary>
         /// <param name="command">The command to add.</param>
         public void AddCommand(string command)
@@ -69,13 +70,17 @@ namespace AvConsoleToolkit.Commands
                 return;
             }
 
-            // Don't add if it's the same as the last command (sequential deduplication)
-            if (this.commands.Count > 0 && this.commands[^1].Equals(command, StringComparison.Ordinal))
+            // Remove any existing occurrence of this command to ensure uniqueness
+            // Search backwards for efficiency (most likely to find recent duplicates first)
+            for (int i = this.commands.Count - 1; i >= 0; i--)
             {
-                this.currentPosition = this.commands.Count;
-                return;
+                if (this.commands[i].Equals(command, StringComparison.Ordinal))
+                {
+                    this.commands.RemoveAt(i);
+                }
             }
 
+            // Add the command at the end (most recent position)
             this.commands.Add(command);
 
             // Trim to max size if exceeded
