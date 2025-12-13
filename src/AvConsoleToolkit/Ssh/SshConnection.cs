@@ -18,6 +18,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using AvConsoleToolkit.Utilities;
 using Renci.SshNet;
 using Renci.SshNet.Sftp;
 using Spectre.Console;
@@ -237,6 +238,29 @@ namespace AvConsoleToolkit.Ssh
             await Task.Run(() => client.CreateDirectory(path), cancellationToken);
         }
 
+        public async Task<int> DeleteFilesByGlobAsync(string pattern, CancellationToken cancellationToken = default)
+        {
+            var client = await this.EnsureSftpClientAsync(cancellationToken);
+
+            // Get matching files
+            var matchingFiles = await this.ListFilesByGlobAsync(pattern, cancellationToken);
+            var filesArray = matchingFiles.ToArray();
+
+            if (filesArray.Length == 0)
+            {
+                return 0;
+            }
+
+            // Delete each file
+            foreach (var file in filesArray)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Run(() => client.DeleteFile(file.FullName), cancellationToken);
+            }
+
+            return filesArray.Length;
+        }
+
         public void Dispose()
         {
             this.Dispose(true);
@@ -247,6 +271,64 @@ namespace AvConsoleToolkit.Ssh
         {
             var client = await this.EnsureSftpClientAsync(cancellationToken);
             await Task.Run(() => client.DownloadFile(remotePath, destination), cancellationToken);
+        }
+
+        public async Task<int> DownloadFilesByGlobAsync(string pattern, string localDirectory, bool preserveStructure = true, CancellationToken cancellationToken = default)
+        {
+            var client = await this.EnsureSftpClientAsync(cancellationToken);
+
+            // Ensure local directory exists
+            Directory.CreateDirectory(localDirectory);
+
+            // Get matching files
+            var matchingFiles = await this.ListFilesByGlobAsync(pattern, cancellationToken);
+            var filesArray = matchingFiles.ToArray();
+
+            if (filesArray.Length == 0)
+            {
+                return 0;
+            }
+
+            // Determine base path for structure preservation
+            var baseRemotePath = this.GetBasePathFromPattern(pattern);
+
+            // Download each file
+            foreach (var file in filesArray)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string localPath;
+                if (preserveStructure && !string.IsNullOrEmpty(baseRemotePath))
+                {
+                    // Preserve directory structure
+                    var relativePath = file.FullName.StartsWith(baseRemotePath)
+                        ? file.FullName[baseRemotePath.Length..].TrimStart('/')
+                        : Path.GetFileName(file.Name);
+
+                    localPath = Path.Combine(localDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+                    // Ensure subdirectory exists
+                    var localDir = Path.GetDirectoryName(localPath);
+                    if (!string.IsNullOrEmpty(localDir))
+                    {
+                        Directory.CreateDirectory(localDir);
+                    }
+                }
+                else
+                {
+                    // Flatten structure - just use filename
+                    localPath = Path.Combine(localDirectory, file.Name);
+                }
+
+                // Download the file
+                using var fileStream = File.Create(localPath);
+                await Task.Run(() => client.DownloadFile(file.FullName, fileStream), cancellationToken);
+
+                // Preserve timestamp
+                File.SetLastWriteTimeUtc(localPath, file.LastWriteTimeUtc);
+            }
+
+            return filesArray.Length;
         }
 
         public async Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default)
@@ -261,6 +343,58 @@ namespace AvConsoleToolkit.Ssh
             return await Task.Run(() => client.ListDirectory(path).ToList(), cancellationToken);
         }
 
+        public async Task<IEnumerable<ISftpFile>> ListFilesByGlobAsync(string pattern, CancellationToken cancellationToken = default)
+        {
+            var client = await this.EnsureSftpClientAsync(cancellationToken);
+
+            // Normalize pattern
+            pattern = pattern.Replace('\\', '/');
+
+            // Extract the base directory from the pattern
+            var lastSlash = pattern.LastIndexOf('/');
+            string baseDirectory;
+            string filePattern;
+
+            if (lastSlash >= 0)
+            {
+                baseDirectory = lastSlash > 0 ? pattern[..lastSlash] : ".";
+                filePattern = pattern[(lastSlash + 1)..];
+            }
+            else
+            {
+                baseDirectory = ".";
+                filePattern = pattern;
+            }
+
+            // Check if pattern contains ** (recursive wildcard)
+            var isRecursive = pattern.Contains("**");
+
+            // Get all files from base directory (recursively if needed)
+            var allFiles = new List<ISftpFile>();
+
+            if (isRecursive)
+            {
+                // For recursive patterns, start from the first directory before **
+                var doubleStarIndex = pattern.IndexOf("**", StringComparison.Ordinal);
+                var recursiveBase = doubleStarIndex > 0 ? pattern[..pattern.LastIndexOf('/', doubleStarIndex - 1)] : ".";
+                if (string.IsNullOrEmpty(recursiveBase))
+                {
+                    recursiveBase = ".";
+                }
+
+                await this.ListFilesRecursiveAsync(client, recursiveBase, allFiles, cancellationToken);
+            }
+            else
+            {
+                // Non-recursive: just list the base directory
+                var items = await Task.Run(() => client.ListDirectory(baseDirectory), cancellationToken);
+                allFiles.AddRange(items.Where(f => !f.IsDirectory && f.Name != "." && f.Name != ".."));
+            }
+
+            // Filter files by glob pattern
+            return allFiles.Where(file => GlobMatcher.IsMatch(pattern, file.FullName)).ToList();
+        }
+
         public async Task<string> ReadAsync(CancellationToken cancellationToken = default)
         {
             Debug.WriteLine("ReadAsync");
@@ -272,77 +406,6 @@ namespace AvConsoleToolkit.Ssh
         {
             var client = await this.EnsureSftpClientAsync(cancellationToken);
             await Task.Run(() => client.SetLastWriteTimeUtc(remotePath, lastWriteTime), cancellationToken);
-        }
-
-        /// <summary>
-        /// Starts a Spectre.Console live status display for this connection.
-        /// </summary>
-        /// <param name="cancellationToken">A cancellation token to stop the live display.</param>
-        private void StartLiveStatusAsync(CancellationToken cancellationToken = default)
-        {
-            if (this.liveStatusTask != null && !this.liveStatusTask.IsCompleted)
-            {
-                return;
-            }
-
-            this.liveStatusCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var token = this.liveStatusCts.Token;
-
-            this.liveStatusTask = Task.Run(async () =>
-            {
-                var renderable = new ConnectionStatusRenderable(this.statusModel, true, this.spinnerIndex);
-                var live = AnsiConsole.Live(renderable)
-                    .AutoClear(false)
-                    .Overflow(VerticalOverflow.Crop)
-                    .Cropping(VerticalOverflowCropping.Top);
-
-                try
-                {
-                    await live.StartAsync(async ctx =>
-                    {
-                        try
-                        {
-                            while (!token.IsCancellationRequested)
-                            {
-                                this.spinnerIndex++;
-                                ctx.UpdateTarget(new ConnectionStatusRenderable(this.statusModel, true, this.spinnerIndex));
-                                await Task.Delay(120, token);
-                            }
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            ctx.UpdateTarget(new ConnectionStatusRenderable(this.statusModel, false, this.spinnerIndex));
-                        }
-                    });
-                }
-                catch (OperationCanceledException)
-                {
-                }
-            }, token);
-        }
-
-        /// <summary>
-        /// Stops the live status display if running.
-        /// </summary>
-        private void StopLiveStatus()
-        {
-            if (this.liveStatusCts != null)
-            {
-                this.liveStatusCts.Cancel();
-                this.liveStatusCts.Dispose();
-                this.liveStatusCts = null;
-            }
-            if (this.liveStatusTask != null)
-            {
-                try
-                {
-                    this.liveStatusTask.Wait(500);
-                }
-                catch
-                {
-                }
-                this.liveStatusTask = null;
-            }
         }
 
         public async Task UploadFileAsync(Stream source, string remotePath, bool canOverride, Action<ulong>? uploadCallback = null, CancellationToken cancellationToken = default)
@@ -737,6 +800,62 @@ namespace AvConsoleToolkit.Ssh
             return client;
         }
 
+        /// <summary>
+        /// Extracts the base path from a glob pattern (the directory part before any wildcards).
+        /// </summary>
+        private string GetBasePathFromPattern(string pattern)
+        {
+            pattern = pattern.Replace('\\', '/');
+
+            // Find the first wildcard character
+            var wildcardIndex = pattern.IndexOfAny(['*', '?', '[']);
+
+            if (wildcardIndex == -1)
+            {
+                // No wildcards - return the directory portion
+                var lastSlash = pattern.LastIndexOf('/');
+                return lastSlash >= 0 ? pattern[..lastSlash] : string.Empty;
+            }
+
+            // Find the last / before the first wildcard
+            var lastSlashBeforeWildcard = pattern.LastIndexOf('/', wildcardIndex);
+            return lastSlashBeforeWildcard >= 0 ? pattern[..lastSlashBeforeWildcard] : string.Empty;
+        }
+
+        /// <summary>
+        /// Recursively lists all files under a directory.
+        /// </summary>
+        private async Task ListFilesRecursiveAsync(SftpClient client, string path, List<ISftpFile> files, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                var items = await Task.Run(() => client.ListDirectory(path), cancellationToken);
+
+                foreach (var item in items)
+                {
+                    if (item.Name == "." || item.Name == "..")
+                    {
+                        continue;
+                    }
+
+                    if (item.IsDirectory)
+                    {
+                        await this.ListFilesRecursiveAsync(client, item.FullName, files, cancellationToken);
+                    }
+                    else
+                    {
+                        files.Add(item);
+                    }
+                }
+            }
+            catch
+            {
+                // Skip directories we can't access
+            }
+        }
+
         private void OnSftpClientError(object? sender, Renci.SshNet.Common.ExceptionEventArgs e)
         {
             lock (this.lockObject)
@@ -785,6 +904,53 @@ namespace AvConsoleToolkit.Ssh
             {
                 this.StartReconnection();
             }
+        }
+
+        /// <summary>
+        /// Starts a Spectre.Console live status display for this connection.
+        /// </summary>
+        /// <param name="cancellationToken">A cancellation token to stop the live display.</param>
+        private void StartLiveStatusAsync(CancellationToken cancellationToken = default)
+        {
+            if (this.liveStatusTask != null && !this.liveStatusTask.IsCompleted)
+            {
+                return;
+            }
+
+            this.liveStatusCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var token = this.liveStatusCts.Token;
+
+            this.liveStatusTask = Task.Run(async () =>
+            {
+                var renderable = new ConnectionStatusRenderable(this.statusModel, true, this.spinnerIndex);
+                var live = AnsiConsole.Live(renderable)
+                    .AutoClear(false)
+                    .Overflow(VerticalOverflow.Crop)
+                    .Cropping(VerticalOverflowCropping.Top);
+
+                try
+                {
+                    await live.StartAsync(async ctx =>
+            {
+                try
+                {
+                    while (!token.IsCancellationRequested)
+                    {
+                        this.spinnerIndex++;
+                        ctx.UpdateTarget(new ConnectionStatusRenderable(this.statusModel, true, this.spinnerIndex));
+                        await Task.Delay(120, token);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    ctx.UpdateTarget(new ConnectionStatusRenderable(this.statusModel, false, this.spinnerIndex));
+                }
+            });
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            }, token);
         }
 
         private void StartReconnection()
@@ -923,6 +1089,30 @@ namespace AvConsoleToolkit.Ssh
 
                 AnsiConsole.MarkupLine($"[red]Failed to connect to {this.hostAddress} after {maxAttempts} attempts[/]");
             });
+        }
+
+        /// <summary>
+        /// Stops the live status display if running.
+        /// </summary>
+        private void StopLiveStatus()
+        {
+            if (this.liveStatusCts != null)
+            {
+                this.liveStatusCts.Cancel();
+                this.liveStatusCts.Dispose();
+                this.liveStatusCts = null;
+            }
+            if (this.liveStatusTask != null)
+            {
+                try
+                {
+                    this.liveStatusTask.Wait(500);
+                }
+                catch
+                {
+                }
+                this.liveStatusTask = null;
+            }
         }
 
         private void ThrowIfDisposed()

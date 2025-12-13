@@ -23,6 +23,7 @@ using System.Threading.Tasks;
 using System.Xml;
 using AvConsoleToolkit.Crestron;
 using AvConsoleToolkit.Ssh;
+using AvConsoleToolkit.Utilities;
 using Renci.SshNet.Sftp;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -64,14 +65,20 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         {
             try
             {
-                // Validate inputs
-                if (!File.Exists(settings.ProgramFile))
+                // Resolve file pattern to actual file(s)
+                var filesToUpload = FileOperations.ResolveFiles(settings.ProgramFile, allowMultiple: false, autoSelectSingle: true);
+
+                if (filesToUpload.Count == 0)
                 {
-                    AnsiConsole.MarkupLine("[red]Error:[/] Program file not found.");
-                    return 1;
+                    return 1; // Error already displayed by ResolveFiles
                 }
 
-                var extension = Path.GetExtension(settings.ProgramFile).ToLowerInvariant();
+                // Get the selected file
+                var programFile = filesToUpload[0];
+                settings.ProgramFile = programFile; // Update settings with resolved path
+
+                // Validate file extension
+                var extension = Path.GetExtension(programFile).ToLowerInvariant();
                 if (!SupportedExtensions.Contains(extension))
                 {
                     AnsiConsole.MarkupLine($"[red]Error: Unsupported file extension. Supported: {string.Join(", ", SupportedExtensions)}[/]");
