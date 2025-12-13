@@ -14,10 +14,10 @@
     <Copyright>Christopher McNeely</Copyright>
     <Company>Christopher McNeely</Company>
     <GenerateAssemblyDescriptionAttribute>true</GenerateAssemblyDescriptionAttribute>
-    <InternalsVisibleTo>AvConsoleToolkit.Tests</InternalsVisibleTo>
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="AvConsoleToolkit.Tests" />
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="AvConsoleToolkit.LICENSE" />
   </ItemGroup>
 
