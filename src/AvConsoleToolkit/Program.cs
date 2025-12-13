@@ -1,7 +1,7 @@
 // <copyright file="Program.cs">
 // The MIT License
-// Copyright � Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the �Software�),
+// Copyright © Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -74,9 +74,10 @@ namespace AvConsoleToolkit
                             .WithAlias("u")
                             .WithAlias("load")
                             .WithAlias("l")
-                            .WithDescription("Upload a program to Crestron hardware")
+                            .WithDescription("Upload a program to Crestron hardware (supports glob patterns)")
                             .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "--address", "192.168.1.100", "-u", "admin", "-p", "password"])
-                            .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "-a", "192.168.1.100", "-u", "admin", "-p", "password", "-c"]);
+                            .WithExample(["crestron", "program", "upload", "*.lpz", "-s", "1", "-a", "192.168.1.100"])
+                            .WithExample(["crestron", "program", "upload", "programs/test_*.cpz", "-s", "2", "-a", "192.168.1.100", "-c"]);
                     })
                     .WithAlias("p");
                 })
@@ -108,13 +109,13 @@ namespace AvConsoleToolkit
                 config.AddBranch("addressbook", ab =>
                 {
                     ab.SetDescription("Utilities for looking up Crestron device information from address books.");
-                    
+
                     ab.AddCommand<Commands.AddressBook.AddressBookListCommand>("list")
                         .WithAlias("ls")
                         .WithDescription("List all entries from configured address books")
                         .WithExample(["addressbook", "list"])
                         .WithExample(["ab", "ls", "--detailed"]);
-                    
+
                     ab.AddCommand<Commands.AddressBook.AddressBookLookupCommand>("lookup")
                         .WithAlias("l")
                         .WithDescription("Look up a specific address book entry by name or IP address")
