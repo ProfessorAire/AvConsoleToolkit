@@ -256,60 +256,69 @@ namespace AvConsoleToolkit.Commands.Crestron.FileEdit
                 EnableRaisingEvents = true
             };
 
-            var uploadCompletionSource = new TaskCompletionSource<bool>();
-
-            async void OnFileChanged(object sender, FileSystemEventArgs e)
+            void OnFileChanged(object sender, FileSystemEventArgs e)
             {
-                if (uploading)
+                // Run async work in a fire-and-forget task with proper exception handling
+                _ = Task.Run(async () =>
                 {
-                    return;
-                }
-
-                // Debounce - wait a moment to ensure the file is fully written
-                await Task.Delay(500, cancellationToken);
-
-                var newWriteTime = System.IO.File.GetLastWriteTimeUtc(localPath);
-                if (newWriteTime <= lastWriteTime)
-                {
-                    return;
-                }
-
-                lastWriteTime = newWriteTime;
-                uploading = true;
-
-                try
-                {
-                    await AnsiConsole.Progress()
-                        .AutoClear(true)
-                        .Columns([
-                            new TaskDescriptionColumn(),
-                            new ProgressBarColumn(),
-                            new PercentageColumn()
-                        ])
-                        .StartAsync(async ctx =>
+                    try
+                    {
+                        if (uploading)
                         {
-                            var uploadTask = ctx.AddTask($"[green]Uploading {displayName}[/]");
-                            await this.UploadFileAsync(
-                                connection,
-                                settings,
-                                localPath,
-                                cancellationToken,
-                                progress => uploadTask.Value = progress);
+                            return;
+                        }
 
-                            uploadTask.Value = 100;
-                            uploadTask.StopTask();
-                        });
+                        // Debounce - wait a moment to ensure the file is fully written
+                        await Task.Delay(500, cancellationToken);
 
-                    AnsiConsole.MarkupLine($"[green]'{displayName}' uploaded successfully at {DateTime.Now:HH:mm:ss}[/]");
-                }
-                catch (Exception ex)
-                {
-                    AnsiConsole.MarkupLine($"[red]Upload failed: {ex.Message}[/]");
-                }
-                finally
-                {
-                    uploading = false;
-                }
+                        var newWriteTime = System.IO.File.GetLastWriteTimeUtc(localPath);
+                        if (newWriteTime <= lastWriteTime)
+                        {
+                            return;
+                        }
+
+                        lastWriteTime = newWriteTime;
+                        uploading = true;
+
+                        try
+                        {
+                            await AnsiConsole.Progress()
+                                .AutoClear(true)
+                                .Columns([
+                                    new TaskDescriptionColumn(),
+                                    new ProgressBarColumn(),
+                                    new PercentageColumn()
+                                ])
+                                .StartAsync(async ctx =>
+                                {
+                                    var uploadTask = ctx.AddTask($"[green]Uploading {displayName}[/]");
+                                    await this.UploadFileAsync(
+                                        connection,
+                                        settings,
+                                        localPath,
+                                        cancellationToken,
+                                        progress => uploadTask.Value = progress);
+
+                                    uploadTask.Value = 100;
+                                    uploadTask.StopTask();
+                                });
+
+                            AnsiConsole.MarkupLine($"[green]'{displayName}' uploaded successfully at {DateTime.Now:HH:mm:ss}[/]");
+                        }
+                        finally
+                        {
+                            uploading = false;
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Expected when cancellation is requested
+                    }
+                    catch (Exception ex)
+                    {
+                        AnsiConsole.MarkupLine($"[red]Upload failed: {ex.Message}[/]");
+                    }
+                }, cancellationToken);
             }
 
             watcher.Changed += OnFileChanged;
