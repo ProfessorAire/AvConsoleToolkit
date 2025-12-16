@@ -1104,7 +1104,8 @@ namespace AvConsoleToolkit.Commands
                                     // Write the new output
                                     if (!string.IsNullOrEmpty(outputToWrite))
                                     {
-                                        AnsiConsole.Write(outputToWrite);
+                                        //ctx.UpdateTarget(new Text(string.Empty));
+                                        AnsiConsole.Write(new Text(outputToWrite));
                                     }
 
                                     // Update the live display
