@@ -1,4 +1,4 @@
-﻿// <copyright file="ISettings.cs">
+// <copyright file="IEditorSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,29 +10,32 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 
 namespace AvConsoleToolkit.Configuration
 {
     /// <summary>
-    /// Defines the application's settings.
+    /// Defines settings for file editors used in remote file editing.
     /// </summary>
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface ISettings
+    public interface IEditorSettings
     {
         /// <summary>
-        /// Gets the current connection settings used to configure connection related functionality.
+        /// Gets or sets the editor mappings by file extension.
+        /// Format: ".ext=editor_path;.ext2=editor_path2"
+        /// Example: ".txt=notepad.exe;.cs=code;.xml=notepad++"
+        /// If no mapping is found for a file type, the built-in editor will be used.
         /// </summary>
-        IConnectionSettings Connection { get; }
+        [DefaultValue("")]
+        string EditorMappings { get; set; }
 
         /// <summary>
-        /// Gets the current editor settings used to configure file editing functionality.
+        /// Gets or sets the default external editor to use when no specific mapping is found.
+        /// If empty, the built-in nano-like editor will be used.
+        /// Example: "code", "notepad", "vim"
         /// </summary>
-        IEditorSettings Editor { get; }
-
-        /// <summary>
-        /// Gets the current connection settings used to configure Pass Through specific functionality.
-        /// </summary>
-        IPassThroughSettings PassThrough { get; }
+        [DefaultValue("")]
+        string DefaultEditor { get; set; }
     }
 }
