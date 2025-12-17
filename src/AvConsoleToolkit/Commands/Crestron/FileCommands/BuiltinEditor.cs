@@ -353,9 +353,26 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                 headerText += " [Modified]";
             }
 
+            // Ensure the header always renders as exactly one line
+            if (headerText.Length >= windowWidth)
+            {
+                // Truncate header if it's too long
+                headerText = headerText.Substring(0, Math.Max(0, windowWidth - 3)) + "...";
+            }
+
             var paddingLeft = Math.Max(0, (windowWidth - headerText.Length) / 2);
             var paddingRight = Math.Max(0, windowWidth - paddingLeft - headerText.Length);
             var header = new string(' ', paddingLeft) + headerText + new string(' ', paddingRight);
+
+            // Ensure header is exactly windowWidth characters
+            if (header.Length > windowWidth)
+            {
+                header = header.Substring(0, windowWidth);
+            }
+            else if (header.Length < windowWidth)
+            {
+                header = header.PadRight(windowWidth);
+            }
 
             AnsiConsole.Markup($"[{this.headerFgColor.ToMarkup()} on {this.headerBgColor.ToMarkup()}]{header.EscapeMarkup()}[/]");
 
@@ -1235,31 +1252,72 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
             AnsiConsole.AlternateScreen(() =>
             {
                 var helpLines = this.keyBindings.GetHelpText();
-                var windowHeight = System.Console.WindowHeight;
-                var windowWidth = System.Console.WindowWidth;
+                var scrollOffset = 0;
+                var needsRender = true;
 
-                System.Console.CursorVisible = false;
-
-                // Header
-                System.Console.SetCursorPosition(0, 0);
-                var header = "Editor Help";
-                var paddingLeft = Math.Max(0, (windowWidth - header.Length) / 2);
-                AnsiConsole.Markup($"[white on blue]{new string(' ', paddingLeft)}{header}{new string(' ', windowWidth - paddingLeft - header.Length)}[/]");
-
-                // Content
-                for (int i = 0; i < Math.Min(helpLines.Length, windowHeight - 3); i++)
-                {
-                    System.Console.SetCursorPosition(0, i + 1);
-                    System.Console.Write(helpLines[i].PadRight(windowWidth));
-                }
-
-                // Footer
-                System.Console.SetCursorPosition(0, windowHeight - 1);
-                AnsiConsole.Markup("[cyan on black] Press Ctrl+Q to return to editor [/]".PadRight(windowWidth));
-
-                // Wait for exit
                 while (true)
                 {
+                    if (needsRender)
+                    {
+                        var windowHeight = System.Console.WindowHeight;
+                        var windowWidth = System.Console.WindowWidth;
+                        var contentHeight = windowHeight - 2; // Header + Footer
+
+                        System.Console.CursorVisible = false;
+
+                        // Header
+                        System.Console.SetCursorPosition(0, 0);
+                        var header = "Editor Help";
+                        if (header.Length >= windowWidth)
+                        {
+                            header = header.Substring(0, windowWidth);
+                        }
+
+                        var paddingLeft = Math.Max(0, (windowWidth - header.Length) / 2);
+                        var paddingRight = Math.Max(0, windowWidth - paddingLeft - header.Length);
+                        var headerLine = new string(' ', paddingLeft) + header + new string(' ', paddingRight);
+                        if (headerLine.Length > windowWidth)
+                        {
+                            headerLine = headerLine.Substring(0, windowWidth);
+                        }
+
+                        AnsiConsole.Markup($"[white on blue]{headerLine.EscapeMarkup()}[/]");
+
+                        // Content with scrolling
+                        for (int i = 0; i < contentHeight; i++)
+                        {
+                            System.Console.SetCursorPosition(0, i + 1);
+                            var lineIndex = scrollOffset + i;
+                            if (lineIndex < helpLines.Length)
+                            {
+                                var line = helpLines[lineIndex];
+                                if (line.Length > windowWidth)
+                                {
+                                    line = line.Substring(0, windowWidth);
+                                }
+
+                                System.Console.Write(line.PadRight(windowWidth));
+                            }
+                            else
+                            {
+                                System.Console.Write(new string(' ', windowWidth));
+                            }
+                        }
+
+                        // Footer - always at the last line
+                        System.Console.SetCursorPosition(0, windowHeight - 1);
+                        var footerText = helpLines.Length > contentHeight
+                            ? $" ^Q Return | ↑↓ Scroll ({scrollOffset + 1}-{Math.Min(scrollOffset + contentHeight, helpLines.Length)}/{helpLines.Length})"
+                            : " Press Ctrl+Q to return to editor";
+                        if (footerText.Length > windowWidth)
+                        {
+                            footerText = footerText.Substring(0, windowWidth);
+                        }
+
+                        AnsiConsole.Markup($"[cyan on black]{footerText.PadRight(windowWidth).EscapeMarkup()}[/]");
+                        needsRender = false;
+                    }
+
                     if (System.Console.KeyAvailable)
                     {
                         var key = System.Console.ReadKey(true);
@@ -1267,9 +1325,24 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                         {
                             break;
                         }
+                        else if (key.Key == ConsoleKey.UpArrow || key.Key == ConsoleKey.PageUp)
+                        {
+                            var scrollAmount = key.Key == ConsoleKey.PageUp ? System.Console.WindowHeight - 3 : 1;
+                            scrollOffset = Math.Max(0, scrollOffset - scrollAmount);
+                            needsRender = true;
+                        }
+                        else if (key.Key == ConsoleKey.DownArrow || key.Key == ConsoleKey.PageDown)
+                        {
+                            var scrollAmount = key.Key == ConsoleKey.PageDown ? System.Console.WindowHeight - 3 : 1;
+                            var maxScroll = Math.Max(0, helpLines.Length - (System.Console.WindowHeight - 2));
+                            scrollOffset = Math.Min(maxScroll, scrollOffset + scrollAmount);
+                            needsRender = true;
+                        }
                     }
-
-                    Thread.Sleep(50);
+                    else
+                    {
+                        Thread.Sleep(50);
+                    }
                 }
             });
         }
