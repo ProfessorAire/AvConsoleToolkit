@@ -70,6 +70,13 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         private Color headerFgColor;
         private Color gutterBgColor;
         private Color gutterFgColor;
+        private Color editorBgColor;
+        private Color editorFgColor;
+        private Color statusBarBgColor;
+        private Color statusBarFgColor;
+        private Color hintBarBgColor;
+        private Color hintBarFgColor;
+        private Color glyphColor;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="BuiltinEditor"/> class.
@@ -172,11 +179,18 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         {
             var extension = Path.GetExtension(this.filePath)?.TrimStart('.').ToLowerInvariant() ?? string.Empty;
 
-            // Default colors
+            // Load all theme colors
             this.headerBgColor = ParseHexColor(this.settings.HeaderBackgroundColor, new Color(208, 135, 112));
             this.headerFgColor = ParseHexColor(this.settings.HeaderForegroundColor, new Color(46, 52, 64));
             this.gutterBgColor = ParseHexColor(this.settings.GutterBackgroundColor, new Color(59, 66, 82));
             this.gutterFgColor = ParseHexColor(this.settings.GutterForegroundColor, new Color(229, 233, 240));
+            this.editorBgColor = ParseHexColor(this.settings.EditorBackgroundColor, new Color(46, 52, 64));
+            this.editorFgColor = ParseHexColor(this.settings.EditorForegroundColor, new Color(236, 239, 244));
+            this.statusBarBgColor = ParseHexColor(this.settings.StatusBarBackgroundColor, new Color(59, 66, 82));
+            this.statusBarFgColor = ParseHexColor(this.settings.StatusBarForegroundColor, new Color(236, 239, 244));
+            this.hintBarBgColor = ParseHexColor(this.settings.HintBarBackgroundColor, new Color(67, 76, 94));
+            this.hintBarFgColor = ParseHexColor(this.settings.HintBarForegroundColor, new Color(136, 192, 208));
+            this.glyphColor = ParseHexColor(this.settings.GlyphColor, new Color(76, 86, 106));
 
             // Check for extension-specific header colors
             if (!string.IsNullOrWhiteSpace(this.settings.HeaderColorMappings))
@@ -480,7 +494,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
                         if (needsWrapGlyph)
                         {
-                            AnsiConsole.Markup($"[dim]{wrapGlyph.EscapeMarkup()}[/]");
+                            AnsiConsole.Markup($"[{this.glyphColor.ToMarkup()}]{wrapGlyph.EscapeMarkup()}[/]");
                         }
                     }
                     else
@@ -491,7 +505,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                             AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
                         }
 
-                        AnsiConsole.Markup($"[dim]~[/]{new string(' ', contentWidth - 1)}");
+                        AnsiConsole.Markup($"[{this.glyphColor.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
                     }
                 }
                 else
@@ -541,7 +555,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                     }
                     else
                     {
-                        AnsiConsole.Markup($"[dim]~[/]{new string(' ', contentWidth - 1)}");
+                        AnsiConsole.Markup($"[{this.glyphColor.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
                     }
                 }
             }
@@ -571,12 +585,12 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                 statusPadding = 0;
             }
 
-            AnsiConsole.Markup($"[white on grey]{status.EscapeMarkup()}{new string(' ', statusPadding)}{position}{progressBarSpace}[/]");
+            AnsiConsole.Markup($"[{this.statusBarFgColor.ToMarkup()} on {this.statusBarBgColor.ToMarkup()}]{status.EscapeMarkup()}{new string(' ', statusPadding)}{position}{progressBarSpace}[/]");
 
             // Help bar
             System.Console.SetCursorPosition(0, windowHeight - 1);
             var help = this.keyBindings.GetShortcutHints();
-            AnsiConsole.Markup($"[cyan on black]{help.PadRight(windowWidth).EscapeMarkup()}[/]");
+            AnsiConsole.Markup($"[{this.hintBarFgColor.ToMarkup()} on {this.hintBarBgColor.ToMarkup()}]{help.PadRight(windowWidth).EscapeMarkup()}[/]");
 
             // Position cursor
             var displayRow = this.cursorRow - this.scrollOffsetY + 1;
