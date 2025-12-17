@@ -22,7 +22,7 @@ using AvConsoleToolkit.Ssh;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Crestron.File
+namespace AvConsoleToolkit.Commands.Crestron.FileOps
 {
     /// <summary>
     /// Command that allows in-line editing of files on remote Crestron devices.
@@ -369,27 +369,17 @@ namespace AvConsoleToolkit.Commands.Crestron.File
                 return null;
             }
 
-            var extension = Path.GetExtension(filePath)?.ToLowerInvariant() ?? string.Empty;
+            var extension = Path.GetExtension(filePath)?.TrimStart('.').ToLowerInvariant() ?? string.Empty;
             var editorSettings = AppConfig.Settings.Editor;
 
-            // Check for extension-specific mapping
-            if (!string.IsNullOrWhiteSpace(editorSettings.EditorMappings))
+            // Check for extension-specific mapping in the dictionary
+            if (editorSettings.Mappings != null)
             {
-                var mappings = editorSettings.EditorMappings.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                foreach (var mapping in mappings)
+                var editorPath = editorSettings.Mappings[extension];
+                if (!string.IsNullOrWhiteSpace(editorPath))
                 {
-                    var parts = mapping.Split('=', 2, StringSplitOptions.TrimEntries);
-                    if (parts.Length == 2 && parts[0].Equals(extension, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return parts[1];
-                    }
+                    return editorPath;
                 }
-            }
-
-            // Use default editor if configured
-            if (!string.IsNullOrWhiteSpace(editorSettings.DefaultEditor))
-            {
-                return editorSettings.DefaultEditor;
             }
 
             // No editor configured - use built-in
