@@ -12,7 +12,7 @@
 
 using System;
 
-namespace AvConsoleToolkit.Commands.Crestron.FileOps
+namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 {
     /// <summary>
     /// Defines editor actions that can be bound to key combinations.
