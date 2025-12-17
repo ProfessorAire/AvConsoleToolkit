@@ -82,7 +82,7 @@ namespace AvConsoleToolkit
 
                     branch.AddBranch("file", file =>
                     {
-                        file.AddCommand<Commands.Crestron.File.FileEditCommand>("edit")
+                        file.AddCommand<Commands.Crestron.FileOps.FileEditCommand>("edit")
                             .WithAlias("e")
                             .WithDescription("Edit a file on a remote Crestron device")
                             .WithExample(["crestron", "file", "edit", "program01/config.xml", "-a", "192.168.1.100"])
