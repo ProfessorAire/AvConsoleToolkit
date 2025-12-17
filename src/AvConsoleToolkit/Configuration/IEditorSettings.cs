@@ -17,12 +17,16 @@ namespace AvConsoleToolkit.Configuration
 {
     /// <summary>
     /// Defines settings for file editors used in remote file editing.
-    /// This is a dictionary mapping file extensions (without the dot) to external editor paths.
-    /// Example: "json" => "code" to open .json files with VS Code.
-    /// If no mapping is found for a file type, the built-in editor will be used.
     /// </summary>
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface IEditorSettings : IDictionary<string, string>
+    public interface IEditorSettings
     {
+        /// <summary>
+        /// Gets the editor mappings by file extension.
+        /// Keys are file extensions without the dot (e.g., "json", "xml", "txt").
+        /// Values are the external editor paths or commands to use.
+        /// If no mapping is found for a file type, the built-in editor will be used.
+        /// </summary>
+        IDictionary<string, string> Mappings { get; }
     }
 }
