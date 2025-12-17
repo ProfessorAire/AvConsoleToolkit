@@ -22,7 +22,7 @@ using AvConsoleToolkit.Ssh;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Crestron.FileEdit
+namespace AvConsoleToolkit.Commands.Crestron.File
 {
     /// <summary>
     /// Command that allows in-line editing of files on remote Crestron devices.
