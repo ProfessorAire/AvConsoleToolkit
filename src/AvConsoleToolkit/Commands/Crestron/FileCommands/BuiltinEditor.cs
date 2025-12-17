@@ -418,7 +418,12 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
             }
 
             // Editor content - handle word wrap properly
-            var wrapGlyph = this.settings.WordWrapGlyph ?? "\uEBEA";
+            var wrapGlyph = this.settings.WordWrapGlyph;
+            if (string.IsNullOrEmpty(wrapGlyph))
+            {
+                wrapGlyph = "\\"; // Simple backslash as wrap indicator (universal support)
+            }
+
             var wrapIndent = "  "; // 2 character indent for wrapped lines
             var currentSourceLine = this.scrollOffsetY;
             var currentWrapOffset = 0;
@@ -596,10 +601,86 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
             var help = this.keyBindings.GetShortcutHints();
             AnsiConsole.Markup($"[{this.hintBarFgColor.ToMarkup()} on {this.hintBarBgColor.ToMarkup()}]{help.PadRight(windowWidth).EscapeMarkup()}[/]");
 
-            // Position cursor
-            var displayRow = this.cursorRow - this.scrollOffsetY + 1;
-            var displayCol = gutterWidth + (this.wordWrapEnabled ? this.cursorCol : this.cursorCol - this.scrollOffsetX);
+            // Position cursor - account for word wrap
+            int displayRow;
+            int displayCol;
+
+            if (this.wordWrapEnabled)
+            {
+                // Calculate the screen row by counting how many wrapped rows are above the cursor
+                var screenRowCount = 0;
+                var wrapIndentLen = wrapIndent.Length;
+
+                for (int lineIdx = this.scrollOffsetY; lineIdx <= this.cursorRow && screenRowCount < editorHeight; lineIdx++)
+                {
+                    if (lineIdx >= this.lines.Count)
+                    {
+                        break;
+                    }
+
+                    var lineText = this.lines[lineIdx].ToString();
+
+                    if (lineIdx < this.cursorRow)
+                    {
+                        // Count all wrapped rows for lines before cursor
+                        var pos = 0;
+                        var firstSegment = true;
+                        while (pos < lineText.Length || firstSegment)
+                        {
+                            var segmentWidth = contentWidth - (firstSegment ? 0 : wrapIndentLen) - 1;
+                            screenRowCount++;
+                            pos += segmentWidth;
+                            firstSegment = false;
+                            if (pos <= 0)
+                            {
+                                break; // Safety
+                            }
+                        }
+
+                        // At minimum one row per line
+                        if (screenRowCount == 0 || (lineText.Length == 0))
+                        {
+                            screenRowCount = Math.Max(screenRowCount, 1);
+                        }
+                    }
+                    else
+                    {
+                        // This is the cursor's line - find which segment contains the cursor
+                        var pos = 0;
+                        var firstSegment = true;
+                        while (pos <= this.cursorCol)
+                        {
+                            var segmentWidth = contentWidth - (firstSegment ? 0 : wrapIndentLen) - 1;
+                            if (this.cursorCol < pos + segmentWidth || pos + segmentWidth >= lineText.Length)
+                            {
+                                // Cursor is in this segment
+                                var colInSegment = this.cursorCol - pos;
+                                displayCol = gutterWidth + (firstSegment ? 0 : wrapIndentLen) + colInSegment;
+                                break;
+                            }
+
+                            screenRowCount++;
+                            pos += segmentWidth;
+                            firstSegment = false;
+                            if (segmentWidth <= 0)
+                            {
+                                break; // Safety
+                            }
+                        }
+                    }
+                }
+
+                displayRow = screenRowCount + 1; // +1 for header
+                displayCol = gutterWidth + Math.Min(this.cursorCol, contentWidth - 2);
+            }
+            else
+            {
+                displayRow = this.cursorRow - this.scrollOffsetY + 1;
+                displayCol = gutterWidth + this.cursorCol - this.scrollOffsetX;
+            }
+
             displayCol = Math.Max(gutterWidth, Math.Min(displayCol, windowWidth - 1));
+            displayRow = Math.Max(1, Math.Min(displayRow, editorHeight));
             System.Console.SetCursorPosition(displayCol, displayRow);
             System.Console.CursorVisible = true;
         }
@@ -719,6 +800,9 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                     return;
                 case EditorAction.Undo:
                     this.Undo();
+                    return;
+                case EditorAction.ToggleTheme:
+                    this.ToggleTheme();
                     return;
             }
 
@@ -1426,6 +1510,44 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
             this.modified = state.Modified;
             this.ClearSelection();
             this.SetStatusMessage("Undo.");
+        }
+
+        private void ToggleTheme()
+        {
+            // Toggle between Dark and Bright themes
+            var currentTheme = this.settings.Theme ?? "Dark";
+            var newTheme = currentTheme.Equals("Dark", StringComparison.OrdinalIgnoreCase) ? "Bright" : "Dark";
+
+            // Apply theme colors
+            if (newTheme.Equals("Bright", StringComparison.OrdinalIgnoreCase))
+            {
+                // Nord Bright (Snow Storm based)
+                this.editorBgColor = new Color(236, 239, 244); // #ECEFF4 Snow Storm 2
+                this.editorFgColor = new Color(46, 52, 64);    // #2E3440 Polar Night 0
+                this.statusBarBgColor = new Color(216, 222, 233); // #D8DEE9 Snow Storm 0
+                this.statusBarFgColor = new Color(46, 52, 64);    // #2E3440 Polar Night 0
+                this.hintBarBgColor = new Color(229, 233, 240);   // #E5E9F0 Snow Storm 1
+                this.hintBarFgColor = new Color(94, 129, 172);    // #5E81AC Frost 3
+                this.gutterBgColor = new Color(216, 222, 233);    // #D8DEE9 Snow Storm 0
+                this.gutterFgColor = new Color(76, 86, 106);      // #4C566A Polar Night 3
+                this.glyphColor = new Color(136, 192, 208);       // #88C0D0 Frost 1
+            }
+            else
+            {
+                // Nord Dark (Polar Night based) - Default
+                this.editorBgColor = new Color(46, 52, 64);       // #2E3440 Polar Night 0
+                this.editorFgColor = new Color(236, 239, 244);    // #ECEFF4 Snow Storm 2
+                this.statusBarBgColor = new Color(59, 66, 82);    // #3B4252 Polar Night 1
+                this.statusBarFgColor = new Color(236, 239, 244); // #ECEFF4 Snow Storm 2
+                this.hintBarBgColor = new Color(67, 76, 94);      // #434C5E Polar Night 2
+                this.hintBarFgColor = new Color(136, 192, 208);   // #88C0D0 Frost 1
+                this.gutterBgColor = new Color(59, 66, 82);       // #3B4252 Polar Night 1
+                this.gutterFgColor = new Color(229, 233, 240);    // #E5E9F0 Snow Storm 1
+                this.glyphColor = new Color(76, 86, 106);         // #4C566A Polar Night 3
+            }
+
+            this.settings.Theme = newTheme;
+            this.SetStatusMessage($"Theme: {newTheme}");
         }
     }
 

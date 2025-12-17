@@ -73,9 +73,9 @@ namespace AvConsoleToolkit.Configuration
 
         /// <summary>
         /// Gets or sets the glyph to display at the end of wrapped lines.
-        /// Default is the NerdFonts wrap icon (U+EBEA).
+        /// Default is a backslash for universal font support. Set to NerdFonts icons if available.
         /// </summary>
-        [DefaultValue("\uEBEA")]
+        [DefaultValue("\\")]
         string WordWrapGlyph { get; set; }
 
         /// <summary>
