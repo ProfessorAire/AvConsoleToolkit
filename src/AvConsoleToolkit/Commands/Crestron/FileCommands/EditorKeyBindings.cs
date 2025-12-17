@@ -48,6 +48,9 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
         /// <summary>Toggle word wrap.</summary>
         ToggleWordWrap,
+
+        /// <summary>Undo the last action.</summary>
+        Undo,
     }
 
     /// <summary>
@@ -86,6 +89,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                     ConsoleKey.K => EditorAction.CutLine,
                     ConsoleKey.G => EditorAction.Help,
                     ConsoleKey.W => EditorAction.ToggleWordWrap,
+                    ConsoleKey.Z => EditorAction.Undo,
                     _ => EditorAction.None
                 };
             }
@@ -123,6 +127,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                 "",
                 "Editing:",
                 "  F2        Save file (or Ctrl+S)",
+                "  Ctrl+Z    Undo",
                 "  Ctrl+C    Copy selection",
                 "  Ctrl+X    Cut selection",
                 "  Ctrl+U    Paste",
@@ -144,7 +149,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         /// <returns>The shortcut hint text.</returns>
         public virtual string GetShortcutHints()
         {
-            return " ^Q Exit  F2/^S Save  ^G Help  ^K Cut Line  ^C Copy  ^U Paste";
+            return " ^Q Exit  F2 Save  ^Z Undo  ^G Help  ^C Copy  ^U Paste";
         }
     }
 }
