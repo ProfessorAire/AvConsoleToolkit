@@ -59,6 +59,10 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         // Clipboard
         private string? clipboard;
 
+        // Undo stack - stores full document state and cursor position
+        private readonly Stack<UndoState> undoStack = new();
+        private const int MaxUndoHistory = 100;
+
         // Display settings
         private bool showLineNumbers;
         private bool wordWrapEnabled;
@@ -713,6 +717,9 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                     this.scrollOffsetX = 0;
                     this.SetStatusMessage($"Word wrap: {(this.wordWrapEnabled ? "on" : "off")}");
                     return;
+                case EditorAction.Undo:
+                    this.Undo();
+                    return;
             }
 
             // Handle selection (Shift key)
@@ -1076,6 +1083,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
         private void InsertChar(char c)
         {
+            this.SaveUndoState();
             this.lines[this.cursorRow].Insert(this.cursorCol, c);
             this.cursorCol++;
             this.modified = true;
@@ -1083,6 +1091,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
         private void InsertText(string text)
         {
+            this.SaveUndoState();
             this.lines[this.cursorRow].Insert(this.cursorCol, text);
             this.cursorCol += text.Length;
             this.modified = true;
@@ -1090,6 +1099,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
         private void HandleEnter()
         {
+            this.SaveUndoState();
             var currentLine = this.lines[this.cursorRow];
             var afterCursor = currentLine.ToString(this.cursorCol, currentLine.Length - this.cursorCol);
             currentLine.Remove(this.cursorCol, currentLine.Length - this.cursorCol);
@@ -1104,12 +1114,14 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         {
             if (this.cursorCol > 0)
             {
+                this.SaveUndoState();
                 this.lines[this.cursorRow].Remove(this.cursorCol - 1, 1);
                 this.cursorCol--;
                 this.modified = true;
             }
             else if (this.cursorRow > 0)
             {
+                this.SaveUndoState();
                 var currentLine = this.lines[this.cursorRow].ToString();
                 this.lines.RemoveAt(this.cursorRow);
                 this.cursorRow--;
@@ -1123,11 +1135,13 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         {
             if (this.cursorCol < this.lines[this.cursorRow].Length)
             {
+                this.SaveUndoState();
                 this.lines[this.cursorRow].Remove(this.cursorCol, 1);
                 this.modified = true;
             }
             else if (this.cursorRow < this.lines.Count - 1)
             {
+                this.SaveUndoState();
                 var nextLine = this.lines[this.cursorRow + 1].ToString();
                 this.lines.RemoveAt(this.cursorRow + 1);
                 this.lines[this.cursorRow].Append(nextLine);
@@ -1152,6 +1166,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         {
             if (this.hasSelection)
             {
+                this.SaveUndoState();
                 this.clipboard = this.GetSelectedText();
                 this.DeleteSelection();
                 this.SetStatusMessage("Text cut.");
@@ -1189,6 +1204,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
         private void HandleCutLine()
         {
+            this.SaveUndoState();
             this.clipboard = this.lines[this.cursorRow].ToString() + Environment.NewLine;
             if (this.lines.Count > 1)
             {
@@ -1360,5 +1376,60 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                 }
             });
         }
+
+        private void SaveUndoState()
+        {
+            var state = new UndoState(
+                this.lines.Select(l => l.ToString()).ToList(),
+                this.cursorRow,
+                this.cursorCol,
+                this.modified);
+
+            this.undoStack.Push(state);
+
+            // Limit undo history size
+            if (this.undoStack.Count > MaxUndoHistory)
+            {
+                var tempStack = new Stack<UndoState>();
+                for (int i = 0; i < MaxUndoHistory; i++)
+                {
+                    tempStack.Push(this.undoStack.Pop());
+                }
+
+                this.undoStack.Clear();
+                while (tempStack.Count > 0)
+                {
+                    this.undoStack.Push(tempStack.Pop());
+                }
+            }
+        }
+
+        private void Undo()
+        {
+            if (this.undoStack.Count == 0)
+            {
+                this.SetStatusMessage("Nothing to undo.");
+                return;
+            }
+
+            var state = this.undoStack.Pop();
+
+            this.lines.Clear();
+            foreach (var line in state.Lines)
+            {
+                this.lines.Add(new StringBuilder(line));
+            }
+
+            this.cursorRow = Math.Min(state.CursorRow, this.lines.Count - 1);
+            this.cursorCol = Math.Min(state.CursorCol, this.lines[this.cursorRow].Length);
+            this.modified = state.Modified;
+            this.ClearSelection();
+            this.SetStatusMessage("Undo.");
+        }
     }
+
+    /// <summary>
+    /// Represents a saved editor state for undo operations.
+    /// </summary>
+    internal sealed record UndoState(List<string> Lines, int CursorRow, int CursorCol, bool Modified);
 }
