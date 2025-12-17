@@ -70,5 +70,12 @@ namespace AvConsoleToolkit.Configuration
         /// </summary>
         [DefaultValue(2)]
         int TabDepth { get; set; }
+
+        /// <summary>
+        /// Gets or sets the glyph to display at the end of wrapped lines.
+        /// Default is the NerdFonts wrap icon (U+EBEA).
+        /// </summary>
+        [DefaultValue("\uEBEA")]
+        string WordWrapGlyph { get; set; }
     }
 }
