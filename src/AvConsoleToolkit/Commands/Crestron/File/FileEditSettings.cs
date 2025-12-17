@@ -13,7 +13,7 @@
 using System.ComponentModel;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Crestron.FileEdit
+namespace AvConsoleToolkit.Commands.Crestron.File
 {
     /// <summary>
     /// Settings used to configure the <see cref="FileEditCommand"/> behavior.
