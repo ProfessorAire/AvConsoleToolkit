@@ -1120,7 +1120,6 @@ namespace AvConsoleToolkit.Commands
                                 if (Console.KeyAvailable)
                                 {
                                     var keyInfo = Console.ReadKey(intercept: true);
-
                                     // Handle Ctrl+X for exit (always allow exit)
                                     if (keyInfo.Key == ConsoleKey.X && keyInfo.Modifiers == ConsoleModifiers.Control)
                                     {
