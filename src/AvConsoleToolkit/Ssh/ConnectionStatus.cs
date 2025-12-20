@@ -20,7 +20,7 @@ namespace AvConsoleToolkit.Ssh
         /// <summary>
         /// The connection is not established.
         /// </summary>
-        NotConnected,
+        NotConnected = 0,
 
         /// <summary>
         /// The connection is being established.

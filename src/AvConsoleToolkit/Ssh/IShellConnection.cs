@@ -34,6 +34,11 @@ namespace AvConsoleToolkit.Ssh
         event EventHandler? ShellReconnected;
 
         /// <summary>
+        /// Occurs when the connection status changes.
+        /// </summary>  
+        event Action<ConnectionStatus> ShellConnectionStatusChanged;
+
+        /// <summary>
         /// Gets a value indicating whether data is available to read from the shell stream.
         /// </summary>
         bool DataAvailable { get; }
