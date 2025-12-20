@@ -33,6 +33,14 @@ namespace AvConsoleToolkit.Ssh
         /// Occurs when the file transfer connection is reconnected after a disconnection.
         /// </summary>
         event EventHandler? FileTransferReconnected;
+        
+        /// <summary>
+        /// Occurs when the connection status of a file transfer changes.
+        /// </summary>
+        /// <remarks>Subscribers can use this event to monitor changes in the file transfer connection,
+        /// such as when the connection is established, lost, or transitions between states. The event provides the new
+        /// connection status as a parameter.</remarks>
+        event Action<ConnectionStatus> FileTransferConnectionStatusChanged;
 
         /// <summary>
         /// Gets a value indicating whether the connection is established.

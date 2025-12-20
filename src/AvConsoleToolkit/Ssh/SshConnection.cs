@@ -131,6 +131,18 @@ namespace AvConsoleToolkit.Ssh
 
         public event EventHandler<ConnectionStatusModel>? StatusChanged;
 
+        public event Action<ConnectionStatus> SshConnectionStatusChanged
+        {
+            add => this.statusModel.SshStateChanged += value;
+            remove => this.statusModel.SshStateChanged -= value;
+        }
+
+        public event Action<ConnectionStatus> FileTransferConnectionStatusChanged
+        {
+            add => this.statusModel.SftpStateChanged += value;
+            remove => this.statusModel.SftpStateChanged -= value;
+        }
+
         public bool DataAvailable
         {
             get
