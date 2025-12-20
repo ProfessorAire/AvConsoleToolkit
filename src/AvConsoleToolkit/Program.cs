@@ -12,6 +12,7 @@
 
 using System;
 using System.Text;
+using AvConsoleToolkit.Commands.Sftp;
 using AvConsoleToolkit.Ssh;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -81,19 +82,20 @@ namespace AvConsoleToolkit
                             .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "-a", "192.168.1.100", "-u", "admin", "-p", "password", "-c"]);
                     })
                     .WithAlias("p");
-
-                    branch.AddBranch("file", file =>
-                    {
-                        file.AddCommand<Commands.Crestron.FileCommands.FileEditCommand>("edit")
-                            .WithAlias("e")
-                            .WithDescription("Edit a file on a remote Crestron device")
-                            .WithExample(["crestron", "file", "edit", "program01/config.xml", "-a", "192.168.1.100"])
-                            .WithExample(["crestron", "file", "edit", "user/settings.json", "-a", "192.168.1.100", "-f"])
-                            .WithExample(["crestron", "file", "edit", "program01/data.txt", "-a", "192.168.1.100", "-b"]);
-                    })
-                    .WithAlias("f");
                 })
                 .WithAlias("c");
+
+                config.AddBranch("sftp", sftp =>
+                {
+                    sftp.SetDescription("Commands performed using SFTP.");
+                    sftp.AddCommand<FileEditCommand>("edit")
+                        .WithAlias("e")
+                        .WithDescription("Edit a file on a remote device via SFTP and a built-in text editor, or specified local application. Applications can be configured on a per-extension basis via the editor settings.")
+                        .WithExample(["sftp", "edit", "program01/config.xml", "-a", "192.168.1.100"])
+                        .WithExample(["sftp", "edit", "user/settings.json", "-a", "192.168.1.100", "-f"])
+                        .WithExample(["sftp", "edit", "program01/data.txt", "-a", "192.168.1.100", "-b"])
+                        .WithExample(["sftp", "edit", "user/appSettings.jsonc", "-a", "192.168.1.100", "-e", "notepad"]);
+                });
 
                 config.AddBranch("config", cfg =>
                 {
@@ -121,13 +123,13 @@ namespace AvConsoleToolkit
                 config.AddBranch("addressbook", ab =>
                 {
                     ab.SetDescription("Utilities for looking up Crestron device information from address books.");
-                    
+
                     ab.AddCommand<Commands.AddressBook.AddressBookListCommand>("list")
                         .WithAlias("ls")
                         .WithDescription("List all entries from configured address books")
                         .WithExample(["addressbook", "list"])
                         .WithExample(["ab", "ls", "--detailed"]);
-                    
+
                     ab.AddCommand<Commands.AddressBook.AddressBookLookupCommand>("lookup")
                         .WithAlias("l")
                         .WithDescription("Look up a specific address book entry by name or IP address")

@@ -260,6 +260,14 @@ namespace AvConsoleToolkit.Commands
 
             try
             {
+                // Global pass through command.
+                var isGlobal = false;
+                if (command[0] == ':')
+                {
+                    isGlobal = true;
+                    command = command[1..];
+                }
+
                 // Parse the command line into arguments
                 var args = ParseCommandLine(command);
                 if (args.Length == 0)
@@ -267,9 +275,13 @@ namespace AvConsoleToolkit.Commands
                     return Task.FromResult(false);
                 }
 
-                // Prepend the command branch (e.g., "crestron")
+                // Prepend the command branch.
                 var fullArgs = new List<string>(args.Length + 7);
-                fullArgs.Add(this.CommandBranch);
+                if (!isGlobal)
+                {
+                    fullArgs.Add(this.CommandBranch);
+                }
+
                 fullArgs.AddRange(args);
 
                 if (!fullArgs.Contains("-a") && !fullArgs.Contains("--address"))
@@ -284,7 +296,7 @@ namespace AvConsoleToolkit.Commands
                     fullArgs.Add(this.CurrentSettings!.Username!);
                 }
 
-                if (!fullArgs.Contains("-p") && !fullArgs.Contains("--password"))
+                if (!fullArgs.Contains("-p") && !fullArgs.Contains("--password") && !string.IsNullOrWhiteSpace(this.CurrentSettings!.Password))
                 {
                     fullArgs.Add("-p");
                     fullArgs.Add(this.CurrentSettings!.Password!);

@@ -1,4 +1,4 @@
-// <copyright file="IEditorSettings.cs">
+// <copyright file="EditorAction.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,30 +10,47 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
-
-namespace AvConsoleToolkit.Configuration
+namespace AvConsoleToolkit.Editors
 {
     /// <summary>
-    /// Defines settings for file editors used in remote file editing.
+    /// Defines editor actions that can be bound to key combinations.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface IEditorSettings
+    public enum FileTextEditorAction
     {
-        /// <summary>
-        /// Gets the editor mappings by file extension.
-        /// <para>In the pattern <c>txt=notepad.exe;json=code</c></para>
-        /// </summary>
-        [DefaultValue("")]
-        string Mappings { get; set; }
+        /// <summary>No action.</summary>
+        None,
 
-        /// <summary>
-        /// Gets or sets the name or path of the default editor application used to open files instead of the built-in editor.
-        /// </summary>
-        [Description("Name or path of the default editor application used to open files instead of the built-in editor.")]
-        [DefaultValue("")]
-        string DefaultEditor { get; set; }
+        /// <summary>Exit the editor.</summary>
+        Exit,
+
+        /// <summary>Save the file.</summary>
+        Save,
+
+        /// <summary>Copy selected text.</summary>
+        Copy,
+
+        /// <summary>Cut selected text.</summary>
+        Cut,
+
+        /// <summary>Paste from clipboard.</summary>
+        Paste,
+
+        /// <summary>Cut the current line.</summary>
+        CutLine,
+
+        /// <summary>Show help screen.</summary>
+        Help,
+
+        /// <summary>Toggle line numbers.</summary>
+        ToggleLineNumbers,
+
+        /// <summary>Toggle word wrap.</summary>
+        ToggleWordWrap,
+
+        /// <summary>Undo the last action.</summary>
+        Undo,
+
+        /// <summary>Toggle between Dark and Bright themes.</summary>
+        ToggleTheme,
     }
 }

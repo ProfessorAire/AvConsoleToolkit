@@ -24,19 +24,19 @@ using System.Threading.Tasks;
 using AvConsoleToolkit.Configuration;
 using Spectre.Console;
 
-namespace AvConsoleToolkit.Commands.Crestron.FileCommands
+namespace AvConsoleToolkit.Editors
 {
     /// <summary>
     /// A built-in nano-like text editor that operates in an alternate screen buffer.
     /// Provides text editing capabilities with keyboard navigation, selection, and configurable display options.
     /// </summary>
-    public sealed class BuiltinEditor
+    public sealed class FileTextEditor
     {
         private readonly string filePath;
         private readonly string displayName;
         private readonly Func<Task> onSaveCallback;
         private readonly List<StringBuilder> lines = new();
-        private readonly EditorKeyBindings keyBindings;
+        private readonly FileTextEditorKeyBindings keyBindings;
         private readonly IBuiltInEditorSettings settings;
 
         private int cursorRow;
@@ -83,18 +83,18 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         private Style? glyphColor;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="BuiltinEditor"/> class.
+        /// Initializes a new instance of the <see cref="FileTextEditor"/> class.
         /// </summary>
         /// <param name="filePath">Path to the local file to edit.</param>
         /// <param name="displayName">Display name shown in the editor header.</param>
         /// <param name="onSaveCallback">Callback invoked when the file is saved.</param>
         /// <param name="keyBindings">Optional custom key bindings.</param>
-        public BuiltinEditor(string filePath, string displayName, Func<Task> onSaveCallback, EditorKeyBindings? keyBindings = null)
+        public FileTextEditor(string filePath, string displayName, Func<Task> onSaveCallback, FileTextEditorKeyBindings? keyBindings = null)
         {
             this.filePath = filePath;
             this.displayName = displayName;
             this.onSaveCallback = onSaveCallback;
-            this.keyBindings = keyBindings ?? EditorKeyBindings.Default;
+            this.keyBindings = keyBindings ?? FileTextEditorKeyBindings.Default;
             this.settings = AppConfig.Settings.BuiltInEditor;
 
             // Load settings
@@ -104,26 +104,6 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
             // Parse colors
             this.LoadColors();
-        }
-
-        private void HandleKeyEvents(Terminal.Gui.View.KeyEventEventArgs args)
-        {
-            args.Handled = false;
-            var keyEvent = args.KeyEvent;
-            //if (keyEvent is null)
-            //{
-            //    return true;
-            //}
-
-            if (keyEvent.Key == Terminal.Gui.Key.S && keyEvent.IsCtrl)
-            {
-                // Special case: Ctrl+S to save
-                this.HandleKeySync(new System.ConsoleKeyInfo('s', System.ConsoleKey.S, false, false, true), CancellationToken.None);
-                //return true;
-                args.Handled = true;
-            }
-
-            //return true;
         }
 
         /// <summary>
@@ -818,40 +798,40 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
             var action = this.keyBindings.GetAction(key);
             switch (action)
             {
-                case EditorAction.Exit:
+                case FileTextEditorAction.Exit:
                     this.HandleExitSync(cancellationToken);
                     return;
-                case EditorAction.Save:
+                case FileTextEditorAction.Save:
                     this.HandleSaveSync(cancellationToken);
                     return;
-                case EditorAction.Copy:
+                case FileTextEditorAction.Copy:
                     this.HandleCopy();
                     return;
-                case EditorAction.Cut:
+                case FileTextEditorAction.Cut:
                     this.HandleCut();
                     return;
-                case EditorAction.Paste:
+                case FileTextEditorAction.Paste:
                     this.HandlePaste();
                     return;
-                case EditorAction.CutLine:
+                case FileTextEditorAction.CutLine:
                     this.HandleCutLine();
                     return;
-                case EditorAction.Help:
+                case FileTextEditorAction.Help:
                     this.ShowHelp();
                     return;
-                case EditorAction.ToggleLineNumbers:
+                case FileTextEditorAction.ToggleLineNumbers:
                     this.showLineNumbers = !this.showLineNumbers;
                     this.SetStatusMessage($"Line numbers: {(this.showLineNumbers ? "on" : "off")}");
                     return;
-                case EditorAction.ToggleWordWrap:
+                case FileTextEditorAction.ToggleWordWrap:
                     this.wordWrapEnabled = !this.wordWrapEnabled;
                     this.scrollOffsetX = 0;
                     this.SetStatusMessage($"Word wrap: {(this.wordWrapEnabled ? "on" : "off")}");
                     return;
-                case EditorAction.Undo:
+                case FileTextEditorAction.Undo:
                     this.Undo();
                     return;
-                case EditorAction.ToggleTheme:
+                case FileTextEditorAction.ToggleTheme:
                     this.ToggleTheme();
                     return;
             }
