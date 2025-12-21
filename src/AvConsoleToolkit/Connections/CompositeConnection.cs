@@ -22,12 +22,12 @@ using Renci.SshNet;
 using Renci.SshNet.Sftp;
 using Spectre.Console;
 
-namespace AvConsoleToolkit.Ssh
+namespace AvConsoleToolkit.Connections
 {
     /// <summary>
-    /// Implements SSH connection with lazy initialization and automatic recovery.
+    /// Implements SSH and SFTP connection with lazy initialization and automatic recovery.
     /// </summary>
-    public class SshConnection : ISshConnection
+    public class CompositeConnection : Connections.ICompositeConnection
     {
         private readonly string hostAddress;
 
@@ -39,7 +39,7 @@ namespace AvConsoleToolkit.Ssh
 
         private readonly string? privateKeyPath;
 
-        private readonly ConnectionStatusModel statusModel;
+        private readonly Connections.ConnectionStatusModel statusModel;
 
         private readonly string? username;
 
@@ -72,14 +72,14 @@ namespace AvConsoleToolkit.Ssh
         private bool wasSshConnected;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SshConnection"/> class with password authentication.
+        /// Initializes a new instance of the <see cref="CompositeConnection"/> class with password authentication.
         /// </summary>
         /// <param name="hostAddress">The host address to connect to.</param>
         /// <param name="port">The port to connect on.</param>
         /// <param name="username">The username for authentication.</param>
         /// <param name="password">The password for authentication.</param>
         /// <param name="verbose">A value indicating whether the connection should write verbose messages.</param>
-        public SshConnection(string hostAddress, int port, string username, string password, bool verbose = false)
+        public CompositeConnection(string hostAddress, int port, string username, string password, bool verbose = false)
         {
             this.hostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
             this.port = port;
@@ -87,14 +87,14 @@ namespace AvConsoleToolkit.Ssh
             this.password = password ?? throw new ArgumentNullException(nameof(password));
             this.privateKeyPath = null;
             this.verbose = verbose;
-            this.statusModel = new ConnectionStatusModel
+            this.statusModel = new Connections.ConnectionStatusModel
             {
                 HostAddress = hostAddress,
             };
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SshConnection"/> class with SSH key authentication.
+        /// Initializes a new instance of the <see cref="CompositeConnection"/> class with SSH key authentication.
         /// </summary>
         /// <param name="hostAddress">The host address to connect to.</param>
         /// <param name="port">The port to connect on.</param>
@@ -102,7 +102,7 @@ namespace AvConsoleToolkit.Ssh
         /// <param name="privateKeyPath">The path to the private key file.</param>
         /// <param name="usePrivateKey">Must be true to use this constructor for private key authentication.</param>
         /// <param name="verbose">A value indicating whether the connection should write verbose messages.</param>
-        public SshConnection(string hostAddress, int port, string username, string privateKeyPath, bool usePrivateKey, bool verbose = false)
+        public CompositeConnection(string hostAddress, int port, string username, string privateKeyPath, bool usePrivateKey, bool verbose = false)
         {
             if (!usePrivateKey)
             {
@@ -115,7 +115,7 @@ namespace AvConsoleToolkit.Ssh
             this.privateKeyPath = privateKeyPath ?? throw new ArgumentNullException(nameof(privateKeyPath));
             this.password = null;
             this.verbose = verbose;
-            this.statusModel = new ConnectionStatusModel
+            this.statusModel = new Connections.ConnectionStatusModel
             {
                 HostAddress = hostAddress,
             };
@@ -129,15 +129,15 @@ namespace AvConsoleToolkit.Ssh
 
         public event EventHandler? ShellReconnected;
 
-        public event EventHandler<ConnectionStatusModel>? StatusChanged;
+        public event EventHandler<Connections.ConnectionStatusModel>? StatusChanged;
 
-        public event Action<ConnectionStatus> SshConnectionStatusChanged
+        public event Action<Connections.ConnectionStatus> SshConnectionStatusChanged
         {
             add => this.statusModel.SshStateChanged += value;
             remove => this.statusModel.SshStateChanged -= value;
         }
 
-        public event Action<ConnectionStatus> FileTransferConnectionStatusChanged
+        public event Action<Connections.ConnectionStatus> FileTransferConnectionStatusChanged
         {
             add => this.statusModel.SftpStateChanged += value;
             remove => this.statusModel.SftpStateChanged -= value;
@@ -154,14 +154,26 @@ namespace AvConsoleToolkit.Ssh
             }
         }
 
-        public bool IsConnected
+        /// <inheritdoc/>
+        public bool IsFileTransferConnected
         {
             get
             {
                 lock (this.lockObject)
                 {
-                    return (this.sshClient?.IsConnected ?? false) ||
-                           (this.sftpClient?.IsConnected ?? false);
+                    return this.sftpClient?.IsConnected ?? false;
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public bool IsShellConnected
+        {
+            get
+            {
+                lock (this.lockObject)
+                {
+                    return this.sshClient?.IsConnected ?? false;
                 }
             }
         }
@@ -183,7 +195,7 @@ namespace AvConsoleToolkit.Ssh
             }
             catch (Exception ex)
             {
-                this.UpdateSftpStatus(ConnectionStatus.ConnectionFailed);
+                this.UpdateSftpStatus(Connections.ConnectionStatus.ConnectionFailed);
                 if (this.verbose)
                 {
                     AnsiConsole.WriteException(ex);
@@ -218,7 +230,7 @@ namespace AvConsoleToolkit.Ssh
             }
             catch (Exception ex)
             {
-                this.UpdateSshStatus(ConnectionStatus.ConnectionFailed);
+                this.UpdateSshStatus(Connections.ConnectionStatus.ConnectionFailed);
                 if (this.verbose)
                 {
                     AnsiConsole.WriteException(ex);
@@ -302,7 +314,7 @@ namespace AvConsoleToolkit.Ssh
 
             this.liveStatusTask = Task.Run(async () =>
             {
-                var renderable = new ConnectionStatusRenderable(this.statusModel, true, this.spinnerIndex);
+                var renderable = new Connections.ConnectionStatusRenderable(this.statusModel, true, this.spinnerIndex);
                 var live = AnsiConsole.Live(renderable)
                     .AutoClear(false)
                     .Overflow(VerticalOverflow.Crop)
@@ -317,13 +329,13 @@ namespace AvConsoleToolkit.Ssh
                             while (!token.IsCancellationRequested)
                             {
                                 this.spinnerIndex++;
-                                ctx.UpdateTarget(new ConnectionStatusRenderable(this.statusModel, true, this.spinnerIndex));
+                                ctx.UpdateTarget(new Connections.ConnectionStatusRenderable(this.statusModel, true, this.spinnerIndex));
                                 await Task.Delay(120, token);
                             }
                         }
                         catch (OperationCanceledException)
                         {
-                            ctx.UpdateTarget(new ConnectionStatusRenderable(this.statusModel, false, this.spinnerIndex));
+                            ctx.UpdateTarget(new Connections.ConnectionStatusRenderable(this.statusModel, false, this.spinnerIndex));
                         }
                     });
                 }
@@ -553,11 +565,11 @@ namespace AvConsoleToolkit.Ssh
             {
                 if (!this.isReconnecting)
                 {
-                    this.UpdateSftpStatus(ConnectionStatus.Connecting);
+                    this.UpdateSftpStatus(Connections.ConnectionStatus.Connecting);
                 }
 
                 await client.ConnectAsync(cancellationToken);
-                this.UpdateSftpStatus(ConnectionStatus.Connected);
+                this.UpdateSftpStatus(Connections.ConnectionStatus.Connected);
                 this.wasSftpConnected = true;
             }
 
@@ -599,11 +611,11 @@ namespace AvConsoleToolkit.Ssh
             {
                 if (!this.isReconnecting)
                 {
-                    this.UpdateSshStatus(ConnectionStatus.Connecting);
+                    this.UpdateSshStatus(Connections.ConnectionStatus.Connecting);
                 }
 
                 await client.ConnectAsync(cancellationToken);
-                this.UpdateSshStatus(ConnectionStatus.Connected);
+                this.UpdateSshStatus(Connections.ConnectionStatus.Connected);
                 this.wasSshConnected = true;
             }
 
@@ -629,7 +641,7 @@ namespace AvConsoleToolkit.Ssh
 
                     if (!this.isReconnecting)
                     {
-                        this.UpdateSftpStatus(this.wasSftpConnected ? ConnectionStatus.LostConnection : ConnectionStatus.ConnectionFailed);
+                        this.UpdateSftpStatus(this.wasSftpConnected ? Connections.ConnectionStatus.LostConnection : Connections.ConnectionStatus.ConnectionFailed);
                     }
 
                     this.CleanupSftpClient();
@@ -668,7 +680,7 @@ namespace AvConsoleToolkit.Ssh
                 {
                     if (!this.isReconnecting)
                     {
-                        this.UpdateSshStatus(ConnectionStatus.LostConnection);
+                        this.UpdateSshStatus(Connections.ConnectionStatus.LostConnection);
                     }
 
                     this.CleanupShellStream();
@@ -687,14 +699,14 @@ namespace AvConsoleToolkit.Ssh
             {
                 if (!this.isReconnecting)
                 {
-                    this.UpdateSshStatus(wasReconnecting ? ConnectionStatus.Reconnecting : ConnectionStatus.Connecting);
+                    this.UpdateSshStatus(wasReconnecting ? Connections.ConnectionStatus.Reconnecting : Connections.ConnectionStatus.Connecting);
                 }
 
                 await client.ConnectAsync(cancellationToken);
 
                 if (!this.isReconnecting)
                 {
-                    this.UpdateSshStatus(ConnectionStatus.Connected);
+                    this.UpdateSshStatus(Connections.ConnectionStatus.Connected);
                 }
             }
 
@@ -732,7 +744,7 @@ namespace AvConsoleToolkit.Ssh
 
                     if (!this.isReconnecting)
                     {
-                        this.UpdateSshStatus(this.wasSshConnected ? ConnectionStatus.LostConnection : ConnectionStatus.ConnectionFailed);
+                        this.UpdateSshStatus(this.wasSshConnected ? Connections.ConnectionStatus.LostConnection : Connections.ConnectionStatus.ConnectionFailed);
                     }
 
                     this.CleanupSshClient();
@@ -758,7 +770,7 @@ namespace AvConsoleToolkit.Ssh
                     return;
                 }
 
-                this.UpdateSftpStatus(ConnectionStatus.LostConnection);
+                this.UpdateSftpStatus(Connections.ConnectionStatus.LostConnection);
                 this.sftpClient.ErrorOccurred -= this.OnSftpClientError;
             }
 
@@ -781,7 +793,7 @@ namespace AvConsoleToolkit.Ssh
 
                 try
                 {
-                    this.UpdateSshStatus(ConnectionStatus.LostConnection);
+                    this.UpdateSshStatus(Connections.ConnectionStatus.LostConnection);
                 }
                 catch
                 {
@@ -836,13 +848,13 @@ namespace AvConsoleToolkit.Ssh
 
                         if (this.sshClientNeeded)
                         {
-                            var status = this.wasSshConnected ? ConnectionStatus.Reconnecting : ConnectionStatus.Connecting;
+                            var status = this.wasSshConnected ? Connections.ConnectionStatus.Reconnecting : Connections.ConnectionStatus.Connecting;
                             this.UpdateSshStatus(status, attemptCount, maxAttempts);
                         }
 
                         if (this.sftpClientNeeded)
                         {
-                            var status = this.wasSftpConnected ? ConnectionStatus.Reconnecting : ConnectionStatus.Connecting;
+                            var status = this.wasSftpConnected ? Connections.ConnectionStatus.Reconnecting : Connections.ConnectionStatus.Connecting;
                             this.UpdateSftpStatus(status, attemptCount, maxAttempts);
                         }
 
@@ -869,13 +881,13 @@ namespace AvConsoleToolkit.Ssh
                         var fail = false;
                         if (this.sshClientNeeded && (sshTask?.IsFaulted ?? true))
                         {
-                            this.UpdateSshStatus(ConnectionStatus.ConnectionFailed, attemptCount, maxAttempts);
+                            this.UpdateSshStatus(Connections.ConnectionStatus.ConnectionFailed, attemptCount, maxAttempts);
                             fail = true;
                         }
 
                         if (this.sftpClientNeeded && (sftpTask?.IsFaulted ?? true))
                         {
-                            this.UpdateSftpStatus(ConnectionStatus.ConnectionFailed, attemptCount, maxAttempts);
+                            this.UpdateSftpStatus(Connections.ConnectionStatus.ConnectionFailed, attemptCount, maxAttempts);
                             fail = true;
                         }
 
@@ -887,12 +899,12 @@ namespace AvConsoleToolkit.Ssh
                         {
                             if (this.sshClientNeeded)
                             {
-                                this.UpdateSshStatus(ConnectionStatus.Connected);
+                                this.UpdateSshStatus(Connections.ConnectionStatus.Connected);
                             }
 
                             if (this.sftpClientNeeded)
                             {
-                                this.UpdateSftpStatus(ConnectionStatus.Connected);
+                                this.UpdateSftpStatus(Connections.ConnectionStatus.Connected);
                             }
 
                             this.StopLiveStatus();
@@ -918,12 +930,12 @@ namespace AvConsoleToolkit.Ssh
                     {
                         if (this.sshClientNeeded)
                         {
-                            this.UpdateSshStatus(ConnectionStatus.ConnectionFailed, attemptCount, maxAttempts);
+                            this.UpdateSshStatus(Connections.ConnectionStatus.ConnectionFailed, attemptCount, maxAttempts);
                         }
 
                         if (this.sftpClientNeeded)
                         {
-                            this.UpdateSftpStatus(ConnectionStatus.ConnectionFailed, attemptCount, maxAttempts);
+                            this.UpdateSftpStatus(Connections.ConnectionStatus.ConnectionFailed, attemptCount, maxAttempts);
                         }
                     }
                 }
@@ -942,7 +954,7 @@ namespace AvConsoleToolkit.Ssh
             ObjectDisposedException.ThrowIf(this.disposed, this);
         }
 
-        private void UpdateSftpStatus(ConnectionStatus status, int attempt = 0, int maxAttempts = 0)
+        private void UpdateSftpStatus(Connections.ConnectionStatus status, int attempt = 0, int maxAttempts = 0)
         {
             this.statusModel.SftpState = status;
             this.statusModel.SftpAttempt = attempt;
@@ -950,7 +962,7 @@ namespace AvConsoleToolkit.Ssh
             this.StatusChanged?.Invoke(this, this.statusModel);
         }
 
-        private void UpdateSshStatus(ConnectionStatus status, int attempt = 0, int maxAttempts = 0)
+        private void UpdateSshStatus(Connections.ConnectionStatus status, int attempt = 0, int maxAttempts = 0)
         {
             this.statusModel.SshState = status;
             this.statusModel.SshAttempt = attempt;

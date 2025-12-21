@@ -21,7 +21,7 @@ using System.Threading.Tasks;
 using AvConsoleToolkit.Configuration;
 using AvConsoleToolkit.Crestron;
 using AvConsoleToolkit.Editors;
-using AvConsoleToolkit.Ssh;
+using AvConsoleToolkit.Connections;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -78,7 +78,7 @@ namespace AvConsoleToolkit.Commands.Sftp
                 }
 
                 // Get SSH connection
-                var connection = ConnectionFactory.Instance.GetSshConnection(settings.Host, 22, settings.Username, settings.Password);
+                var connection = ConnectionFactory.Instance.GetCompositeConnection(settings.Host, 22, settings.Username, settings.Password);
 
                 // Check for cached file or download
                 var cache = TempFileCache.Instance;
@@ -125,7 +125,7 @@ namespace AvConsoleToolkit.Commands.Sftp
             }
         }
 
-        private async Task DownloadFileAsync(ISshConnection connection, FileEditSettings settings, string localPath, CancellationToken cancellationToken)
+        private async Task DownloadFileAsync(IFileTransferConnection connection, FileEditSettings settings, string localPath, CancellationToken cancellationToken)
         {
             await AnsiConsole.Progress()
                 .AutoClear(false)
@@ -170,7 +170,7 @@ namespace AvConsoleToolkit.Commands.Sftp
             AnsiConsole.MarkupLine("[green]Download complete.[/]");
         }
 
-        private async Task UploadFileAsync(ISshConnection connection, FileEditSettings settings, string localPath, CancellationToken cancellationToken, Action<double>? progressCallback = null)
+        private async Task UploadFileAsync(IFileTransferConnection connection, FileEditSettings settings, string localPath, CancellationToken cancellationToken, Action<double>? progressCallback = null)
         {
             await connection.ConnectFileTransferAsync(cancellationToken);
 
@@ -193,7 +193,7 @@ namespace AvConsoleToolkit.Commands.Sftp
             await connection.SetLastWriteTimeUtcAsync(settings.RemoteFilePath, lastWriteTime, cancellationToken);
         }
 
-        private async Task EditWithBuiltinEditorAsync(ISshConnection connection, FileEditSettings settings, string localPath, CancellationToken cancellationToken)
+        private async Task EditWithBuiltinEditorAsync(IFileTransferConnection connection, FileEditSettings settings, string localPath, CancellationToken cancellationToken)
         {
             var displayName = Path.GetFileName(settings.RemoteFilePath);
             FileTextEditor? editor = null;
@@ -241,7 +241,7 @@ namespace AvConsoleToolkit.Commands.Sftp
             await editor.RunAsync(cancellationToken);
         }
 
-        private async Task EditWithExternalEditorAsync(ISshConnection connection, FileEditSettings settings, string localPath, string editorPath, CancellationToken cancellationToken)
+        private async Task EditWithExternalEditorAsync(IFileTransferConnection connection, FileEditSettings settings, string localPath, string editorPath, CancellationToken cancellationToken)
         {
             var displayName = Path.GetFileName(settings.RemoteFilePath);
             AnsiConsole.MarkupLine($"[cyan]Opening '{displayName}' in external editor: {editorPath}[/]");
