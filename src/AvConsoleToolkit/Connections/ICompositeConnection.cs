@@ -1,4 +1,4 @@
-// <copyright file="ConnectionStatus.cs">
+﻿// <copyright file="ICompositeConnection.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,46 +10,15 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-namespace AvConsoleToolkit.Ssh
+namespace AvConsoleToolkit.Connections
 {
     /// <summary>
-    /// Status of a connection.
+    /// Represents a connection that supports both shell command execution and file transfer operations.
     /// </summary>
-    public enum ConnectionStatus
+    /// <remarks>This interface combines the capabilities of <see cref="IShellConnection"/> and <see cref="IFileTransferConnection"/>,
+    /// allowing implementations to provide both interactive shell access and file transfer functionality over a single
+    /// connection. Members inherited from the base interfaces define the available operations.</remarks>
+    public interface ICompositeConnection : IShellConnection, IFileTransferConnection
     {
-        /// <summary>
-        /// The connection is not established.
-        /// </summary>
-        NotConnected = 0,
-
-        /// <summary>
-        /// The connection is being established.
-        /// </summary>
-        Connecting,
-
-        /// <summary>
-        /// The connection has been established.
-        /// </summary>
-        Connected,
-
-        /// <summary>
-        /// The connection was lost.
-        /// </summary>
-        LostConnection,
-
-        /// <summary>
-        /// The connection is being re-established.
-        /// </summary>
-        Reconnecting,
-
-        /// <summary>
-        /// A connection attempt failed.
-        /// </summary>
-        ConnectionFailed,
-
-        /// <summary>
-        /// The connection is being closed.
-        /// </summary>
-        Disconnecting,
     }
 }
