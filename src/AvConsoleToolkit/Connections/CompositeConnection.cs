@@ -27,7 +27,7 @@ namespace AvConsoleToolkit.Connections
     /// <summary>
     /// Implements SSH and SFTP connection with lazy initialization and automatic recovery.
     /// </summary>
-    public class CompositeConnection : Connections.ICompositeConnection
+    public class CompositeConnection : ICompositeConnection
     {
         private readonly string hostAddress;
 
@@ -185,6 +185,9 @@ namespace AvConsoleToolkit.Connections
         /// </summary>
         public int MaxReconnectionAttempts { get; set; } = 0;
 
+        /// <inheritdoc/>
+        public bool SuppressOutput { get; set; }
+
         public async Task<bool> ConnectFileTransferAsync(CancellationToken cancellationToken = default)
         {
             try
@@ -196,7 +199,7 @@ namespace AvConsoleToolkit.Connections
             catch (Exception ex)
             {
                 this.UpdateSftpStatus(Connections.ConnectionStatus.ConnectionFailed);
-                if (this.verbose)
+                if (this.verbose && !this.SuppressOutput)
                 {
                     AnsiConsole.WriteException(ex);
                 }
@@ -231,7 +234,7 @@ namespace AvConsoleToolkit.Connections
             catch (Exception ex)
             {
                 this.UpdateSshStatus(Connections.ConnectionStatus.ConnectionFailed);
-                if (this.verbose)
+                if (this.verbose && !this.SuppressOutput)
                 {
                     AnsiConsole.WriteException(ex);
                 }
@@ -304,6 +307,11 @@ namespace AvConsoleToolkit.Connections
         /// <param name="cancellationToken">A cancellation token to stop the live display.</param>
         private void StartLiveStatusAsync(CancellationToken cancellationToken = default)
         {
+            if (this.SuppressOutput)
+            {
+                return;
+            }
+
             if (this.liveStatusTask != null && !this.liveStatusTask.IsCompleted)
             {
                 return;
@@ -945,7 +953,10 @@ namespace AvConsoleToolkit.Connections
                     this.isReconnecting = false;
                 }
 
-                AnsiConsole.MarkupLine($"[red]Failed to connect to {this.hostAddress} after {maxAttempts} attempts[/]");
+                if (!this.SuppressOutput)
+                {
+                    AnsiConsole.MarkupLine($"[red]Failed to connect to {this.hostAddress} after {maxAttempts} attempts.[/]");
+                }
             });
         }
 
