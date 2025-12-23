@@ -123,7 +123,7 @@ namespace AvConsoleToolkit.Configuration
         /// Gets or sets the current theme name ("Dark" or "Bright").
         /// </summary>
         [DefaultValue("Dark")]
-        string Theme { get; set; }
+        string ThemeName { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether word wrap is enabled by default.
