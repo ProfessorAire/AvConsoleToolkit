@@ -215,14 +215,12 @@ namespace AvConsoleToolkit.Commands.Sftp
                         cancellationToken,
                         progress =>
                         {
-                            if (editor != null)
-                            {
-                                editor.UploadProgress = (int)progress;
-                            }
+                                editor?.UploadProgress = (int)progress;
                         });
 
                     if (editor != null)
                     {
+                        editor.UploadProgress = 100;
                         editor.UploadProgress = -1;
                     }
                 }

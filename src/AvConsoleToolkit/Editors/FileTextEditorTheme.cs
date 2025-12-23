@@ -1,18 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using AvConsoleToolkit.Configuration;
+﻿using AvConsoleToolkit.Configuration;
 using Spectre.Console;
 
 namespace AvConsoleToolkit.Editors
 {
-    internal record FileTextEditorTheme(
-        Style Header,
-        Style TextEditor,
-        Style Gutter,
-        Style Glyph,
-        Style StatusBar,
-        Style HintBar)
+    internal record FileTextEditorTheme()
     {
         /// <summary>
         /// Gets the Nord Light theme for the file text editor.
@@ -52,6 +43,36 @@ namespace AvConsoleToolkit.Editors
         public static FileTextEditorTheme User { get; }
 
         /// <summary>
+        /// Gets or sets the style applied to the header section.
+        /// </summary>
+        public required Style Header { get; set; }
+
+        /// <summary>
+        /// Gets or sets the style applied to the text editor component.
+        /// </summary>
+        public required Style TextEditor { get; set; }
+
+        /// <summary>
+        /// Gets or sets the style applied to the gutter area of the control.
+        /// </summary>
+        public required Style Gutter { get; set; }
+
+        /// <summary>
+        /// Gets or sets the style information for glyphs associated with this element.
+        /// </summary>
+        public required Style Glyph { get; set; }
+
+        /// <summary>
+        /// Gets or sets the style applied to the status bar.
+        /// </summary>
+        public required Style StatusBar { get; set; }
+
+        /// <summary>
+        /// Gets or sets the style applied to the hint bar element.
+        /// </summary>
+        public required Style HintBar { get; set; }
+
+        /// <summary>
         /// Initializes the built-in file text editor themes, including Nord variants and a user-customizable theme.
         /// </summary>
         /// <remarks>This static constructor sets up several predefined themes based on the Nord color
@@ -61,67 +82,72 @@ namespace AvConsoleToolkit.Editors
         static FileTextEditorTheme()
         {
             // Nord Dark - Dark ambiance design using Polar Night palette
-            NordDark = new FileTextEditorTheme(
-                Header: new Style(foreground: Color.FromHex("ECEFF4"), background: Color.FromHex("3B4252")),
-                TextEditor: new Style(foreground: Color.FromHex("ECEFF4"), background: Color.FromHex("2E3440")),
-                Gutter: new Style(foreground: Color.FromHex("4C566A"), background: Color.FromHex("3B4252")),
-                Glyph: new Style(foreground: Color.FromHex("88C0D0"), background: Color.FromHex("3B4252")),
-                StatusBar: new Style(foreground: Color.FromHex("ECEFF4"), background: Color.FromHex("3B4252")),
-                HintBar: new Style(foreground: Color.FromHex("D8DEE9"), background: Color.FromHex("434C5E"))
-            );
+            NordDark = new FileTextEditorTheme
+            {
+                Header = new Style(foreground: Color.FromHex("ECEFF4"), background: Color.FromHex("3B4252")),
+                TextEditor = new Style(foreground: Color.FromHex("ECEFF4"), background: Color.FromHex("2E3440")),
+                Gutter = new Style(foreground: Color.FromHex("4C566A"), background: Color.FromHex("3B4252")),
+                Glyph = new Style(foreground: Color.FromHex("88C0D0"), background: Color.FromHex("3B4252")),
+                StatusBar = new Style(foreground: Color.FromHex("ECEFF4"), background: Color.FromHex("3B4252")),
+                HintBar = new Style(foreground: Color.FromHex("D8DEE9"), background: Color.FromHex("434C5E"))
+            };
 
             // Nord Light - Bright ambiance design using Snow Storm palette
-            NordLight = new FileTextEditorTheme(
-                Header: new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("E5E9F0")),
-                TextEditor: new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("ECEFF4")),
-                Gutter: new Style(foreground: Color.FromHex("4C566A"), background: Color.FromHex("E5E9F0")),
-                Glyph: new Style(foreground: Color.FromHex("5E81AC"), background: Color.FromHex("E5E9F0")),
-                StatusBar: new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("E5E9F0")),
-                HintBar: new Style(foreground: Color.FromHex("3B4252"), background: Color.FromHex("D8DEE9"))
-            );
+            NordLight = new FileTextEditorTheme
+            {
+                Header = new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("E5E9F0")),
+                TextEditor = new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("ECEFF4")),
+                Gutter = new Style(foreground: Color.FromHex("4C566A"), background: Color.FromHex("E5E9F0")),
+                Glyph = new Style(foreground: Color.FromHex("5E81AC"), background: Color.FromHex("E5E9F0")),
+                StatusBar = new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("E5E9F0")),
+                HintBar = new Style(foreground: Color.FromHex("3B4252"), background: Color.FromHex("D8DEE9"))
+            };
 
             // Nord Semi-Light - Dark to bright style (uses nord4 as base)
-            NordSemiLight = new FileTextEditorTheme(
-                Header: new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("E5E9F0")),
-                TextEditor: new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("D8DEE9")),
-                Gutter: new Style(foreground: Color.FromHex("4C566A"), background: Color.FromHex("E5E9F0")),
-                Glyph: new Style(foreground: Color.FromHex("5E81AC"), background: Color.FromHex("E5E9F0")),
-                StatusBar: new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("E5E9F0")),
-                HintBar: new Style(foreground: Color.FromHex("3B4252"), background: Color.FromHex("ECEFF4"))
-            );
+            NordSemiLight = new FileTextEditorTheme
+            {
+                Header = new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("E5E9F0")),
+                TextEditor = new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("D8DEE9")),
+                Gutter = new Style(foreground: Color.FromHex("4C566A"), background: Color.FromHex("E5E9F0")),
+                Glyph = new Style(foreground: Color.FromHex("5E81AC"), background: Color.FromHex("E5E9F0")),
+                StatusBar = new Style(foreground: Color.FromHex("2E3440"), background: Color.FromHex("E5E9F0")),
+                HintBar = new Style(foreground: Color.FromHex("3B4252"), background: Color.FromHex("ECEFF4"))
+            };
 
             // Nord Semi-Dark - Semi-dark variant with elevated UI elements
-            NordSemiDark = new FileTextEditorTheme(
-                Header: new Style(foreground: Color.FromHex("D8DEE9"), background: Color.FromHex("434C5E")),
-                TextEditor: new Style(foreground: Color.FromHex("ECEFF4"), background: Color.FromHex("3B4252")),
-                Gutter: new Style(foreground: Color.FromHex("4C566A"), background: Color.FromHex("434C5E")),
-                Glyph: new Style(foreground: Color.FromHex("88C0D0"), background: Color.FromHex("434C5E")),
-                StatusBar: new Style(foreground: Color.FromHex("D8DEE9"), background: Color.FromHex("434C5E")),
-                HintBar: new Style(foreground: Color.FromHex("E5E9F0"), background: Color.FromHex("3B4252"))
-            );
+            NordSemiDark = new FileTextEditorTheme
+            {
+                Header = new Style(foreground: Color.FromHex("D8DEE9"), background: Color.FromHex("434C5E")),
+                TextEditor = new Style(foreground: Color.FromHex("ECEFF4"), background: Color.FromHex("3B4252")),
+                Gutter = new Style(foreground: Color.FromHex("4C566A"), background: Color.FromHex("434C5E")),
+                Glyph = new Style(foreground: Color.FromHex("88C0D0"), background: Color.FromHex("434C5E")),
+                StatusBar = new Style(foreground: Color.FromHex("D8DEE9"), background: Color.FromHex("434C5E")),
+                HintBar = new Style(foreground: Color.FromHex("E5E9F0"), background: Color.FromHex("3B4252"))
+            };
 
             // User - Theme generated from AppConfig.Settings.BuiltInEditor
             var settings = AppConfig.Settings.BuiltInEditor;
-            User = new FileTextEditorTheme(
-                Header: new Style(
+            User = new FileTextEditorTheme
+            {
+                Header = new Style(
                     foreground: ParseHexColor(settings.HeaderForegroundColor, NordDark.Header.Foreground),
                     background: ParseHexColor(settings.HeaderBackgroundColor, NordDark.Header.Background)),
-                TextEditor: new Style(
+                TextEditor = new Style(
                     foreground: ParseHexColor(settings.EditorForegroundColor, NordDark.TextEditor.Foreground),
                     background: ParseHexColor(settings.EditorBackgroundColor, NordDark.TextEditor.Background)),
-                Gutter: new Style(
+                Gutter = new Style(
                     foreground: ParseHexColor(settings.GutterForegroundColor, NordDark.TextEditor.Foreground),
                     background: ParseHexColor(settings.GutterBackgroundColor, NordDark.TextEditor.Background)),
-                Glyph: new Style(
+                Glyph = new Style(
                     foreground: ParseHexColor(settings.GlyphColor, NordDark.Glyph.Foreground),
                     background: ParseHexColor(settings.GlyphBackgroundColor, NordDark.Glyph.Background)),
-                StatusBar: new Style(
+                StatusBar = new Style(
                     foreground: ParseHexColor(settings.StatusBarForegroundColor, NordDark.StatusBar.Foreground),
                     background: ParseHexColor(settings.StatusBarBackgroundColor, NordDark.StatusBar.Background)),
-                HintBar: new Style(
+                HintBar = new Style(
                     foreground: ParseHexColor(settings.HintBarForegroundColor, NordDark.HintBar.Foreground),
                     background: ParseHexColor(settings.HintBarBackgroundColor, NordDark.HintBar.Background))
-            );
+            };
         }
 
         /// <summary>
