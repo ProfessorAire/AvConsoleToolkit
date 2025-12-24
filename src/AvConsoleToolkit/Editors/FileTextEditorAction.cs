@@ -1,4 +1,4 @@
-// <copyright file="EditorAction.cs">
+// <copyright file="FileTextEditorAction.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -52,5 +52,30 @@ namespace AvConsoleToolkit.Editors
 
         /// <summary>Toggle between Dark and Bright themes.</summary>
         ToggleTheme,
+
+        /// <summary>
+        /// Search for text in the editor.
+        /// </summary>
+        Search,
+
+        /// <summary>
+        /// Replace text in the editor.
+        /// </summary>
+        Replace,
+
+        /// <summary>
+        /// Find next occurrence in search.
+        /// </summary>
+        FindNext,
+
+        /// <summary>
+        /// Replace current occurrence.
+        /// </summary>
+        ReplaceCurrent,
+
+        /// <summary>
+        /// Replace all occurrences.
+        /// </summary>
+        ReplaceAll,
     }
 }

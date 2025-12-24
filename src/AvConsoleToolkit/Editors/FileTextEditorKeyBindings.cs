@@ -1,4 +1,4 @@
-// <copyright file="EditorKeyBindings.cs">
+// <copyright file="FileTextEditorKeyBindings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -14,7 +14,6 @@ using System;
 
 namespace AvConsoleToolkit.Editors
 {
-
     /// <summary>
     /// Provides default key bindings for the built-in editor.
     /// This class can be extended to support customizable key bindings in the future.
@@ -22,9 +21,9 @@ namespace AvConsoleToolkit.Editors
     public class FileTextEditorKeyBindings
     {
         /// <summary>
-        /// Gets the default key bindings instance.
+        /// Default key bindings for the editor.
         /// </summary>
-        public static FileTextEditorKeyBindings Default { get; } = new FileTextEditorKeyBindings();
+        public static readonly FileTextEditorKeyBindings Default = new();
 
         /// <summary>
         /// Gets the editor action for the given key combination.
@@ -33,12 +32,6 @@ namespace AvConsoleToolkit.Editors
         /// <returns>The editor action to perform.</returns>
         public virtual FileTextEditorAction GetAction(ConsoleKeyInfo key)
         {
-            // Ctrl+F2 for theme toggle
-            if (key.Key == ConsoleKey.F2 && key.Modifiers.HasFlag(ConsoleModifiers.Control))
-            {
-                return FileTextEditorAction.ToggleTheme;
-            }
-
             if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
             {
                 return key.Key switch
@@ -52,15 +45,23 @@ namespace AvConsoleToolkit.Editors
                     ConsoleKey.G => FileTextEditorAction.Help,
                     ConsoleKey.W => FileTextEditorAction.ToggleWordWrap,
                     ConsoleKey.Z => FileTextEditorAction.Undo,
+                    ConsoleKey.F2 => FileTextEditorAction.ToggleTheme,
                     ConsoleKey.Oem3 => FileTextEditorAction.ToggleLineNumbers, // Backtick ` toggles line numbers.
+                    ConsoleKey.F => FileTextEditorAction.Search,
+                    ConsoleKey.H => FileTextEditorAction.Replace,
                     _ => FileTextEditorAction.None
                 };
             }
 
-            // Ctrl+` (backtick) for toggling line numbers
-            if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.KeyChar == '`')
+            if (key.Modifiers.HasFlag(ConsoleModifiers.Alt))
             {
-                return FileTextEditorAction.ToggleLineNumbers;
+                return key.Key switch
+                {
+                    ConsoleKey.N => FileTextEditorAction.FindNext,
+                    ConsoleKey.R => FileTextEditorAction.ReplaceCurrent,
+                    ConsoleKey.A => FileTextEditorAction.ReplaceAll,
+                    _ => FileTextEditorAction.None
+                };
             }
 
             return FileTextEditorAction.None;
@@ -72,39 +73,47 @@ namespace AvConsoleToolkit.Editors
         /// <returns>Array of help text lines.</returns>
         public virtual string[] GetHelpText()
         {
-            return new[]
-            {
+            return
+            [
                 "Built-in Editor Help",
-                "",
+string.Empty,
                 "Navigation:",
-                "  Arrow keys    Move cursor",
-                "  Home/End      Go to start/end of line",
-                "  Page Up/Down  Scroll page up/down",
-                "  Ctrl+Home     Go to start of document",
-                "  Ctrl+End      Go to end of document",
-                "",
+                "  Arrow keys         Move cursor",
+                "  Home/End           Go to start/end of line",
+                "  Page Up/Down       Scroll page up/down",
+                "  Ctrl+Home          Go to start of document",
+                "  Ctrl+End           Go to end of document",
+string.Empty,
                 "Selection:",
                 "  Shift+Arrow        Select text",
                 "  Ctrl+Shift+Arrow   Select word",
                 "  Ctrl+A             Select all",
-                "",
+string.Empty,
                 "Editing:",
-                "  Ctrl+O    Save file",
-                "  Ctrl+Z    Undo",
-                "  Ctrl+C    Copy selection",
-                "  Ctrl+X    Cut selection",
-                "  Ctrl+U    Paste",
-                "  Ctrl+K    Cut line",
-                "",
+                "  Ctrl+O              Save file",
+                "  Ctrl+Z              Undo",
+                "  Ctrl+C              Copy selection",
+                "  Ctrl+X              Cut selection",
+                "  Ctrl+U              Paste",
+                "  Ctrl+K              Cut line",
+string.Empty,
+                "Search/Replace:",
+                "  Ctrl+F              Search for text",
+                "  Ctrl+H              Replace text",
+                "  Alt+N               Find next occurrence",
+                "  Alt+R               Replace current occurrence",
+                "  Alt+A               Replace all occurrences",
+                "  Escape              Close search/replace",
+string.Empty,
                 "View:",
-                "  Ctrl+`    Toggle line numbers",
-                "  Ctrl+W    Toggle word wrap",
-                "  Ctrl+F2   Cycle theme",
-                "",
+                "  Ctrl+`              Toggle line numbers",
+                "  Ctrl+W              Toggle word wrap",
+                "  Ctrl+F2             Cycle theme",
+string.Empty,
                 "Other:",
-                "  Ctrl+G    Show this help",
-                "  Ctrl+Q    Exit editor",
-            };
+                "  Ctrl+G              Show this help",
+                "  Ctrl+Q              Exit editor",
+            ];
         }
 
         /// <summary>
@@ -113,7 +122,7 @@ namespace AvConsoleToolkit.Editors
         /// <returns>The shortcut hint text.</returns>
         public virtual string GetShortcutHints()
         {
-            return " ^Q Exit  ^O Save  ^Z Undo  ^G Help  ^C Copy  ^U Paste  ^F2 Theme";
+            return " ^Q Exit  ^O Save  ^Z Undo  ^G Help  ^F Search  ^H Replace  ^F2 Theme";
         }
     }
 }
