@@ -15,6 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -202,6 +203,8 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
+        private bool handlingExit;
+
         /// <summary>
         /// Runs the editor session.
         /// </summary>
@@ -237,7 +240,7 @@ namespace AvConsoleToolkit.Editors
                             this.needsRender = true;
                         }
 
-                        if (Console.KeyAvailable)
+                        if (Console.KeyAvailable && !this.handlingExit)
                         {
                             var key = Console.ReadKey(true);
                             _ = this.HandleKeyAsync(key, cancellationToken);
@@ -255,6 +258,14 @@ namespace AvConsoleToolkit.Editors
                         }
                     }
                 });
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when cancellation is requested
+            }
+            catch (Exception)
+            {
+                // Ensure we always restore console state even on exceptions
             }
             finally
             {
@@ -640,149 +651,217 @@ namespace AvConsoleToolkit.Editors
         {
             if (this.modified)
             {
-                this.SetStatusMessage("Save changes before exit? (Y)es/(N)o/(C)ancel");
-
-                while (true)
+                try
                 {
-                    if (Console.KeyAvailable)
+                    this.handlingExit = true;
+                    this.SetStatusMessage("Save changes before exit? (Y)es/(N)o/(C)ancel");
+                    this.needsRender = true;
+
+                    var timeout = DateTime.Now.AddSeconds(30);
+                    while (DateTime.Now < timeout)
                     {
-                        var key = Console.ReadKey(true);
-                        switch (char.ToUpperInvariant(key.KeyChar))
+                        if (cancellationToken.IsCancellationRequested)
                         {
-                            case 'Y':
-                                await this.HandleSaveAsync(cancellationToken);
-                                this.running = false;
-                                return;
-                            case 'N':
-                                this.running = false;
-                                return;
-                            case 'C':
-                                this.SetStatusMessage(string.Empty);
-                                return;
+                            this.running = false;
+                            return;
                         }
+
+                        if (Console.KeyAvailable)
+                        {
+                            var key = Console.ReadKey(true);
+                            switch (char.ToUpperInvariant(key.KeyChar))
+                            {
+                                case 'Y':
+                                    await this.HandleSaveAsync(cancellationToken);
+                                    this.running = false;
+                                    return;
+                                case 'N':
+                                    this.running = false;
+                                    return;
+                                case 'C':
+                                    this.SetStatusMessage(string.Empty);
+                                    return;
+                            }
+                        }
+
+                        await Task.Delay(50, cancellationToken);
                     }
 
-                    Thread.Sleep(50);
+                    // Timeout - exit without saving
+                    this.SetStatusMessage("Exit confirmation timeout - exiting without save");
+                    await Task.Delay(1000, CancellationToken.None);
+                }
+                finally
+                {
+                    this.handlingExit = false;
                 }
             }
-            else
-            {
-                this.running = false;
-            }
+
+            this.running = false;
         }
 
         private async Task HandleKeyAsync(ConsoleKeyInfo key, CancellationToken cancellationToken)
         {
-            // If focus is on search/replace, handle input there
-            if (this.currentFocus != SearchReplaceFocus.Editor)
+            try
             {
-                this.HandleSearchReplaceInput(key);
-                return;
-            }
-
-            // Check for editor actions first
-            var action = this.keyBindings.GetAction(key);
-            switch (action)
-            {
-                case FileTextEditorAction.Exit:
-                    await this.HandleExitAsync(cancellationToken);
-                    return;
-                case FileTextEditorAction.Save:
-                    await this.HandleSaveAsync(cancellationToken);
-                    return;
-                case FileTextEditorAction.Copy:
-                    this.HandleCopy();
-                    return;
-                case FileTextEditorAction.Cut:
-                    this.HandleCut();
-                    return;
-                case FileTextEditorAction.Paste:
-                    this.HandlePaste();
-                    return;
-                case FileTextEditorAction.CutLine:
-                    this.HandleCutLine();
-                    return;
-                case FileTextEditorAction.Help:
-                    this.ShowHelp();
-                    return;
-                case FileTextEditorAction.ToggleLineNumbers:
-                    this.showLineNumbers = !this.showLineNumbers;
-                    this.SetStatusMessage($"Line numbers: {(this.showLineNumbers ? "on" : "off")}");
-                    return;
-                case FileTextEditorAction.ToggleWordWrap:
-                    this.wordWrapEnabled = !this.wordWrapEnabled;
-                    this.scrollOffsetX = 0;
-                    this.SetStatusMessage($"Word wrap: {(this.wordWrapEnabled ? "on" : "off")}");
-
-                    //  Re-render to apply word wrap changes
-                    this.Render();
-                    return;
-                case FileTextEditorAction.Undo:
-                    this.Undo();
-                    return;
-                case FileTextEditorAction.ToggleTheme:
-                    this.ToggleTheme();
-                    return;
-                case FileTextEditorAction.Search:
-                    this.OpenSearch();
-                    return;
-                case FileTextEditorAction.Replace:
-                    this.OpenReplace();
-                    return;
-                case FileTextEditorAction.FindNext:
-                    if (this.searchPaneVisible)
-                    {
-                        this.FindNext();
-                    }
-                    return;
-                case FileTextEditorAction.ReplaceCurrent:
-                    if (this.replacePaneVisible)
-                    {
-                        this.ReplaceCurrent();
-                    }
-                    return;
-                case FileTextEditorAction.ReplaceAll:
-                    if (this.replacePaneVisible)
-                    {
-                        this.ReplaceAll();
-                    }
-                    return;
-            }
-
-            // Handle selection (Shift key)
-            var isSelecting = key.Modifiers.HasFlag(ConsoleModifiers.Shift);
-            var isWordMove = key.Modifiers.HasFlag(ConsoleModifiers.Control);
-
-            if (isSelecting && !this.hasSelection)
-            {
-                this.StartSelection();
-            }
-
-            // Handle navigation and editing keys
-            switch (key.Key)
-            {
-                case ConsoleKey.Tab:
-                    if (this.currentFocus != SearchReplaceFocus.Editor)
+                // If focus is on search/replace, handle input there
+                if (this.currentFocus != SearchReplaceFocus.Editor)
+                {
+                    if (await this.HandleSearchReplaceInputAsync(key))
                     {
                         return;
                     }
-                    else
-                    {
-                        if (key.Modifiers.HasFlag(ConsoleModifiers.Shift))
+                }
+
+                // Check for editor actions first
+                var action = this.keyBindings.GetAction(key);
+                switch (action)
+                {
+                    case FileTextEditorAction.Exit:
+                        await this.HandleExitAsync(cancellationToken);
+                        return;
+                    case FileTextEditorAction.Save:
+                        await this.HandleSaveAsync(cancellationToken);
+                        return;
+                    case FileTextEditorAction.Copy:
+                        this.HandleCopy();
+                        return;
+                    case FileTextEditorAction.Cut:
+                        this.HandleCut();
+                        return;
+                    case FileTextEditorAction.Paste:
+                        this.HandlePaste();
+                        return;
+                    case FileTextEditorAction.CutLine:
+                        this.HandleCutLine();
+                        return;
+                    case FileTextEditorAction.Help:
+                        this.ShowHelp();
+                        return;
+                    case FileTextEditorAction.ToggleLineNumbers:
+                        this.showLineNumbers = !this.showLineNumbers;
+                        this.SetStatusMessage($"Line numbers: {(this.showLineNumbers ? "on" : "off")}");
+                        return;
+                    case FileTextEditorAction.ToggleWordWrap:
+                        this.wordWrapEnabled = !this.wordWrapEnabled;
+                        this.scrollOffsetX = 0;
+                        this.SetStatusMessage($"Word wrap: {(this.wordWrapEnabled ? "on" : "off")}");
+
+                        //  Re-render to apply word wrap changes
+                        this.Render();
+                        return;
+                    case FileTextEditorAction.Undo:
+                        this.Undo();
+                        return;
+                    case FileTextEditorAction.ToggleTheme:
+                        this.ToggleTheme();
+                        return;
+                    case FileTextEditorAction.Search:
+                        this.OpenSearch();
+                        return;
+                    case FileTextEditorAction.Replace:
+                        this.OpenReplace();
+                        return;
+                    case FileTextEditorAction.FindNext:
+                        if (this.searchPaneVisible)
                         {
-                            if (this.TryGetNormalizedSelection(out var sel))
+                            this.FindNext();
+                        }
+                        return;
+                    case FileTextEditorAction.ReplaceCurrent:
+                        if (this.replacePaneVisible)
+                        {
+                            this.ReplaceCurrent();
+                        }
+                        return;
+                    case FileTextEditorAction.ReplaceAll:
+                        if (this.replacePaneVisible)
+                        {
+                            this.ReplaceAll();
+                        }
+                        return;
+                }
+
+                // Handle selection (Shift key)
+                var isSelecting = key.Modifiers.HasFlag(ConsoleModifiers.Shift);
+                var isWordMove = key.Modifiers.HasFlag(ConsoleModifiers.Control);
+
+                if (isSelecting && !this.hasSelection)
+                {
+                    this.StartSelection();
+                }
+
+                // Handle navigation and editing keys
+                switch (key.Key)
+                {
+                    case ConsoleKey.Tab:
+                        if (this.currentFocus != SearchReplaceFocus.Editor)
+                        {
+                            return;
+                        }
+                        else
+                        {
+                            if (key.Modifiers.HasFlag(ConsoleModifiers.Shift))
                             {
-                                this.SaveUndoState();
-                                
-                                var changed = false;
-                                var cursorLineRemoveCount = 0;
-                                for (var i = sel.startRow; i <= sel.endRow; i++)
+                                if (this.TryGetNormalizedSelection(out var sel))
                                 {
-                                    var line = this.lines[i];
-                                    var removeCount = 0;
-                                    for (var j = 0; j < this.tabDepth && j < line.Length; j++)
+                                    this.SaveUndoState();
+
+                                    var changed = false;
+                                    var cursorLineRemoveCount = 0;
+                                    for (var i = sel.startRow; i <= sel.endRow; i++)
                                     {
-                                        if (line[j] == ' ')
+                                        var line = this.lines[i];
+                                        var removeCount = 0;
+                                        for (var j = 0; j < this.tabDepth && j < line.Length; j++)
+                                        {
+                                            if (line[j] == ' ')
+                                            {
+                                                removeCount++;
+                                            }
+                                            else
+                                            {
+                                                break;
+                                            }
+                                        }
+
+                                        if (removeCount > 0)
+                                        {
+                                            changed = true;
+                                            line.Remove(0, removeCount);
+
+                                            // Track removal for cursor line
+                                            if (i == this.cursorRow)
+                                            {
+                                                cursorLineRemoveCount = removeCount;
+                                            }
+
+                                            // Adjust selection boundaries for this line
+                                            if (i == sel.startRow)
+                                            {
+                                                this.selectionStartCol = Math.Max(0, this.selectionStartCol - removeCount);
+                                            }
+
+                                            if (i == sel.endRow)
+                                            {
+                                                this.selectionEndCol = Math.Max(0, this.selectionEndCol - removeCount);
+                                            }
+                                        }
+                                    }
+
+                                    if (changed)
+                                    {
+                                        this.cursorCol = Math.Max(0, this.cursorCol - cursorLineRemoveCount);
+                                        this.modified = true;
+                                    }
+                                }
+                                else
+                                {
+                                    var line = this.lines[this.cursorRow];
+                                    var removeCount = 0;
+                                    for (var i = 0; i < this.tabDepth && i < line.Length; i++)
+                                    {
+                                        if (line[i] == ' ')
                                         {
                                             removeCount++;
                                         }
@@ -794,218 +873,183 @@ namespace AvConsoleToolkit.Editors
 
                                     if (removeCount > 0)
                                     {
-                                        changed = true;
+                                        this.SaveUndoState();
                                         line.Remove(0, removeCount);
-                                        
-                                        // Track removal for cursor line
-                                        if (i == this.cursorRow)
-                                        {
-                                            cursorLineRemoveCount = removeCount;
-                                        }
-                                        
-                                        // Adjust selection boundaries for this line
-                                        if (i == sel.startRow)
-                                        {
-                                            this.selectionStartCol = Math.Max(0, this.selectionStartCol - removeCount);
-                                        }
-                                        
-                                        if (i == sel.endRow)
-                                        {
-                                            this.selectionEndCol = Math.Max(0, this.selectionEndCol - removeCount);
-                                        }
+                                        this.cursorCol = Math.Max(0, this.cursorCol - removeCount);
+                                        this.modified = true;
                                     }
                                 }
+                            }
+                            else if (this.hasSelection)
+                            {
+                                this.SaveUndoState();
 
-                                if (changed)
+                                var sel = this.GetNormalizedSelection();
+                                for (var i = sel.startRow; i <= sel.endRow; i++)
                                 {
-                                    this.cursorCol = Math.Max(0, this.cursorCol - cursorLineRemoveCount);
-                                    this.modified = true;
+                                    var line = this.lines[i];
+                                    line.Insert(0, " ", this.tabDepth);
                                 }
+
+                                this.selectionStartCol += this.tabDepth;
+                                this.selectionEndCol += this.tabDepth;
+                                this.modified = true;
+                                this.needsRender = true;
                             }
                             else
                             {
-                                var line = this.lines[this.cursorRow];
-                                var removeCount = 0;
-                                for (var i = 0; i < this.tabDepth && i < line.Length; i++)
-                                {
-                                    if (line[i] == ' ')
-                                    {
-                                        removeCount++;
-                                    }
-                                    else
-                                    {
-                                        break;
-                                    }
-                                }
-
-                                if (removeCount > 0)
-                                {
-                                    this.SaveUndoState();
-                                    line.Remove(0, removeCount);
-                                    this.cursorCol = Math.Max(0, this.cursorCol - removeCount);
-                                    this.modified = true;
-                                }
+                                this.DeleteSelection();
+                                this.InsertText(new string(' ', this.tabDepth));
                             }
                         }
-                        else if (this.hasSelection)
-                        {
-                            this.SaveUndoState();
-                            
-                            var sel = this.GetNormalizedSelection();
-                            for (var i = sel.startRow; i <= sel.endRow; i++)
-                            {
-                                var line = this.lines[i];
-                                line.Insert(0, " ", this.tabDepth);
-                            }
+                        break;
 
-                            this.selectionStartCol += this.tabDepth;
-                            this.selectionEndCol += this.tabDepth;
-                            this.modified = true;
-                            this.needsRender = true;
+                    case ConsoleKey.Escape:
+                        if (this.searchPaneVisible)
+                        {
+                            // Close search/replace pane but leave selection intact
+                            this.CloseSearchReplace();
+                            return;
+                        }
+                        break;
+
+                    case ConsoleKey.UpArrow:
+                        this.MoveCursorUp(isSelecting);
+                        break;
+
+                    case ConsoleKey.DownArrow:
+                        this.MoveCursorDown(isSelecting);
+                        break;
+
+                    case ConsoleKey.LeftArrow:
+                        if (isWordMove)
+                        {
+                            this.MoveCursorWordLeft(isSelecting);
                         }
                         else
                         {
-                            this.DeleteSelection();
-                            this.InsertText(new string(' ', this.tabDepth));
+                            this.MoveCursorLeft(isSelecting);
                         }
-                    }
-                    break;
 
-                case ConsoleKey.Escape:
-                    if (this.searchPaneVisible)
-                    {
-                        // Close search/replace pane but leave selection intact
-                        this.CloseSearchReplace();
-                        return;
-                    }
-                    break;
+                        break;
 
-                case ConsoleKey.UpArrow:
-                    this.MoveCursorUp(isSelecting);
-                    break;
+                    case ConsoleKey.RightArrow:
+                        if (isWordMove)
+                        {
+                            this.MoveCursorWordRight(isSelecting);
+                        }
+                        else
+                        {
+                            this.MoveCursorRight(isSelecting);
+                        }
 
-                case ConsoleKey.DownArrow:
-                    this.MoveCursorDown(isSelecting);
-                    break;
+                        break;
 
-                case ConsoleKey.LeftArrow:
-                    if (isWordMove)
-                    {
-                        this.MoveCursorWordLeft(isSelecting);
-                    }
-                    else
-                    {
-                        this.MoveCursorLeft(isSelecting);
-                    }
+                    case ConsoleKey.Home:
+                        if (isWordMove)
+                        {
+                            this.cursorRow = 0;
+                            this.cursorCol = 0;
+                        }
+                        else
+                        {
+                            this.cursorCol = 0;
+                        }
 
-                    break;
+                        this.UpdateSelection(isSelecting);
+                        break;
 
-                case ConsoleKey.RightArrow:
-                    if (isWordMove)
-                    {
-                        this.MoveCursorWordRight(isSelecting);
-                    }
-                    else
-                    {
-                        this.MoveCursorRight(isSelecting);
-                    }
+                    case ConsoleKey.End:
+                        if (isWordMove)
+                        {
+                            this.cursorRow = this.lines.Count - 1;
+                            this.cursorCol = this.lines[this.cursorRow].Length;
+                        }
+                        else
+                        {
+                            this.cursorCol = this.lines[this.cursorRow].Length;
+                        }
 
-                    break;
+                        this.UpdateSelection(isSelecting);
+                        break;
 
-                case ConsoleKey.Home:
-                    if (isWordMove)
-                    {
-                        this.cursorRow = 0;
-                        this.cursorCol = 0;
-                    }
-                    else
-                    {
-                        this.cursorCol = 0;
-                    }
+                    case ConsoleKey.PageUp:
+                        var pageUp = Console.WindowHeight - 3;
+                        this.cursorRow = Math.Max(0, this.cursorRow - pageUp);
+                        this.cursorCol = Math.Min(this.cursorCol, this.lines[this.cursorRow].Length);
+                        this.UpdateSelection(isSelecting);
+                        break;
 
-                    this.UpdateSelection(isSelecting);
-                    break;
+                    case ConsoleKey.PageDown:
+                        var pageDown = Console.WindowHeight - 3;
+                        this.cursorRow = Math.Min(this.lines.Count - 1, this.cursorRow + pageDown);
+                        this.cursorCol = Math.Min(this.cursorCol, this.lines[this.cursorRow].Length);
+                        this.UpdateSelection(isSelecting);
+                        break;
 
-                case ConsoleKey.End:
-                    if (isWordMove)
-                    {
-                        this.cursorRow = this.lines.Count - 1;
-                        this.cursorCol = this.lines[this.cursorRow].Length;
-                    }
-                    else
-                    {
-                        this.cursorCol = this.lines[this.cursorRow].Length;
-                    }
-
-                    this.UpdateSelection(isSelecting);
-                    break;
-
-                case ConsoleKey.PageUp:
-                    var pageUp = Console.WindowHeight - 3;
-                    this.cursorRow = Math.Max(0, this.cursorRow - pageUp);
-                    this.cursorCol = Math.Min(this.cursorCol, this.lines[this.cursorRow].Length);
-                    this.UpdateSelection(isSelecting);
-                    break;
-
-                case ConsoleKey.PageDown:
-                    var pageDown = Console.WindowHeight - 3;
-                    this.cursorRow = Math.Min(this.lines.Count - 1, this.cursorRow + pageDown);
-                    this.cursorCol = Math.Min(this.cursorCol, this.lines[this.cursorRow].Length);
-                    this.UpdateSelection(isSelecting);
-                    break;
-
-                case ConsoleKey.Enter:
-                    this.DeleteSelection();
-                    this.HandleEnter();
-                    break;
-
-                case ConsoleKey.Backspace:
-                    if (this.hasSelection)
-                    {
+                    case ConsoleKey.Enter:
                         this.DeleteSelection();
-                    }
-                    else
-                    {
-                        this.HandleBackspace();
-                    }
+                        this.HandleEnter();
+                        break;
 
-                    break;
+                    case ConsoleKey.Backspace:
+                        if (this.hasSelection)
+                        {
+                            this.DeleteSelection();
+                        }
+                        else
+                        {
+                            this.HandleBackspace();
+                        }
 
-                case ConsoleKey.Delete:
-                    if (this.hasSelection)
-                    {
-                        this.DeleteSelection();
-                    }
-                    else
-                    {
-                        this.HandleDelete();
-                    }
+                        break;
 
-                    break;
+                    case ConsoleKey.Delete:
+                        if (this.hasSelection)
+                        {
+                            this.DeleteSelection();
+                        }
+                        else
+                        {
+                            this.HandleDelete();
+                        }
 
-                case ConsoleKey.A:
-                    if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
-                    {
-                        this.SelectAll();
-                    }
-                    else if (!char.IsControl(key.KeyChar))
-                    {
-                        this.DeleteSelection();
-                        this.InsertChar(key.KeyChar);
-                    }
+                        break;
 
-                    break;
+                    case ConsoleKey.A:
+                        if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
+                        {
+                            this.SelectAll();
+                        }
+                        else if (!char.IsControl(key.KeyChar))
+                        {
+                            this.DeleteSelection();
+                            this.InsertChar(key.KeyChar);
+                        }
 
-                default:
-                    if (!char.IsControl(key.KeyChar))
-                    {
-                        this.DeleteSelection();
-                        this.InsertChar(key.KeyChar);
-                    }
+                        break;
 
-                    break;
+                    default:
+                        if (!char.IsControl(key.KeyChar))
+                        {
+                            this.DeleteSelection();
+                            this.InsertChar(key.KeyChar);
+                        }
+
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (this.verbose)
+                {
+                    AnsiConsole.Write(new Text($"Error while processing key-stroke '{key.Key}'.{Environment.NewLine}", new Style(Color.Red)));
+                    AnsiConsole.WriteException(ex, ExceptionFormats.ShortenEverything);
+                }
             }
         }
+
+        private bool verbose;
 
         private void HandlePaste()
         {
@@ -1046,63 +1090,8 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        private void HandleSearchReplaceInput(ConsoleKeyInfo key)
+        private async Task<bool> HandleSearchReplaceInputAsync(ConsoleKeyInfo key)
         {
-            // Check for global editor actions first (they work from anywhere)
-            var action = this.keyBindings.GetAction(key);
-            switch (action)
-            {
-                case FileTextEditorAction.Exit:
-                    _ = this.HandleExitAsync(CancellationToken.None);
-                    return;
-                case FileTextEditorAction.Save:
-                    _ = this.HandleSaveAsync(CancellationToken.None);
-                    return;
-                case FileTextEditorAction.Help:
-                    this.ShowHelp();
-                    return;
-                case FileTextEditorAction.ToggleLineNumbers:
-                    this.showLineNumbers = !this.showLineNumbers;
-                    this.SetStatusMessage($"Line numbers: {(this.showLineNumbers ? "on" : "off")}");
-                    return;
-                case FileTextEditorAction.ToggleWordWrap:
-                    this.wordWrapEnabled = !this.wordWrapEnabled;
-                    this.scrollOffsetX = 0;
-                    this.SetStatusMessage($"Word wrap: {(this.wordWrapEnabled ? "on" : "off")}");
-                    this.Render();
-                    return;
-                case FileTextEditorAction.Undo:
-                    this.Undo();
-                    return;
-                case FileTextEditorAction.ToggleTheme:
-                    this.ToggleTheme();
-                    return;
-                case FileTextEditorAction.Search:
-                    this.OpenSearch();
-                    return;
-                case FileTextEditorAction.Replace:
-                    this.OpenReplace();
-                    return;
-                case FileTextEditorAction.FindNext:
-                    if (this.searchPaneVisible)
-                    {
-                        this.FindNext();
-                    }
-                    return;
-                case FileTextEditorAction.ReplaceCurrent:
-                    if (this.replacePaneVisible)
-                    {
-                        this.ReplaceCurrent();
-                    }
-                    return;
-                case FileTextEditorAction.ReplaceAll:
-                    if (this.replacePaneVisible)
-                    {
-                        this.ReplaceAll();
-                    }
-                    return;
-            }
-
             var isSearch = this.currentFocus == SearchReplaceFocus.Search;
             ref var text = ref (isSearch ? ref this.searchText : ref this.replaceText);
             ref var cursorPos = ref (isSearch ? ref this.searchCursorPosition : ref this.replaceCursorPosition);
@@ -1141,14 +1130,15 @@ namespace AvConsoleToolkit.Editors
                         this.currentFocus = SearchReplaceFocus.Editor;
                     }
                 }
-                return;
+
+                return true;
             }
 
             if (key.Key == ConsoleKey.Escape)
             {
                 // Close search/replace and return to editor
                 this.CloseSearchReplace();
-                return;
+                return true;
             }
 
             // Handle text input in search/replace boxes
@@ -1163,7 +1153,7 @@ namespace AvConsoleToolkit.Editors
                     {
                         this.ReplaceCurrent();
                     }
-                    break;
+                    return true;
 
                 case ConsoleKey.Backspace:
                     if (cursorPos > 0)
@@ -1175,7 +1165,7 @@ namespace AvConsoleToolkit.Editors
                             this.UpdateSearchMatches();
                         }
                     }
-                    break;
+                    return true;
 
                 case ConsoleKey.Delete:
                     if (cursorPos < text.Length)
@@ -1186,29 +1176,29 @@ namespace AvConsoleToolkit.Editors
                             this.UpdateSearchMatches();
                         }
                     }
-                    break;
+                    return true;
 
                 case ConsoleKey.LeftArrow:
                     if (cursorPos > 0)
                     {
                         cursorPos--;
                     }
-                    break;
+                    return true;
 
                 case ConsoleKey.RightArrow:
                     if (cursorPos < text.Length)
                     {
                         cursorPos++;
                     }
-                    break;
+                    return true;
 
                 case ConsoleKey.Home:
                     cursorPos = 0;
-                    break;
+                    return true;
 
                 case ConsoleKey.End:
                     cursorPos = text.Length;
-                    break;
+                    return true;
 
                 default:
                     if (!char.IsControl(key.KeyChar))
@@ -1219,9 +1209,13 @@ namespace AvConsoleToolkit.Editors
                         {
                             this.UpdateSearchMatches();
                         }
+
+                        return true;
                     }
                     break;
             }
+
+            return false;
         }
 
         private void InsertChar(char c)
@@ -1471,8 +1465,20 @@ namespace AvConsoleToolkit.Editors
 
         private void Render()
         {
+            // Don't render if we're shutting down
+            if (!this.running)
+            {
+                return;
+            }
+
             lock (this.syncRoot)
             {
+                // Double-check after acquiring lock
+                if (!this.running)
+                {
+                    return;
+                }
+
                 var windowWidth = Console.WindowWidth;
                 var windowHeight = Console.WindowHeight;
                 var headerLines = 1;
