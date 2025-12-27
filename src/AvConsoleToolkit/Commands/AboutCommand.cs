@@ -170,7 +170,7 @@ namespace AvConsoleToolkit.Commands
                         .AddColumn(new TableColumn("[blue]License URL[/]").Width(60));
 
                     // Parse the licenses
-                    var lines = licensesText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                    var lines = licensesText.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
 
                     string? currentPackage = null;
                     string? currentLicense = null;

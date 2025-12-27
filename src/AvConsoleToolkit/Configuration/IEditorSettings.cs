@@ -1,4 +1,4 @@
-// <copyright file="ConnectionStatus.cs">
+// <copyright file="IEditorSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,46 +10,30 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-namespace AvConsoleToolkit.Ssh
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
+
+namespace AvConsoleToolkit.Configuration
 {
     /// <summary>
-    /// Status of a connection.
+    /// Defines settings for file editors used in remote file editing.
     /// </summary>
-    public enum ConnectionStatus
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
+    public interface IEditorSettings
     {
         /// <summary>
-        /// The connection is not established.
+        /// Gets the editor mappings by file extension.
+        /// <para>In the pattern <c>txt=notepad.exe;json=code</c></para>
         /// </summary>
-        NotConnected,
+        [DefaultValue("")]
+        string Mappings { get; set; }
 
         /// <summary>
-        /// The connection is being established.
+        /// Gets or sets the name or path of the default editor application used to open files instead of the built-in editor.
         /// </summary>
-        Connecting,
-
-        /// <summary>
-        /// The connection has been established.
-        /// </summary>
-        Connected,
-
-        /// <summary>
-        /// The connection was lost.
-        /// </summary>
-        LostConnection,
-
-        /// <summary>
-        /// The connection is being re-established.
-        /// </summary>
-        Reconnecting,
-
-        /// <summary>
-        /// A connection attempt failed.
-        /// </summary>
-        ConnectionFailed,
-
-        /// <summary>
-        /// The connection is being closed.
-        /// </summary>
-        Disconnecting,
+        [Description("Name or path of the default editor application used to open files instead of the built-in editor.")]
+        [DefaultValue("")]
+        string DefaultEditor { get; set; }
     }
 }

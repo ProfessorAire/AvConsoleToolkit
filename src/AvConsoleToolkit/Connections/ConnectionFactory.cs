@@ -15,16 +15,16 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
-namespace AvConsoleToolkit.Ssh
+namespace AvConsoleToolkit.Connections
 {
     /// <summary>
     /// Factory implementation for creating and caching SSH connections.
     /// </summary>
-    public class ConnectionFactory : IConnectionFactory
+    public class ConnectionFactory : Connections.IConnectionFactory
     {
-        private static readonly Lazy<ConnectionFactory> LazyInstance = new(() => new ConnectionFactory());
+        private static readonly Lazy<Connections.ConnectionFactory> LazyInstance = new(() => new Connections.ConnectionFactory());
 
-        private readonly Dictionary<string, ISshConnection> connectionCache = [];
+        private readonly Dictionary<string, Connections.ICompositeConnection> connectionCache = [];
 
         private readonly Lock lockObject = new();
 
@@ -38,10 +38,10 @@ namespace AvConsoleToolkit.Ssh
         /// <summary>
         /// Gets the singleton instance of the connection factory.
         /// </summary>
-        public static ConnectionFactory Instance => LazyInstance.Value;
+        public static Connections.ConnectionFactory Instance => LazyInstance.Value;
 
         /// <inheritdoc/>
-        public ISshConnection GetSshConnection(string hostAddress, int port, string username)
+        public Connections.ICompositeConnection GetCompositeConnection(string hostAddress, int port, string username)
         {
             if (string.IsNullOrEmpty(hostAddress))
             {
@@ -78,14 +78,14 @@ namespace AvConsoleToolkit.Ssh
                     return existingConnection;
                 }
 
-                var connection = new SshConnection(hostAddress, port, username, privateKeyPath, usePrivateKey: true);
+                var connection = new CompositeConnection(hostAddress, port, username, privateKeyPath, usePrivateKey: true);
                 this.connectionCache[key] = connection;
                 return connection;
             }
         }
 
         /// <inheritdoc/>
-        public ISshConnection GetSshConnection(string hostAddress, int port, string username, string password)
+        public Connections.ICompositeConnection GetCompositeConnection(string hostAddress, int port, string username, string password)
         {
             if (string.IsNullOrEmpty(hostAddress))
             {
@@ -111,7 +111,7 @@ namespace AvConsoleToolkit.Ssh
                     return existingConnection;
                 }
 
-                var connection = new SshConnection(hostAddress, port, username, password);
+                var connection = new CompositeConnection(hostAddress, port, username, password);
                 this.connectionCache[key] = connection;
                 return connection;
             }

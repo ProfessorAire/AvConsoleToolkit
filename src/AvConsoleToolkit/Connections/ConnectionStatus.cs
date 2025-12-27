@@ -1,4 +1,4 @@
-﻿// <copyright file="ISettings.cs">
+// <copyright file="ConnectionStatus.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,34 +10,46 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Diagnostics.CodeAnalysis;
-
-namespace AvConsoleToolkit.Configuration
+namespace AvConsoleToolkit.Connections
 {
     /// <summary>
-    /// Defines the application's settings.
+    /// Status of a connection.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface ISettings
+    public enum ConnectionStatus
     {
         /// <summary>
-        /// Gets the current connection settings used to configure connection related functionality.
+        /// The connection is not established.
         /// </summary>
-        IConnectionSettings Connection { get; }
+        NotConnected = 0,
 
         /// <summary>
-        /// Gets the current editor settings used to configure file editing functionality.
+        /// The connection is being established.
         /// </summary>
-        IEditorSettings Editor { get; }
+        Connecting,
 
         /// <summary>
-        /// Gets the settings for the built-in text editor.
+        /// The connection has been established.
         /// </summary>
-        IBuiltInEditorSettings BuiltInEditor { get; }
+        Connected,
 
         /// <summary>
-        /// Gets the current connection settings used to configure Pass Through specific functionality.
+        /// The connection was lost.
         /// </summary>
-        IPassThroughSettings PassThrough { get; }
+        LostConnection,
+
+        /// <summary>
+        /// The connection is being re-established.
+        /// </summary>
+        Reconnecting,
+
+        /// <summary>
+        /// A connection attempt failed.
+        /// </summary>
+        ConnectionFailed,
+
+        /// <summary>
+        /// The connection is being closed.
+        /// </summary>
+        Disconnecting,
     }
 }

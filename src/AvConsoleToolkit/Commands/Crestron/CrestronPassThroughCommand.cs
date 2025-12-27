@@ -48,7 +48,8 @@ namespace AvConsoleToolkit.Commands.Crestron
                 { "rm", "del" },
                 { "cp", "copy" },
                 { "mv", "move" },
-                { "pwd", "cd" }
+                { "pwd", "cd" },
+                { "edit", "::sftp edit" },
             };
 
             // Parse and merge user-defined mappings from configuration

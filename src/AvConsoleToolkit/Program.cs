@@ -1,7 +1,7 @@
 // <copyright file="Program.cs">
 // The MIT License
-// Copyright � Christopher McNeely
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the �Software�),
+// Copyright © Christopher McNeely
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -11,7 +11,7 @@
 // </copyright>
 
 using System;
-using AvConsoleToolkit.Ssh;
+using AvConsoleToolkit.Commands.Sftp;
 using Spectre.Console.Cli;
 
 namespace AvConsoleToolkit
@@ -82,6 +82,18 @@ namespace AvConsoleToolkit
                 })
                 .WithAlias("c");
 
+                config.AddBranch("sftp", sftp =>
+                {
+                    sftp.SetDescription("Commands performed using SFTP.");
+                    sftp.AddCommand<FileEditCommand>("edit")
+                        .WithAlias("e")
+                        .WithDescription("Edit a file on a remote device via SFTP and a built-in text editor, or specified local application. Applications can be configured on a per-extension basis via the editor settings.")
+                        .WithExample(["sftp", "edit", "program01/config.xml", "-a", "192.168.1.100"])
+                        .WithExample(["sftp", "edit", "user/settings.json", "-a", "192.168.1.100", "-f"])
+                        .WithExample(["sftp", "edit", "program01/data.txt", "-a", "192.168.1.100", "-b"])
+                        .WithExample(["sftp", "edit", "user/appSettings.jsonc", "-a", "192.168.1.100", "-e", "notepad"]);
+                });
+
                 config.AddBranch("config", cfg =>
                 {
                     cfg.SetDescription("Configuration management, such as setting or reading configuration values.");
@@ -107,14 +119,14 @@ namespace AvConsoleToolkit
 
                 config.AddBranch("addressbook", ab =>
                 {
-                    ab.SetDescription("Utilities for looking up Crestron device information from address books.");
-                    
+                    ab.SetDescription("Utilities for looking up device information from supported address books.");
+
                     ab.AddCommand<Commands.AddressBook.AddressBookListCommand>("list")
                         .WithAlias("ls")
                         .WithDescription("List all entries from configured address books")
                         .WithExample(["addressbook", "list"])
                         .WithExample(["ab", "ls", "--detailed"]);
-                    
+
                     ab.AddCommand<Commands.AddressBook.AddressBookLookupCommand>("lookup")
                         .WithAlias("l")
                         .WithDescription("Look up a specific address book entry by name or IP address")
@@ -125,7 +137,7 @@ namespace AvConsoleToolkit
             });
 
             var result = App.Run(args);
-            ConnectionFactory.Instance.ReleaseAll();
+            Connections.ConnectionFactory.Instance.ReleaseAll();
             return result;
         }
     }
