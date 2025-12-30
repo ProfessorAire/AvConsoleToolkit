@@ -45,7 +45,8 @@ namespace AvConsoleToolkit.Editors
                     ConsoleKey.G => FileTextEditorAction.Help,
                     ConsoleKey.W => FileTextEditorAction.ToggleWordWrap,
                     ConsoleKey.Z => FileTextEditorAction.Undo,
-                    ConsoleKey.F2 => FileTextEditorAction.ToggleTheme,
+                    ConsoleKey.Y => FileTextEditorAction.Redo,
+                    ConsoleKey.F2 => FileTextEditorAction.CycleTheme,
                     ConsoleKey.Oem3 => FileTextEditorAction.ToggleLineNumbers, // Backtick ` toggles line numbers.
                     ConsoleKey.F => FileTextEditorAction.Search,
                     ConsoleKey.H => FileTextEditorAction.Replace,
@@ -92,6 +93,7 @@ string.Empty,
                 "Editing:",
                 "  Ctrl+O              Save file",
                 "  Ctrl+Z              Undo",
+                "  Ctrl+Y              Redo",
                 "  Ctrl+C              Copy selection",
                 "  Ctrl+X              Cut selection",
                 "  Ctrl+U              Paste",
@@ -122,7 +124,7 @@ string.Empty,
         /// <returns>The shortcut hint text.</returns>
         public virtual string GetShortcutHints()
         {
-            return " ^Q Exit  ^O Save  ^Z Undo  ^G Help  ^F Search  ^H Replace  ^F2 Theme";
+            return " ^Q Exit  ^O Save  ^G Help";
         }
     }
 }

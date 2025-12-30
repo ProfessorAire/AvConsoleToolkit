@@ -1,4 +1,6 @@
-﻿using AvConsoleToolkit.Configuration;
+﻿using System;
+using System.IO;
+using AvConsoleToolkit.Configuration;
 using Spectre.Console;
 
 namespace AvConsoleToolkit.Editors
@@ -148,6 +150,50 @@ namespace AvConsoleToolkit.Editors
                     foreground: ParseHexColor(settings.HintBarForegroundColor, NordDark.HintBar.Foreground),
                     background: ParseHexColor(settings.HintBarBackgroundColor, NordDark.HintBar.Background))
             };
+        }
+
+        /// <summary>
+        /// Returns a header style for the specified file based on its extension and configured color mappings.
+        /// </summary>
+        /// <remarks>Header color mappings are defined in the application settings as a
+        /// semicolon-separated list of extension-to-color pairs. If a mapping exists for the file's extension, the
+        /// corresponding colors are applied to the header style.</remarks>
+        /// <param name="fileNameAndPath">The full path or name of the file for which to retrieve the header style. The file extension is used to
+        /// determine the style.</param>
+        /// <returns>A Style object representing the foreground and background colors to use for the file's header. If no
+        /// specific color mapping is found for the file extension, the default header style is returned.</returns>
+        public Style GetHeaderForFile(string fileNameAndPath)
+        {
+            var extension = Path.GetExtension(fileNameAndPath)?.TrimStart('.').ToLowerInvariant() ?? string.Empty;
+            var headerFgColor = this.Header.Foreground;
+            var headerBgColor = this.Header.Background;
+
+            var settings = AppConfig.Settings.BuiltInEditor;
+            if (!string.IsNullOrWhiteSpace(settings.HeaderColorMappings))
+            {
+                var mappings = settings.HeaderColorMappings.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                foreach (var mapping in mappings)
+                {
+                    var parts = mapping.Split('=', 2, StringSplitOptions.TrimEntries);
+                    if (parts.Length == 2 && parts[0].Equals(extension, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var colors = parts[1].Split(',', StringSplitOptions.TrimEntries);
+                        if (colors.Length >= 1)
+                        {
+                            headerFgColor = ParseHexColor(colors[0], headerFgColor);
+                        }
+
+                        if (colors.Length >= 2)
+                        {
+                            headerBgColor = ParseHexColor(colors[1], headerBgColor);
+                        }
+
+                        break;
+                    }
+                }
+            }
+
+            return new Style(headerFgColor, headerBgColor);
         }
 
         /// <summary>
