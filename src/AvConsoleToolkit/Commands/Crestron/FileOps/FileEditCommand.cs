@@ -22,7 +22,7 @@ using AvConsoleToolkit.Ssh;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Crestron.FileCommands
+namespace AvConsoleToolkit.Commands.Crestron.FileOps
 {
     /// <summary>
     /// Command that allows in-line editing of files on remote Crestron devices.
@@ -373,7 +373,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
             var editorSettings = AppConfig.Settings.Editor;
 
             // Check for extension-specific mapping in the dictionary
-            if (editorSettings?.Mappings != null && editorSettings.Mappings.TryGetValue(extension, out var editorPath))
+            if (editorSettings != null && editorSettings.TryGetValue(extension, out var editorPath))
             {
                 if (!string.IsNullOrWhiteSpace(editorPath))
                 {

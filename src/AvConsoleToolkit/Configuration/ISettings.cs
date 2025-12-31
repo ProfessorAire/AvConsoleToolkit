@@ -27,6 +27,7 @@ namespace AvConsoleToolkit.Configuration
 
         /// <summary>
         /// Gets the current editor settings used to configure file editing functionality.
+        /// Maps file extensions (without the dot) to external editor paths.
         /// </summary>
         IEditorSettings Editor { get; }
 
