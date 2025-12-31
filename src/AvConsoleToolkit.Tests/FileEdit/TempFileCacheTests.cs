@@ -5,7 +5,7 @@
 
 using System;
 using System.IO;
-using AvConsoleToolkit.Commands.Crestron.FileOps;
+using AvConsoleToolkit.Commands.Crestron.FileEdit;
 using NUnit.Framework;
 
 namespace AvConsoleToolkit.Tests.FileEdit
