@@ -77,16 +77,35 @@ namespace AvConsoleToolkit.Commands.Sftp
                     settings.Password = entry.Password;
                 }
 
-                // Get SSH connection
                 var connection = ConnectionFactory.Instance.GetCompositeConnection(settings.Host, 22, settings.Username, settings.Password);
+
+                var file = settings.RemoteFilePath;
+                if (Utilities.FileOperations.ContainsWildcard(file))
+                {
+                    var files = (await connection.ListFilesByGlobAsync(file, cancellationToken)).ToList();
+                    if (files.Count == 0)
+                    {
+                        AnsiConsole.Write(new Text($"No remote files found matching pattern: {settings.RemoteFilePath}{Environment.NewLine}", new Style(Color.Red)));
+                        return 1;
+                    }
+
+                    file = files.Count == 1 ? files[0].FullName : Utilities.FileOperations.PromptForRemoteFileSelection(files, false, file).FirstOrDefault()?.FullName;
+                    if (string.IsNullOrWhiteSpace(file))
+                    {
+                        AnsiConsole.Write(new Text($"No file selected from matching files.{Environment.NewLine}", new Style(Color.Red)));
+                        return 1;
+                    }
+                }
+
+                settings.RemoteFilePath = file;
 
                 // Check for cached file or download
                 var cache = TempFileCache.Instance;
-                var localPath = cache.GetCachedFilePath(settings.Host, settings.RemoteFilePath);
+                var localPath = cache.GetCachedFilePath(settings.Host, file);
 
                 if (localPath == null || settings.ForceDownload || !System.IO.File.Exists(localPath))
                 {
-                    localPath = cache.GetOrCreateCachePath(settings.Host, settings.RemoteFilePath);
+                    localPath = cache.GetOrCreateCachePath(settings.Host, file);
                     await this.DownloadFileAsync(connection, settings, localPath, cancellationToken);
                 }
                 else if (settings.Verbose)
@@ -155,7 +174,7 @@ namespace AvConsoleToolkit.Commands.Sftp
                 .StartAsync(async ctx =>
                 {
                     var displayName = settings.Verbose ? settings.RemoteFilePath : Path.GetFileName(settings.RemoteFilePath);
-                    
+
                     var downloadTask = ctx.AddTask($"[cyan]Downloading {displayName}[/]");
 
                     await connection.ConnectFileTransferAsync(cancellationToken);
@@ -260,7 +279,7 @@ namespace AvConsoleToolkit.Commands.Sftp
                         cancellationToken,
                         progress =>
                         {
-                                editor?.UploadProgress = (int)progress;
+                            editor?.UploadProgress = (int)progress;
                         });
 
                     if (editor != null)
@@ -396,7 +415,7 @@ namespace AvConsoleToolkit.Commands.Sftp
 
             watcher.Changed += OnFileChanged;
             var waitFlags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            { 
+            {
                 ["code"] = "--wait",
                 ["subl"] = "--wait",
                 ["atom"] = "--wait",
@@ -498,12 +517,12 @@ namespace AvConsoleToolkit.Commands.Sftp
             if (!string.IsNullOrWhiteSpace(editorSettings?.Mappings))
             {
                 var mappings = editorSettings.Mappings.Split(';', StringSplitOptions.RemoveEmptyEntries).ToDictionary(s => s.Split('=')[0], s => s.Split('=')[1]);
-                if(mappings.TryGetValue(extension, out var editorPath) && !string.IsNullOrWhiteSpace(editorPath))
+                if (mappings.TryGetValue(extension, out var editorPath) && !string.IsNullOrWhiteSpace(editorPath))
                 {
                     return editorPath;
                 }
             }
-            
+
             // Check if a default editor other than the built-in editor is configured.
             if (!string.IsNullOrWhiteSpace(editorSettings?.DefaultEditor))
             {

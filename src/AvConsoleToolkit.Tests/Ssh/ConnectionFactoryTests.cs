@@ -1,8 +1,8 @@
 using System;
-using AvConsoleToolkit.Ssh;
+using AvConsoleToolkit.Connections;
 using NUnit.Framework;
 
-namespace AvConsoleToolkit.Tests.Ssh
+namespace AvConsoleToolkit.Tests.Connections
 {
     [TestFixture]
     public class ConnectionFactoryTests
@@ -31,35 +31,35 @@ namespace AvConsoleToolkit.Tests.Ssh
         }
 
         [Test]
-        public void GetSshConnectionWithPasswordShouldReturnConnection()
+        public void GetCompositeConnectionWithPasswordShouldReturnConnection()
         {
-            var connection = this.factory!.GetSshConnection("test.example.com", 22, "testuser", "testpass");
+            var connection = this.factory!.GetCompositeConnection("test.example.com", 22, "testuser", "testpass");
             Assert.That(connection, Is.Not.Null);
-            Assert.That(connection, Is.InstanceOf<ISshConnection>());
+            Assert.That(connection, Is.InstanceOf<ICompositeConnection>());
         }
 
         [Test]
-        public void GetSshConnectionWithSameParametersShouldReturnCachedConnection()
+        public void GetCompositeConnectionWithSameParametersShouldReturnCachedConnection()
         {
-            var connection1 = this.factory!.GetSshConnection("test.example.com", 22, "testuser", "testpass");
-            var connection2 = this.factory!.GetSshConnection("test.example.com", 22, "testuser", "testpass");
+            var connection1 = this.factory!.GetCompositeConnection("test.example.com", 22, "testuser", "testpass");
+            var connection2 = this.factory!.GetCompositeConnection("test.example.com", 22, "testuser", "testpass");
             Assert.That(connection2, Is.SameAs(connection1));
         }
 
         [Test]
-        public void GetSshConnectionWithDifferentHostShouldReturnDifferentConnection()
+        public void GetCompositeConnectionWithDifferentHostShouldReturnDifferentConnection()
         {
-            var connection1 = this.factory!.GetSshConnection("host1.example.com", 22, "testuser", "testpass");
-            var connection2 = this.factory!.GetSshConnection("host2.example.com", 22, "testuser", "testpass");
+            var connection1 = this.factory!.GetCompositeConnection("host1.example.com", 22, "testuser", "testpass");
+            var connection2 = this.factory!.GetCompositeConnection("host2.example.com", 22, "testuser", "testpass");
             Assert.That(connection2, Is.Not.SameAs(connection1));
         }
 
         [Test]
         public void ReleaseAllShouldClearConnectionCache()
         {
-            var connection1 = this.factory!.GetSshConnection("test.example.com", 22, "testuser", "testpass");
+            var connection1 = this.factory!.GetCompositeConnection("test.example.com", 22, "testuser", "testpass");
             this.factory!.ReleaseAll();
-            var connection2 = this.factory!.GetSshConnection("test.example.com", 22, "testuser", "testpass");
+            var connection2 = this.factory!.GetCompositeConnection("test.example.com", 22, "testuser", "testpass");
             Assert.That(connection2, Is.Not.SameAs(connection1));
         }
     }
