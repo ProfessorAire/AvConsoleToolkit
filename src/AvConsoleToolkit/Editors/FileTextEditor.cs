@@ -25,27 +25,6 @@ using Spectre.Console;
 namespace AvConsoleToolkit.Editors
 {
     /// <summary>
-    /// Represents the current focus in the editor.
-    /// </summary>
-    public enum FileTextEditorFocus
-    {
-        /// <summary>
-        /// Focus is on the text editor.
-        /// </summary>
-        Editor,
-
-        /// <summary>
-        /// Focus is on the search text box.
-        /// </summary>
-        Search,
-
-        /// <summary>
-        /// Focus is on the replace text box.
-        /// </summary>
-        Replace,
-    }
-
-    /// <summary>
     /// A built-in nano-like text editor that operates in an alternate screen buffer.
     /// Provides text editing capabilities with keyboard navigation, selection, and configurable display options.
     /// </summary>
@@ -706,63 +685,6 @@ namespace AvConsoleToolkit.Editors
             }
 
             this.running = false;
-        }
-
-        private void HandleHelpInput(ConsoleKeyInfo key)
-        {
-            var helpLines = this.keyBindings.GetHelpText();
-            var windowHeight = Console.WindowHeight;
-            var contentHeight = windowHeight - 2; // Header + Footer
-
-            if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.Key == ConsoleKey.Q)
-            {
-                this.helpScreenVisible = false;
-                this.needsRender = true;
-                return;
-            }
-
-            switch (key.Key)
-            {
-                case ConsoleKey.Escape:
-                    this.helpScreenVisible = false;
-                    this.needsRender = true;
-                    break;
-
-                case ConsoleKey.UpArrow:
-                    this.helpScrollOffset = Math.Max(0, this.helpScrollOffset - 1);
-                    this.needsRender = true;
-                    break;
-
-                case ConsoleKey.DownArrow:
-                    var maxScroll = Math.Max(0, helpLines.Length - contentHeight);
-                    this.helpScrollOffset = Math.Min(maxScroll, this.helpScrollOffset + 1);
-                    this.needsRender = true;
-                    break;
-
-                case ConsoleKey.PageUp:
-                    var scrollUp = windowHeight - 3;
-                    this.helpScrollOffset = Math.Max(0, this.helpScrollOffset - scrollUp);
-                    this.needsRender = true;
-                    break;
-
-                case ConsoleKey.PageDown:
-                    var scrollDown = windowHeight - 3;
-                    var maxScrollDown = Math.Max(0, helpLines.Length - contentHeight);
-                    this.helpScrollOffset = Math.Min(maxScrollDown, this.helpScrollOffset + scrollDown);
-                    this.needsRender = true;
-                    break;
-
-                case ConsoleKey.Home:
-                    this.helpScrollOffset = 0;
-                    this.needsRender = true;
-                    break;
-
-                case ConsoleKey.End:
-                    var maxScrollEnd = Math.Max(0, helpLines.Length - contentHeight);
-                    this.helpScrollOffset = maxScrollEnd;
-                    this.needsRender = true;
-                    break;
-            }
         }
 
         private async Task HandleKeyAsync(ConsoleKeyInfo key, CancellationToken cancellationToken)
@@ -1766,7 +1688,7 @@ namespace AvConsoleToolkit.Editors
 
                             if (lineText.Length > contentWidth)
                             {
-                                lineText = lineText[..contentWidth - 1];
+                                lineText = lineText[..(contentWidth - 1)];
                                 needsContinuationGlyph = true;
                             }
                             else
@@ -1828,7 +1750,7 @@ namespace AvConsoleToolkit.Editors
                 var help = this.keyBindings.GetShortcutHints();
                 while (help.Length > windowWidth)
                 {
-                    help = $"{help[..help.LastIndexOf(' ', help.LastIndexOf(' ') - 1) - 1]}...";
+                    help = $"{help[..(help.LastIndexOf(' ', help.LastIndexOf(' ') - 1) - 1)]}...";
                 }
 
                 this.WriteText(help.PadRight(windowWidth), this.currentTheme.HintBar);
@@ -1969,68 +1891,6 @@ namespace AvConsoleToolkit.Editors
 
                 Console.CursorVisible = true;
             }
-        }
-
-        private void RenderHelp()
-        {
-            var helpLines = this.keyBindings.GetHelpText();
-            var windowHeight = Console.WindowHeight;
-            var windowWidth = Console.WindowWidth;
-            var contentHeight = windowHeight - 2; // Header + Footer
-
-            Console.CursorVisible = false;
-            Console.SetCursorPosition(0, 0);
-
-            // Header
-            var header = "Editor Help";
-            if (header.Length >= windowWidth)
-            {
-                header = header.Substring(0, windowWidth);
-            }
-
-            var paddingLeft = Math.Max(0, (windowWidth - header.Length) / 2);
-            var paddingRight = Math.Max(0, windowWidth - paddingLeft - header.Length);
-            var headerLine = $"{new string(' ', paddingLeft)}{header}{new string(' ', paddingRight)}";
-            if (headerLine.Length > windowWidth)
-            {
-                headerLine = headerLine.Substring(0, windowWidth);
-            }
-
-            this.WriteText(headerLine, this.currentTheme.Header, true);
-
-            // Content with scrolling
-            for (var i = 0; i < contentHeight; i++)
-            {
-                Console.SetCursorPosition(0, i + 1);
-                var lineIndex = this.helpScrollOffset + i;
-                if (lineIndex < helpLines.Length)
-                {
-                    var line = helpLines[lineIndex];
-                    if (line.Length > windowWidth)
-                    {
-                        line = line.Substring(0, windowWidth);
-                    }
-
-                    this.WriteText(line.PadRight(windowWidth), this.currentTheme.TextEditor);
-                }
-                else
-                {
-                    this.WriteText(new string(' ', windowWidth), this.currentTheme.TextEditor);
-                }
-            }
-
-            // Footer - always at the last line
-            Console.SetCursorPosition(0, windowHeight - 1);
-            var footerText = helpLines.Length > contentHeight
-                ? $" ^Q/ESC Return | Scroll ({this.helpScrollOffset + 1}-{Math.Min(this.helpScrollOffset + contentHeight, helpLines.Length)}/{helpLines.Length})"
-                : " Press Ctrl+Q or ESC to return to editor";
-            if (footerText.Length > windowWidth)
-            {
-                footerText = footerText.Substring(0, windowWidth);
-            }
-
-            this.WriteText(footerText.PadRight(windowWidth), this.currentTheme.HintBar);
-            Console.CursorVisible = false;
         }
 
         private void RenderLineWithSelection(int lineIndex, string lineText, int gutterWidth, int contentWidth)
@@ -2468,6 +2328,125 @@ namespace AvConsoleToolkit.Editors
             this.needsRender = true;
         }
 
+        private void HandleHelpInput(ConsoleKeyInfo key)
+        {
+            var helpLines = this.keyBindings.GetHelpText();
+            var windowHeight = Console.WindowHeight;
+            var contentHeight = windowHeight - 2; // Header + Footer
+
+            if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.Key == ConsoleKey.Q)
+            {
+                this.helpScreenVisible = false;
+                this.needsRender = true;
+                return;
+            }
+
+            switch (key.Key)
+            {
+                case ConsoleKey.Escape:
+                    this.helpScreenVisible = false;
+                    this.needsRender = true;
+                    break;
+
+                case ConsoleKey.UpArrow:
+                    this.helpScrollOffset = Math.Max(0, this.helpScrollOffset - 1);
+                    this.needsRender = true;
+                    break;
+
+                case ConsoleKey.DownArrow:
+                    var maxScroll = Math.Max(0, helpLines.Length - contentHeight);
+                    this.helpScrollOffset = Math.Min(maxScroll, this.helpScrollOffset + 1);
+                    this.needsRender = true;
+                    break;
+
+                case ConsoleKey.PageUp:
+                    var scrollUp = windowHeight - 3;
+                    this.helpScrollOffset = Math.Max(0, this.helpScrollOffset - scrollUp);
+                    this.needsRender = true;
+                    break;
+
+                case ConsoleKey.PageDown:
+                    var scrollDown = windowHeight - 3;
+                    var maxScrollDown = Math.Max(0, helpLines.Length - contentHeight);
+                    this.helpScrollOffset = Math.Min(maxScrollDown, this.helpScrollOffset + scrollDown);
+                    this.needsRender = true;
+                    break;
+
+                case ConsoleKey.Home:
+                    this.helpScrollOffset = 0;
+                    this.needsRender = true;
+                    break;
+
+                case ConsoleKey.End:
+                    var maxScrollEnd = Math.Max(0, helpLines.Length - contentHeight);
+                    this.helpScrollOffset = maxScrollEnd;
+                    this.needsRender = true;
+                    break;
+            }
+        }
+
+        private void RenderHelp()
+        {
+            var helpLines = this.keyBindings.GetHelpText();
+            var windowHeight = Console.WindowHeight;
+            var windowWidth = Console.WindowWidth;
+            var contentHeight = windowHeight - 2; // Header + Footer
+
+            Console.CursorVisible = false;
+            Console.SetCursorPosition(0, 0);
+
+            // Header
+            var header = "Editor Help";
+            if (header.Length >= windowWidth)
+            {
+                header = header.Substring(0, windowWidth);
+            }
+
+            var paddingLeft = Math.Max(0, (windowWidth - header.Length) / 2);
+            var paddingRight = Math.Max(0, windowWidth - paddingLeft - header.Length);
+            var headerLine = $"{new string(' ', paddingLeft)}{header}{new string(' ', paddingRight)}";
+            if (headerLine.Length > windowWidth)
+            {
+                headerLine = headerLine.Substring(0, windowWidth);
+            }
+
+            this.WriteText(headerLine, this.currentTheme.Header, true);
+
+            // Content with scrolling
+            for (var i = 0; i < contentHeight; i++)
+            {
+                Console.SetCursorPosition(0, i + 1);
+                var lineIndex = this.helpScrollOffset + i;
+                if (lineIndex < helpLines.Length)
+                {
+                    var line = helpLines[lineIndex];
+                    if (line.Length > windowWidth)
+                    {
+                        line = line.Substring(0, windowWidth);
+                    }
+
+                    this.WriteText(line.PadRight(windowWidth), this.currentTheme.TextEditor);
+                }
+                else
+                {
+                    this.WriteText(new string(' ', windowWidth), this.currentTheme.TextEditor);
+                }
+            }
+
+            // Footer - always at the last line
+            Console.SetCursorPosition(0, windowHeight - 1);
+            var footerText = helpLines.Length > contentHeight
+                ? $" ^Q/ESC Return | Scroll ({this.helpScrollOffset + 1}-{Math.Min(this.helpScrollOffset + contentHeight, helpLines.Length)}/{helpLines.Length})"
+                : " Press Ctrl+Q or ESC to return to editor";
+            if (footerText.Length > windowWidth)
+            {
+                footerText = footerText.Substring(0, windowWidth);
+            }
+
+            this.WriteText(footerText.PadRight(windowWidth), this.currentTheme.HintBar);
+            Console.CursorVisible = false;
+        }
+
         private void StartSelection()
         {
             this.selectionStartRow = this.cursorRow;
@@ -2630,5 +2609,26 @@ namespace AvConsoleToolkit.Editors
         /// Represents a saved editor state for undo operations.
         /// </summary>
         internal sealed record UndoState(string[] Lines, int CursorRow, int CursorCol, bool Modified);
+    }
+
+    /// <summary>
+    /// Represents the current focus in the editor.
+    /// </summary>
+    public enum FileTextEditorFocus
+    {
+        /// <summary>
+        /// Focus is on the text editor.
+        /// </summary>
+        Editor,
+
+        /// <summary>
+        /// Focus is on the search text box.
+        /// </summary>
+        Search,
+
+        /// <summary>
+        /// Focus is on the replace text box.
+        /// </summary>
+        Replace,
     }
 }
