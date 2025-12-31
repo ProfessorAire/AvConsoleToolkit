@@ -22,7 +22,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Spectre.Console;
 
-namespace AvConsoleToolkit.Commands.Crestron.File
+namespace AvConsoleToolkit.Commands.Crestron.FileEdit
 {
     /// <summary>
     /// A built-in nano-like text editor that operates in an alternate screen buffer.

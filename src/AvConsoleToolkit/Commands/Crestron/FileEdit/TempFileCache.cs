@@ -15,7 +15,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
-namespace AvConsoleToolkit.Commands.Crestron.File
+namespace AvConsoleToolkit.Commands.Crestron.FileEdit
 {
     /// <summary>
     /// Manages temporary files downloaded from remote devices during editing sessions.
