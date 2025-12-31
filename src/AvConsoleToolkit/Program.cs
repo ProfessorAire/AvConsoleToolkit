@@ -79,17 +79,6 @@ namespace AvConsoleToolkit
                             .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "-a", "192.168.1.100", "-u", "admin", "-p", "password", "-c"]);
                     })
                     .WithAlias("p");
-
-                    branch.AddBranch("file", file =>
-                    {
-                        file.AddCommand<Commands.Crestron.FileEdit.FileEditCommand>("edit")
-                            .WithAlias("e")
-                            .WithDescription("Edit a file on a remote Crestron device")
-                            .WithExample(["crestron", "file", "edit", "program01/config.xml", "-a", "192.168.1.100"])
-                            .WithExample(["crestron", "file", "edit", "user/settings.json", "-a", "192.168.1.100", "-f"])
-                            .WithExample(["crestron", "file", "edit", "program01/data.txt", "-a", "192.168.1.100", "-b"]);
-                    })
-                    .WithAlias("f");
                 })
                 .WithAlias("c");
 

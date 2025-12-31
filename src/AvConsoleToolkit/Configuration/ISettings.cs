@@ -26,11 +26,6 @@ namespace AvConsoleToolkit.Configuration
         IConnectionSettings Connection { get; }
 
         /// <summary>
-        /// Gets the current editor settings used to configure file editing functionality.
-        /// </summary>
-        IEditorSettings Editor { get; }
-
-        /// <summary>
         /// Gets the current connection settings used to configure Pass Through specific functionality.
         /// </summary>
         IPassThroughSettings PassThrough { get; }
