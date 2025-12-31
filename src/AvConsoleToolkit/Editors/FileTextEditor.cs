@@ -69,12 +69,18 @@ namespace AvConsoleToolkit.Editors
         private int tabDepth;
         private int detectedTabDepth = -1;
 
-        // Theme
-        private FileTextEditorTheme currentTheme;
-
-        // Header colors (may be overridden by file extension)
+        // Colors
         private Color headerBgColor;
         private Color headerFgColor;
+        private Color gutterBgColor;
+        private Color gutterFgColor;
+        private Color editorBgColor;
+        private Color editorFgColor;
+        private Color statusBarBgColor;
+        private Color statusBarFgColor;
+        private Color hintBarBgColor;
+        private Color hintBarFgColor;
+        private Style? glyphColor;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="FileTextEditor"/> class.
@@ -96,9 +102,8 @@ namespace AvConsoleToolkit.Editors
             this.wordWrapEnabled = this.settings.WordWrapEnabled;
             this.tabDepth = this.settings.TabDepth;
 
-            // Initialize theme
-            this.currentTheme = FileTextEditorTheme.User;
-            this.LoadHeaderColors();
+            // Parse colors
+            this.LoadColors();
         }
 
         /// <summary>
@@ -110,18 +115,6 @@ namespace AvConsoleToolkit.Editors
             set => this.uploadProgress = value;
         }
 
-        /// <summary>
-        /// Gets or sets the current theme used by the editor.
-        /// </summary>
-        private FileTextEditorTheme CurrentTheme
-        {
-            get => this.currentTheme;
-            set
-            {
-                this.currentTheme = value;
-                this.LoadHeaderColors();
-            }
-        }
         /// <summary>
         /// Runs the editor session.
         /// </summary>
@@ -188,16 +181,22 @@ namespace AvConsoleToolkit.Editors
 
         private void LoadColors()
         {
-            this.LoadHeaderColors();
-        }
-
-        private void LoadHeaderColors()
-        {
             var extension = Path.GetExtension(this.filePath)?.TrimStart('.').ToLowerInvariant() ?? string.Empty;
 
-            // Start with theme header colors
-            this.headerFgColor = this.currentTheme.Header.Foreground;
-            this.headerBgColor = this.currentTheme.Header.Background;
+            // Load all theme colors
+            this.headerBgColor = ParseHexColor(this.settings.HeaderBackgroundColor, new Color(208, 135, 112));
+            this.headerFgColor = ParseHexColor(this.settings.HeaderForegroundColor, new Color(46, 52, 64));
+            this.gutterBgColor = ParseHexColor(this.settings.GutterBackgroundColor, new Color(59, 66, 82));
+            this.gutterFgColor = ParseHexColor(this.settings.GutterForegroundColor, new Color(229, 233, 240));
+            this.editorBgColor = ParseHexColor(this.settings.EditorBackgroundColor, new Color(46, 52, 64));
+            this.editorFgColor = ParseHexColor(this.settings.EditorForegroundColor, new Color(236, 239, 244));
+            this.statusBarBgColor = ParseHexColor(this.settings.StatusBarBackgroundColor, new Color(59, 66, 82));
+            this.statusBarFgColor = ParseHexColor(this.settings.StatusBarForegroundColor, new Color(236, 239, 244));
+            this.hintBarBgColor = ParseHexColor(this.settings.HintBarBackgroundColor, new Color(67, 76, 94));
+            this.hintBarFgColor = ParseHexColor(this.settings.HintBarForegroundColor, new Color(136, 192, 208));
+            var glyphForeground = ParseHexColor(this.settings.GlyphColor, new Color(76, 86, 106));
+            var glyphBackground = ParseHexColor(this.settings.GlyphBackgroundColor, new Color(180, 142, 173));
+            this.glyphColor = new Style(glyphForeground, glyphBackground);
 
             // Check for extension-specific header colors
             if (!string.IsNullOrWhiteSpace(this.settings.HeaderColorMappings))
@@ -427,7 +426,7 @@ namespace AvConsoleToolkit.Editors
                 wrapGlyphText = "/";
             }
 
-            var wrapGlyph = new Text(wrapGlyphText.EscapeMarkup(), this.currentTheme.Glyph);
+            var wrapGlyph = new Text(wrapGlyphText.EscapeMarkup(), this.glyphColor);
 
             var continueGlyphText = this.settings.ContinuationGlyph;
             if (string.IsNullOrWhiteSpace(continueGlyphText))
@@ -436,7 +435,7 @@ namespace AvConsoleToolkit.Editors
             }
 
 
-            var continueGlyph = new Text(continueGlyphText.EscapeMarkup(), this.currentTheme.Glyph);
+            var continueGlyph = new Text(continueGlyphText.EscapeMarkup(), this.glyphColor);
 
             var wrapIndent = "  "; // 2 character indent for wrapped lines
             var currentSourceLine = this.scrollOffsetY;
@@ -472,12 +471,12 @@ namespace AvConsoleToolkit.Editors
                             {
                                 // First segment of line - show line number
                                 var lineNum = (currentSourceLine + 1).ToString().PadLeft(gutterWidth - 1);
-                                AnsiConsole.Markup($"[{this.currentTheme.Gutter.Foreground.ToMarkup()} on {this.currentTheme.Gutter.Background.ToMarkup()}]{lineNum} [/]");
+                                AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{lineNum} [/]");
                             }
                             else
                             {
                                 // Continuation - blank gutter
-                                AnsiConsole.Markup($"[{this.currentTheme.Gutter.Foreground.ToMarkup()} on {this.currentTheme.Gutter.Background.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
+                                AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
                             }
                         }
 
@@ -525,10 +524,10 @@ namespace AvConsoleToolkit.Editors
                         // Past end of file
                         if (this.showLineNumbers)
                         {
-                            AnsiConsole.Markup($"[{this.currentTheme.Gutter.Foreground.ToMarkup()} on {this.currentTheme.Gutter.Background.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
+                            AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
                         }
 
-                        AnsiConsole.Markup($"[{this.currentTheme.Glyph.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
+                        AnsiConsole.Markup($"[{this.glyphColor!.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
                     }
                 }
                 else
@@ -542,11 +541,11 @@ namespace AvConsoleToolkit.Editors
                         if (lineIndex < this.lines.Count)
                         {
                             var lineNum = (lineIndex + 1).ToString().PadLeft(gutterWidth - 1);
-                            AnsiConsole.Markup($"[{this.currentTheme.Gutter.Foreground.ToMarkup()} on {this.currentTheme.Gutter.Background.ToMarkup()}]{lineNum} [/]");
+                            AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{lineNum} [/]");
                         }
                         else
                         {
-                            AnsiConsole.Markup($"[{this.currentTheme.Gutter.Foreground.ToMarkup()} on {this.currentTheme.Gutter.Background.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
+                            AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
                         }
                     }
 
@@ -586,7 +585,7 @@ namespace AvConsoleToolkit.Editors
                     }
                     else
                     {
-                        AnsiConsole.Markup($"[{this.currentTheme.Glyph.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
+                        AnsiConsole.Markup($"[{this.glyphColor!.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
                     }
                 }
             }
@@ -616,7 +615,7 @@ namespace AvConsoleToolkit.Editors
                 statusPadding = 0;
             }
 
-            AnsiConsole.Markup($"[{this.currentTheme.StatusBar.Foreground.ToMarkup()} on {this.currentTheme.StatusBar.Background.ToMarkup()}]{status.EscapeMarkup()}{new string(' ', statusPadding)}{position}{progressBarSpace}[/]");
+            AnsiConsole.Markup($"[{this.statusBarFgColor.ToMarkup()} on {this.statusBarBgColor.ToMarkup()}]{status.EscapeMarkup()}{new string(' ', statusPadding)}{position}{progressBarSpace}[/]");
 
             // Help bar
             System.Console.SetCursorPosition(0, windowHeight - 1);
@@ -626,7 +625,7 @@ namespace AvConsoleToolkit.Editors
                 help = $"{help[..(help.LastIndexOf(' ', help.LastIndexOf(' ') - 1) - 1)]}...";
             }
 
-            AnsiConsole.Markup($"[{this.currentTheme.HintBar.Foreground.ToMarkup()} on {this.currentTheme.HintBar.Background.ToMarkup()}]{help.PadRight(windowWidth).EscapeMarkup()}[/]");
+            AnsiConsole.Markup($"[{this.hintBarFgColor.ToMarkup()} on {this.hintBarBgColor.ToMarkup()}]{help.PadRight(windowWidth).EscapeMarkup()}[/]");
 
             // Position cursor - account for word wrap
             int displayRow;
@@ -720,7 +719,7 @@ namespace AvConsoleToolkit.Editors
         {
             if (!this.hasSelection)
             {
-                AnsiConsole.Markup($"[{this.currentTheme.TextEditor.Foreground.ToMarkup()} on {this.currentTheme.TextEditor.Background.ToMarkup()}]{lineText.EscapeMarkup()}[/]");
+                System.Console.Write(lineText);
                 return;
             }
 
@@ -730,7 +729,7 @@ namespace AvConsoleToolkit.Editors
             // Check if this line is within selection
             if (lineIndex < startRow || lineIndex > endRow)
             {
-                AnsiConsole.Markup($"[{this.currentTheme.TextEditor.Foreground.ToMarkup()} on {this.currentTheme.TextEditor.Background.ToMarkup()}]{lineText.EscapeMarkup()}[/]");
+                System.Console.Write(lineText);
                 return;
             }
 
@@ -750,7 +749,7 @@ namespace AvConsoleToolkit.Editors
             // Render before selection
             if (lineStart > 0)
             {
-                AnsiConsole.Markup($"[{this.currentTheme.TextEditor.Foreground.ToMarkup()} on {this.currentTheme.TextEditor.Background.ToMarkup()}]{lineText.Substring(0, lineStart).EscapeMarkup()}[/]");
+                System.Console.Write(lineText.Substring(0, lineStart));
             }
 
             // Render selection
@@ -762,7 +761,7 @@ namespace AvConsoleToolkit.Editors
             // Render after selection
             if (lineEnd < lineText.Length)
             {
-                AnsiConsole.Markup($"[{this.currentTheme.TextEditor.Foreground.ToMarkup()} on {this.currentTheme.TextEditor.Background.ToMarkup()}]{lineText.Substring(lineEnd).EscapeMarkup()}[/]");
+                System.Console.Write(lineText.Substring(lineEnd));
             }
         }
 
@@ -1546,33 +1545,39 @@ namespace AvConsoleToolkit.Editors
         private void ToggleTheme()
         {
             // Toggle between Dark and Bright themes
-            var themeName = this.settings.Theme ?? "User";
-            switch (themeName)
+            var currentTheme = this.settings.Theme ?? "Dark";
+            var newTheme = currentTheme.Equals("Dark", StringComparison.OrdinalIgnoreCase) ? "Bright" : "Dark";
+
+            // Apply theme colors
+            if (newTheme.Equals("Bright", StringComparison.OrdinalIgnoreCase))
             {
-                case "User":
-                    themeName = "NordDark";
-                    this.currentTheme = FileTextEditorTheme.NordDark;
-                    break;
-                case "NordDark":
-                    themeName = "NordSemiDark";
-                    this.currentTheme = FileTextEditorTheme.NordSemiDark;
-                    break;
-                case "NordSemiDark":
-                    themeName = "NordSemiLight";
-                    this.currentTheme = FileTextEditorTheme.NordSemiLight;
-                    break;
-                case "NordSemiLight":
-                    themeName = "NordLight";
-                    this.currentTheme = FileTextEditorTheme.NordLight;
-                    break;
-                default:
-                    themeName = "User";
-                    this.currentTheme = FileTextEditorTheme.User;
-                    break;
+                // Nord Bright (Snow Storm based)
+                this.editorBgColor = new Color(236, 239, 244); // #ECEFF4 Snow Storm 2
+                this.editorFgColor = new Color(46, 52, 64);    // #2E3440 Polar Night 0
+                this.statusBarBgColor = new Color(216, 222, 233); // #D8DEE9 Snow Storm 0
+                this.statusBarFgColor = new Color(46, 52, 64);    // #2E3440 Polar Night 0
+                this.hintBarBgColor = new Color(229, 233, 240);   // #E5E9F0 Snow Storm 1
+                this.hintBarFgColor = new Color(94, 129, 172);    // #5E81AC Frost 3
+                this.gutterBgColor = new Color(216, 222, 233);    // #D8DEE9 Snow Storm 0
+                this.gutterFgColor = new Color(76, 86, 106);      // #4C566A Polar Night 3
+                this.glyphColor = new Color(136, 192, 208);       // #88C0D0 Frost 1
+            }
+            else
+            {
+                // Nord Dark (Polar Night based) - Default
+                this.editorBgColor = new Color(46, 52, 64);       // #2E3440 Polar Night 0
+                this.editorFgColor = new Color(236, 239, 244);    // #ECEFF4 Snow Storm 2
+                this.statusBarBgColor = new Color(59, 66, 82);    // #3B4252 Polar Night 1
+                this.statusBarFgColor = new Color(236, 239, 244); // #ECEFF4 Snow Storm 2
+                this.hintBarBgColor = new Color(67, 76, 94);      // #434C5E Polar Night 2
+                this.hintBarFgColor = new Color(136, 192, 208);   // #88C0D0 Frost 1
+                this.gutterBgColor = new Color(59, 66, 82);       // #3B4252 Polar Night 1
+                this.gutterFgColor = new Color(229, 233, 240);    // #E5E9F0 Snow Storm 1
+                this.glyphColor = new Color(76, 86, 106);         // #4C566A Polar Night 3
             }
 
-            this.settings.Theme = themeName;
-            this.SetStatusMessage($"Theme: {themeName}");
+            this.settings.Theme = newTheme;
+            this.SetStatusMessage($"Theme: {newTheme}");
         }
     }
 
