@@ -10,8 +10,6 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System;
-
 namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
@@ -22,23 +20,6 @@ namespace AvConsoleToolkit.Ssh
     /// that interact with external hosts.</remarks>
     public class ConnectionStatusModel
     {
-        /// <summary>
-        /// Occurs when the SFTP connection status changes.
-        /// </summary>
-        /// <remarks>Subscribers are notified whenever the connection transitions between states, such as
-        /// connecting, connected, or disconnected. Handlers receive the new connection status as a parameter. This
-        /// event is typically used to monitor connection health or trigger actions in response to state
-        /// changes.</remarks>
-        public event Action<ConnectionStatus>? SftpStateChanged;
-
-        /// <summary>
-        /// Occurs when the SSH connection status changes.
-        /// </summary>
-        /// <remarks>Subscribe to this event to receive notifications whenever the SSH connection
-        /// transitions between states, such as connecting, connected, or disconnected. The event provides the new
-        /// connection status as a parameter.</remarks>
-        public event Action<ConnectionStatus>? SshStateChanged;
-
         /// <summary>
         /// Gets the network address of the host to which the connection will be established.
         /// </summary>
@@ -57,18 +38,7 @@ namespace AvConsoleToolkit.Ssh
         /// <summary>
         /// Gets or sets the current status of the SFTP connection.
         /// </summary>
-        public ConnectionStatus SftpState
-        {
-            get => field;
-            set
-            {
-                if (field != value)
-                {
-                    field = value;
-                    SftpStateChanged?.Invoke(value);
-                }
-            }
-        }
+        public ConnectionStatus SftpState { get; set; } = ConnectionStatus.NotConnected;
 
         /// <summary>
         /// Gets or sets the number of SSH connection attempts made.
@@ -83,17 +53,6 @@ namespace AvConsoleToolkit.Ssh
         /// <summary>
         /// Gets or sets the current SSH connection status.
         /// </summary>
-        public ConnectionStatus SshState
-        {
-            get => field;
-            set
-            {
-                if (field != value)
-                {
-                    field = value;
-                    SshStateChanged?.Invoke(value);
-                }
-            }
-        }
+        public ConnectionStatus SshState { get; set; } = ConnectionStatus.NotConnected;
     }
 }
