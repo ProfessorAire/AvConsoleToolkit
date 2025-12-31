@@ -2337,7 +2337,7 @@ namespace AvConsoleToolkit.Editors
             // Render the line with highlighting
             if (!hasSelectionInLine && matchesInLine.Count == 0)
             {
-                this.WriteText(lineText, this.currentTheme.TextEditor);
+                this.WriteTextWithTabs(lineText, this.currentTheme.TextEditor);
                 return;
             }
 
@@ -2398,7 +2398,7 @@ namespace AvConsoleToolkit.Editors
                 // Render text before highlight
                 if (pos < start)
                 {
-                    this.WriteText(lineText.Substring(pos, start - pos), this.currentTheme.TextEditor);
+                    this.WriteTextWithTabs(lineText.Substring(pos, start - pos), this.currentTheme.TextEditor);
                 }
 
                 // Render highlighted region
@@ -2406,7 +2406,7 @@ namespace AvConsoleToolkit.Editors
                 {
                     var highlightEnd = Math.Min(end, lineText.Length);
                     var style = isSelection ? this.currentTheme.TextEditor : this.currentTheme.Glyph;
-                    this.WriteText(lineText.Substring(start, highlightEnd - start), style, isSelection);
+                    this.WriteTextWithTabs(lineText.Substring(start, highlightEnd - start), style, isSelection);
                     pos = highlightEnd;
                 }
             }
@@ -2414,7 +2414,7 @@ namespace AvConsoleToolkit.Editors
             // Render remaining text
             if (pos < lineText.Length)
             {
-                this.WriteText(lineText.Substring(pos), this.currentTheme.TextEditor);
+                this.WriteTextWithTabs(lineText.Substring(pos), this.currentTheme.TextEditor);
             }
         }
 
@@ -2613,7 +2613,7 @@ namespace AvConsoleToolkit.Editors
         }
 
         /// <summary>
-        /// Saves the current content to the file specified by the file path, overwriting any existing file.
+        /// Saves the current content to the file specified by the current file path, overwriting any existing file.
         /// </summary>
         /// <remarks>This method writes all lines to the file using UTF-8 encoding. After saving, the
         /// modified state is reset and a status message is updated. This method does not prompt for confirmation before
@@ -2964,6 +2964,57 @@ namespace AvConsoleToolkit.Editors
             }
 
             AnsiConsole.Write(new Text(content, style));
+        }
+
+        /// <summary>
+        /// Writes the specified text to the console, replacing tab characters with the arrow glyph (→) styled
+        /// with the glyph theme, while applying the given style to other text.
+        /// </summary>
+        /// <param name="content">The text content to write to the console, which may contain tab characters.</param>
+        /// <param name="style">The style to apply to non-tab text, including foreground and background colors, decoration, and link formatting.</param>
+        /// <param name="invert"><see langword="true"/> to swap the foreground and background colors of the specified style; otherwise, <see langword="false"/>.</param>
+        private void WriteTextWithTabs(string content, Style style, bool invert = false)
+        {
+            if (string.IsNullOrEmpty(content))
+            {
+                return;
+            }
+
+            if (invert)
+            {
+                style = new Style(style.Background, style.Foreground, style.Decoration, style.Link);
+            }
+
+            // Check if there are any tab characters
+            if (!content.Contains('\t'))
+            {
+                AnsiConsole.Write(new Text(content, style));
+                return;
+            }
+
+            // Process the content character by character, batching non-tab characters together
+            var pos = 0;
+            while (pos < content.Length)
+            {
+                var tabIndex = content.IndexOf('\t', pos);
+                if (tabIndex == -1)
+                {
+                    // No more tabs, write the rest with the regular style
+                    AnsiConsole.Write(new Text(content.Substring(pos), style));
+                    break;
+                }
+
+                // Write text before the tab with the regular style
+                if (tabIndex > pos)
+                {
+                    AnsiConsole.Write(new Text(content.Substring(pos, tabIndex - pos), style));
+                }
+
+                // Write the tab character as the tab glyph character.
+                AnsiConsole.Write(new Text(this.settings.TabGlyph[0].ToString(), this.CurrentTheme.TabGlyph));
+
+                pos = tabIndex + 1;
+            }
         }
 
         /// <summary>

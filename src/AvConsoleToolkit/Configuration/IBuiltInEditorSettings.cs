@@ -49,7 +49,7 @@ namespace AvConsoleToolkit.Configuration
         /// Gets or sets the color used for glyphs (word wrap indicator, overflow indicator).
         /// </summary>
         [DefaultValue("#5e81ac")]
-        string GlyphColor { get; set; }
+        string GlyphForegroundColor { get; set; }
 
         /// <summary>
         /// Gets or sets the gutter background color in hexadecimal format.
@@ -118,6 +118,24 @@ namespace AvConsoleToolkit.Configuration
         /// </summary>
         [DefaultValue(2)]
         int TabDepth { get; set; }
+
+        /// <summary>
+        /// Gets or sets the glyph used to represent a tab character.
+        /// </summary>
+        [DefaultValue("·")]
+        string TabGlyph { get; set; }
+
+        /// <summary>
+        /// Gets or sets the background color used for tab glyphs.
+        /// </summary>
+        [DefaultValue("#2E3440")]
+        string TabGlyphBackgroundColor { get; set; }
+
+        /// <summary>
+        /// Gets or sets the foreground color used to render tab glyphs.
+        /// </summary>
+        [DefaultValue("#5E81AC")]
+        string TabGlyphForegroundColor { get; set; }
 
         /// <summary>
         /// Gets or sets the current theme name ("Dark" or "Bright").
