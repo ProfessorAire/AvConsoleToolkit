@@ -22,7 +22,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using AvConsoleToolkit.Configuration;
-using AvConsoleToolkit.Connections;
 using Spectre.Console;
 
 namespace AvConsoleToolkit.Editors
@@ -69,7 +68,6 @@ namespace AvConsoleToolkit.Editors
         private bool wordWrapEnabled;
         private int tabDepth;
         private int detectedTabDepth = -1;
-        private string? connectionStatus;
 
         // Theme
         private FileTextEditorTheme currentTheme;
@@ -77,7 +75,6 @@ namespace AvConsoleToolkit.Editors
         // Header colors (may be overridden by file extension)
         private Color headerBgColor;
         private Color headerFgColor;
-        private Style headerStyle;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="FileTextEditor"/> class.
@@ -113,10 +110,7 @@ namespace AvConsoleToolkit.Editors
         public int UploadProgress
         {
             get => this.uploadProgress;
-            set
-            {
-                this.uploadProgress = value;
-            }
+            set => this.uploadProgress = value;
         }
 
         /// <summary>
@@ -131,22 +125,6 @@ namespace AvConsoleToolkit.Editors
                 this.LoadHeaderColors();
             }
         }
-        /// <summary>
-        /// Updates the connection status displayed in the status bar.
-        /// </summary>
-        /// <param name="status">The connection status to display.</param>
-        public void UpdateConnectionStatus(ConnectionStatus status)
-        {
-            var statusColor = status switch
-            {
-                ConnectionStatus.Connected => Color.Lime,
-                ConnectionStatus.Connecting => Color.Yellow,
-                _ => Color.Red
-            };
-
-            this.connectionStatus = status == ConnectionStatus.Connected ? "✓" : "X";
-        }
-
         /// <summary>
         /// Runs the editor session.
         /// </summary>
@@ -174,8 +152,8 @@ namespace AvConsoleToolkit.Editors
                     while (this.running && !cancellationToken.IsCancellationRequested)
                     {
                         // Check for window resize
-                        var currentWidth = Console.WindowWidth;
-                        var currentHeight = Console.WindowHeight;
+                        var currentWidth = System.Console.WindowWidth;
+                        var currentHeight = System.Console.WindowHeight;
                         if (currentWidth != lastWindowWidth || currentHeight != lastWindowHeight)
                         {
                             lastWindowWidth = currentWidth;
@@ -183,10 +161,10 @@ namespace AvConsoleToolkit.Editors
                             needsRender = true;
                         }
 
-                        if (Console.KeyAvailable)
+                        if (System.Console.KeyAvailable)
                         {
-                            var key = Console.ReadKey(true);
-                            await this.HandleKeyAsync(key, cancellationToken);
+                            var key = System.Console.ReadKey(true);
+                            this.HandleKeySync(key, cancellationToken);
                             needsRender = true;
                         }
                         else
@@ -209,6 +187,11 @@ namespace AvConsoleToolkit.Editors
             }
 
             return !this.modified;
+        }
+
+        private void LoadColors()
+        {
+            this.LoadHeaderColors();
         }
 
         private void LoadHeaderColors()
@@ -243,8 +226,6 @@ namespace AvConsoleToolkit.Editors
                     }
                 }
             }
-
-            this.headerStyle = new Style(this.headerFgColor, this.headerBgColor);
         }
 
         private static Color ParseHexColor(string hex, Color defaultColor)
@@ -376,212 +357,49 @@ namespace AvConsoleToolkit.Editors
             this.SetStatusMessage("File saved.");
         }
 
-        private Lock syncRoot = new();
-
         private void Render()
         {
-            lock (this.syncRoot)
+            var windowWidth = System.Console.WindowWidth;
+            var windowHeight = System.Console.WindowHeight;
+            var editorHeight = windowHeight - 3; // Header, status bar, help bar
+
+            // Calculate gutter width
+            var gutterWidth = this.showLineNumbers ? Math.Max(4, this.lines.Count.ToString().Length + 1) + 1 : 0;
+            var contentWidth = windowWidth - gutterWidth;
+
+            System.Console.CursorVisible = false;
+            System.Console.SetCursorPosition(0, 0);
+
+            // Header bar - centered text with file name
+            var headerText = this.displayName;
+            if (this.modified)
             {
-                var windowWidth = System.Console.WindowWidth;
-                var windowHeight = System.Console.WindowHeight;
-                var editorHeight = windowHeight - 3; // Header, status bar, help bar
-
-                // Calculate gutter width
-                var gutterWidth = this.showLineNumbers ? Math.Max(4, this.lines.Count.ToString().Length + 1) + 1 : 0;
-                var contentWidth = windowWidth - gutterWidth;
-
-                System.Console.CursorVisible = false;
-                System.Console.SetCursorPosition(0, 0);
-
-                // Header bar - centered text with file name
-                var headerText = this.displayName;
-                if (this.modified)
-                {
-                    headerText += " [Modified]";
-                }
-
-                // Ensure the header always renders as exactly one line
-                if (headerText.Length >= windowWidth)
-                {
-                    // Truncate header if it's too long
-                    headerText = headerText.Substring(0, Math.Max(0, windowWidth - 3)) + "...";
-                }
-
-                var paddingLeft = Math.Max(0, (windowWidth - headerText.Length) / 2);
-                var paddingRight = Math.Max(0, windowWidth - paddingLeft - headerText.Length);
-                var header = new string(' ', paddingLeft) + headerText + new string(' ', paddingRight);
-
-                // Ensure header is exactly windowWidth characters
-                if (header.Length > windowWidth)
-                {
-                    header = header[..(windowWidth - 1)];
-                }
-                else if (header.Length < windowWidth)
-                {
-                    header = header.PadRight(windowWidth - 1);
-                }
-
-                AnsiConsole.Write(new Text(header, this.headerStyle));
-
-                // Add the connection status icon:
-                AnsiConsole.Write(new Text(this.connectionStatus ?? " ", new Style(this.connectionStatus == "✓" ? Color.Lime : Color.Red, this.headerBgColor)));
-
-                var wrapIndent = this.NewMethod(editorHeight, gutterWidth, contentWidth);
-
-                // Status bar
-                System.Console.SetCursorPosition(0, windowHeight - 2);
-                var statusText = this.GetStatusMessage();
-
-                var position = $"Ln {this.cursorRow + 1}, Col {this.cursorCol + 1}";
-                if (this.detectedTabDepth > 0)
-                {
-                    position += $" Tab:{this.tabDepth}";
-                }
-
-                // Progress bar
-                var progressBarWidth = 20;
-                var progressBarSpace = string.Empty;
-                if (this.uploadProgress >= 0)
-                {
-                    var filled = (int)((this.uploadProgress / 100.0) * progressBarWidth);
-                    var empty = progressBarWidth - filled;
-                    progressBarSpace = $" [{new string('█', filled)}{new string('░', empty)}] {this.uploadProgress,3}%";
-                }
-
-                // Build status bar content with proper markup handling
-                //var statusBarContent = new StringBuilder();
-                //statusBarContent.Append($"[{this.currentTheme.StatusBar.Foreground.ToMarkup()} on {this.currentTheme.StatusBar.Background.ToMarkup()}]");
-
-                // Add status message or connection status
-                if (!string.IsNullOrEmpty(statusText))
-                {
-                    AnsiConsole.Write(new Text(statusText, this.currentTheme.StatusBar));
-                }
-
-                // Calculate padding (need to account for visible text length, not markup length)
-                var visibleStatusLength = this.GetVisibleLength(statusText);
-                var visibleConnectionLength = this.connectionStatus?.Length ?? 0;
-                var totalVisibleStatus = visibleStatusLength;
-                if (visibleStatusLength > 0 && visibleConnectionLength > 0)
-                {
-                    totalVisibleStatus += 3 + visibleConnectionLength; // " | " + connection status
-                }
-                else if (visibleConnectionLength > 0)
-                {
-                    totalVisibleStatus = visibleConnectionLength;
-                }
-
-                var statusPadding = windowWidth - totalVisibleStatus - position.Length - progressBarSpace.Length;
-                if (statusPadding < 0)
-                {
-                    statusPadding = 0;
-                }
-
-                AnsiConsole.Write(new Text(new string(' ', statusPadding), this.CurrentTheme.StatusBar));
-                AnsiConsole.Write(position, this.CurrentTheme.StatusBar);
-                AnsiConsole.Write(new Text(progressBarSpace, this.CurrentTheme.StatusBar));
-
-                // Help bar
-                System.Console.SetCursorPosition(0, windowHeight - 1);
-                var help = this.keyBindings.GetShortcutHints();
-                while (help.Length > windowWidth)
-                {
-                    help = $"{help[..(help.LastIndexOf(' ', help.LastIndexOf(' ') - 1) - 1)]}...";
-                }
-
-                AnsiConsole.Markup($"[{this.currentTheme.HintBar.Foreground.ToMarkup()} on {this.currentTheme.HintBar.Background.ToMarkup()}]{help.PadRight(windowWidth).EscapeMarkup()}[/]");
-
-                // Position cursor - account for word wrap
-                int displayRow;
-                int displayCol;
-
-                if (this.wordWrapEnabled)
-                {
-                    // Calculate the screen row by counting how many wrapped rows are above the cursor
-                    var screenRowCount = 0;
-                    var wrapIndentLen = wrapIndent.Length;
-                    displayCol = gutterWidth; // Default value
-
-                    for (int lineIdx = this.scrollOffsetY; lineIdx <= this.cursorRow && screenRowCount < editorHeight; lineIdx++)
-                    {
-                        if (lineIdx >= this.lines.Count)
-                        {
-                            break;
-                        }
-
-                        var lineText = this.lines[lineIdx].ToString();
-
-                        if (lineIdx < this.cursorRow)
-                        {
-                            // Count all wrapped rows for lines before cursor
-                            // Empty lines still take one row
-                            if (lineText.Length == 0)
-                            {
-                                screenRowCount++;
-                            }
-                            else
-                            {
-                                var pos = 0;
-                                var firstSegment = true;
-                                while (pos < lineText.Length)
-                                {
-                                    var segmentWidth = contentWidth - (firstSegment ? 0 : wrapIndentLen) - 1;
-                                    if (segmentWidth <= 0)
-                                    {
-                                        segmentWidth = 1; // Safety: at least 1 character per segment
-                                    }
-
-                                    screenRowCount++;
-                                    pos += segmentWidth;
-                                    firstSegment = false;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            // This is the cursor's line - find which segment contains the cursor
-                            var pos = 0;
-                            var firstSegment = true;
-                            while (pos <= this.cursorCol)
-                            {
-                                var segmentWidth = contentWidth - (firstSegment ? 0 : wrapIndentLen) - 1;
-                                if (segmentWidth <= 0)
-                                {
-                                    segmentWidth = 1; // Safety: at least 1 character per segment
-                                }
-
-                                if (this.cursorCol < pos + segmentWidth || pos + segmentWidth >= lineText.Length)
-                                {
-                                    // Cursor is in this segment
-                                    var colInSegment = this.cursorCol - pos;
-                                    displayCol = gutterWidth + (firstSegment ? 0 : wrapIndentLen) + colInSegment;
-                                    break;
-                                }
-
-                                screenRowCount++;
-                                pos += segmentWidth;
-                                firstSegment = false;
-                            }
-                        }
-                    }
-
-                    displayRow = screenRowCount + 1; // +1 for header
-                }
-                else
-                {
-                    displayRow = this.cursorRow - this.scrollOffsetY + 1;
-                    displayCol = gutterWidth + this.cursorCol - this.scrollOffsetX;
-                }
-
-                displayCol = Math.Max(gutterWidth, Math.Min(displayCol, windowWidth - 1));
-                displayRow = Math.Max(1, Math.Min(displayRow, editorHeight));
-                System.Console.SetCursorPosition(displayCol, displayRow);
-                System.Console.CursorVisible = true;
+                headerText += " [Modified]";
             }
-        }
 
-        private string NewMethod(int editorHeight, int gutterWidth, int contentWidth)
-        {
+            // Ensure the header always renders as exactly one line
+            if (headerText.Length >= windowWidth)
+            {
+                // Truncate header if it's too long
+                headerText = headerText.Substring(0, Math.Max(0, windowWidth - 3)) + "...";
+            }
+
+            var paddingLeft = Math.Max(0, (windowWidth - headerText.Length) / 2);
+            var paddingRight = Math.Max(0, windowWidth - paddingLeft - headerText.Length);
+            var header = new string(' ', paddingLeft) + headerText + new string(' ', paddingRight);
+
+            // Ensure header is exactly windowWidth characters
+            if (header.Length > windowWidth)
+            {
+                header = header[..windowWidth];
+            }
+            else if (header.Length < windowWidth)
+            {
+                header = header.PadRight(windowWidth);
+            }
+
+            AnsiConsole.Markup($"[{this.headerFgColor.ToMarkup()} on {this.headerBgColor.ToMarkup()}]{header.EscapeMarkup()}[/]");
+
             // Adjust scroll offset
             if (this.cursorRow < this.scrollOffsetY)
             {
@@ -619,6 +437,7 @@ namespace AvConsoleToolkit.Editors
             {
                 continueGlyphText = ">";
             }
+
 
             var continueGlyph = new Text(continueGlyphText.EscapeMarkup(), this.currentTheme.Glyph);
 
@@ -775,7 +594,129 @@ namespace AvConsoleToolkit.Editors
                 }
             }
 
-            return wrapIndent;
+            // Status bar
+            System.Console.SetCursorPosition(0, windowHeight - 2);
+            var status = this.GetStatusMessage();
+            var position = $"Ln {this.cursorRow + 1}, Col {this.cursorCol + 1}";
+            if (this.detectedTabDepth > 0)
+            {
+                position += $" Tab:{this.tabDepth}";
+            }
+
+            // Progress bar
+            var progressBarWidth = 20;
+            var progressBarSpace = string.Empty;
+            if (this.uploadProgress >= 0)
+            {
+                var filled = (int)((this.uploadProgress / 100.0) * progressBarWidth);
+                var empty = progressBarWidth - filled;
+                progressBarSpace = $" [{new string('█', filled)}{new string('░', empty)}] {this.uploadProgress,3}%";
+            }
+
+            var statusPadding = windowWidth - status.Length - position.Length - progressBarSpace.Length;
+            if (statusPadding < 0)
+            {
+                statusPadding = 0;
+            }
+
+            AnsiConsole.Markup($"[{this.currentTheme.StatusBar.Foreground.ToMarkup()} on {this.currentTheme.StatusBar.Background.ToMarkup()}]{status.EscapeMarkup()}{new string(' ', statusPadding)}{position}{progressBarSpace}[/]");
+
+            // Help bar
+            System.Console.SetCursorPosition(0, windowHeight - 1);
+            var help = this.keyBindings.GetShortcutHints();
+            while (help.Length > windowWidth)
+            {
+                help = $"{help[..(help.LastIndexOf(' ', help.LastIndexOf(' ') - 1) - 1)]}...";
+            }
+
+            AnsiConsole.Markup($"[{this.currentTheme.HintBar.Foreground.ToMarkup()} on {this.currentTheme.HintBar.Background.ToMarkup()}]{help.PadRight(windowWidth).EscapeMarkup()}[/]");
+
+            // Position cursor - account for word wrap
+            int displayRow;
+            int displayCol;
+
+            if (this.wordWrapEnabled)
+            {
+                // Calculate the screen row by counting how many wrapped rows are above the cursor
+                var screenRowCount = 0;
+                var wrapIndentLen = wrapIndent.Length;
+                displayCol = gutterWidth; // Default value
+
+                for (int lineIdx = this.scrollOffsetY; lineIdx <= this.cursorRow && screenRowCount < editorHeight; lineIdx++)
+                {
+                    if (lineIdx >= this.lines.Count)
+                    {
+                        break;
+                    }
+
+                    var lineText = this.lines[lineIdx].ToString();
+
+                    if (lineIdx < this.cursorRow)
+                    {
+                        // Count all wrapped rows for lines before cursor
+                        // Empty lines still take one row
+                        if (lineText.Length == 0)
+                        {
+                            screenRowCount++;
+                        }
+                        else
+                        {
+                            var pos = 0;
+                            var firstSegment = true;
+                            while (pos < lineText.Length)
+                            {
+                                var segmentWidth = contentWidth - (firstSegment ? 0 : wrapIndentLen) - 1;
+                                if (segmentWidth <= 0)
+                                {
+                                    segmentWidth = 1; // Safety: at least 1 character per segment
+                                }
+
+                                screenRowCount++;
+                                pos += segmentWidth;
+                                firstSegment = false;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // This is the cursor's line - find which segment contains the cursor
+                        var pos = 0;
+                        var firstSegment = true;
+                        while (pos <= this.cursorCol)
+                        {
+                            var segmentWidth = contentWidth - (firstSegment ? 0 : wrapIndentLen) - 1;
+                            if (segmentWidth <= 0)
+                            {
+                                segmentWidth = 1; // Safety: at least 1 character per segment
+                            }
+
+                            if (this.cursorCol < pos + segmentWidth || pos + segmentWidth >= lineText.Length)
+                            {
+                                // Cursor is in this segment
+                                var colInSegment = this.cursorCol - pos;
+                                displayCol = gutterWidth + (firstSegment ? 0 : wrapIndentLen) + colInSegment;
+                                break;
+                            }
+
+                            screenRowCount++;
+                            pos += segmentWidth;
+                            firstSegment = false;
+                        }
+                    }
+                }
+
+                displayRow = screenRowCount + 1; // +1 for header
+            }
+            else
+            {
+                displayRow = this.cursorRow - this.scrollOffsetY + 1;
+                displayCol = gutterWidth + this.cursorCol - this.scrollOffsetX;
+            }
+
+            displayCol = Math.Max(gutterWidth, Math.Min(displayCol, windowWidth - 1));
+            displayRow = Math.Max(1, Math.Min(displayRow, editorHeight));
+            System.Console.SetCursorPosition(displayCol, displayRow);
+            System.Console.CursorVisible = true;
         }
 
         private void RenderLineWithSelection(int lineIndex, string lineText, int gutterWidth, int contentWidth)
@@ -849,35 +790,23 @@ namespace AvConsoleToolkit.Editors
             return string.Empty;
         }
 
-        private int GetVisibleLength(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-            {
-                return 0;
-            }
-
-            // Remove markup tags to get actual visible length
-            var result = System.Text.RegularExpressions.Regex.Replace(text, @"\[.*?\]", string.Empty);
-            return result.Length;
-        }
-
         private void SetStatusMessage(string message)
         {
             this.statusMessage = message;
             this.statusMessageTime = DateTime.Now;
         }
 
-        private async Task HandleKeyAsync(ConsoleKeyInfo key, CancellationToken cancellationToken)
+        private void HandleKeySync(ConsoleKeyInfo key, CancellationToken cancellationToken)
         {
             // Check for editor actions first
             var action = this.keyBindings.GetAction(key);
             switch (action)
             {
                 case FileTextEditorAction.Exit:
-                    await this.HandleExitAsync(cancellationToken);
+                    this.HandleExitSync(cancellationToken);
                     return;
                 case FileTextEditorAction.Save:
-                    await this.HandleSaveAsync(cancellationToken);
+                    this.HandleSaveSync(cancellationToken);
                     return;
                 case FileTextEditorAction.Copy:
                     this.HandleCopy();
@@ -1418,13 +1347,13 @@ namespace AvConsoleToolkit.Editors
             this.SetStatusMessage("Line cut to clipboard.");
         }
 
-        private async Task HandleSaveAsync(CancellationToken cancellationToken)
+        private void HandleSaveSync(CancellationToken cancellationToken)
         {
             this.SaveFile();
 
             try
             {
-                await this.onSaveCallback();
+                this.onSaveCallback().GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
@@ -1432,11 +1361,12 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        private async Task HandleExitAsync(CancellationToken cancellationToken)
+        private void HandleExitSync(CancellationToken cancellationToken)
         {
             if (this.modified)
             {
                 this.SetStatusMessage("Save changes before exit? (Y)es/(N)o/(C)ancel");
+                this.Render();
 
                 while (true)
                 {
@@ -1446,7 +1376,7 @@ namespace AvConsoleToolkit.Editors
                         switch (char.ToUpperInvariant(key.KeyChar))
                         {
                             case 'Y':
-                                await this.HandleSaveAsync(cancellationToken);
+                                this.HandleSaveSync(cancellationToken);
                                 this.running = false;
                                 return;
                             case 'N':

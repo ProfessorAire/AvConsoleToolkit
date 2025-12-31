@@ -238,14 +238,7 @@ namespace AvConsoleToolkit.Commands.Sftp
             }
 
             editor = new FileTextEditor(localPath, displayName, OnSaveAsync);
-
-            var statusTask = new Action<ConnectionStatus>(status => editor?.UpdateConnectionStatus(status));
-            connection.FileTransferConnectionStatusChanged += statusTask;
-            connection.SuppressOutput = true;
-            editor.UpdateConnectionStatus(connection.IsFileTransferConnected ? ConnectionStatus.Connected : ConnectionStatus.Reconnecting);
             await editor.RunAsync(cancellationToken);
-            connection.FileTransferConnectionStatusChanged -= statusTask;
-            connection.SuppressOutput = false;
         }
 
         private async Task EditWithExternalEditorAsync(IFileTransferConnection connection, FileEditSettings settings, string localPath, string editorPath, CancellationToken cancellationToken)
