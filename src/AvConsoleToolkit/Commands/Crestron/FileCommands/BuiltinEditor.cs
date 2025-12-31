@@ -80,7 +80,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         private Color statusBarFgColor;
         private Color hintBarBgColor;
         private Color hintBarFgColor;
-        private Style? glyphColor;
+        private Color glyphColor;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="BuiltinEditor"/> class.
@@ -104,26 +104,6 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
             // Parse colors
             this.LoadColors();
-        }
-
-        private void HandleKeyEvents(Terminal.Gui.View.KeyEventEventArgs args)
-        {
-            args.Handled = false;
-            var keyEvent = args.KeyEvent;
-            //if (keyEvent is null)
-            //{
-            //    return true;
-            //}
-
-            if (keyEvent.Key == Terminal.Gui.Key.S && keyEvent.IsCtrl)
-            {
-                // Special case: Ctrl+S to save
-                this.HandleKeySync(new System.ConsoleKeyInfo('s', System.ConsoleKey.S, false, false, true), CancellationToken.None);
-                //return true;
-                args.Handled = true;
-            }
-
-            //return true;
         }
 
         /// <summary>
@@ -154,7 +134,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
             try
             {
-                AnsiConsole.AlternateScreen(async () =>
+                AnsiConsole.AlternateScreen(() =>
                 {
                     // Initial render
                     this.Render();
@@ -214,9 +194,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
             this.statusBarFgColor = ParseHexColor(this.settings.StatusBarForegroundColor, new Color(236, 239, 244));
             this.hintBarBgColor = ParseHexColor(this.settings.HintBarBackgroundColor, new Color(67, 76, 94));
             this.hintBarFgColor = ParseHexColor(this.settings.HintBarForegroundColor, new Color(136, 192, 208));
-            var glyphForeground = ParseHexColor(this.settings.GlyphColor, new Color(76, 86, 106));
-            var glyphBackground = ParseHexColor(this.settings.GlyphBackgroundColor, new Color(180, 142, 173));
-            this.glyphColor = new Style(glyphForeground, glyphBackground);
+            this.glyphColor = ParseHexColor(this.settings.GlyphColor, new Color(76, 86, 106));
 
             // Check for extension-specific header colors
             if (!string.IsNullOrWhiteSpace(this.settings.HeaderColorMappings))
@@ -407,7 +385,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
             // Ensure header is exactly windowWidth characters
             if (header.Length > windowWidth)
             {
-                header = header[..windowWidth];
+                header = header.Substring(0, windowWidth);
             }
             else if (header.Length < windowWidth)
             {
@@ -440,22 +418,11 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
             }
 
             // Editor content - handle word wrap properly
-            var wrapGlyphText = this.settings.WordWrapGlyph;
-            if (string.IsNullOrEmpty(wrapGlyphText))
+            var wrapGlyph = this.settings.WordWrapGlyph;
+            if (string.IsNullOrEmpty(wrapGlyph))
             {
-                wrapGlyphText = "/";
+                wrapGlyph = "\\"; // Simple backslash as wrap indicator (universal support)
             }
-
-            var wrapGlyph = new Text(wrapGlyphText.EscapeMarkup(), this.glyphColor);
-
-            var continueGlyphText = this.settings.ContinuationGlyph;
-            if (string.IsNullOrWhiteSpace(continueGlyphText))
-            {
-                continueGlyphText = ">";
-            }
-
-
-            var continueGlyph = new Text(continueGlyphText.EscapeMarkup(), this.glyphColor);
 
             var wrapIndent = "  "; // 2 character indent for wrapped lines
             var currentSourceLine = this.scrollOffsetY;
@@ -536,7 +503,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
                         if (needsWrapGlyph)
                         {
-                            AnsiConsole.Write(wrapGlyph);
+                            AnsiConsole.Markup($"[{this.glyphColor.ToMarkup()}]{wrapGlyph.EscapeMarkup()}[/]");
                         }
                     }
                     else
@@ -547,7 +514,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                             AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
                         }
 
-                        AnsiConsole.Markup($"[{this.glyphColor!.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
+                        AnsiConsole.Markup($"[{this.glyphColor.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
                     }
                 }
                 else
@@ -583,12 +550,9 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                             lineText = string.Empty;
                         }
 
-                        var needsContinuationGlyph = false;
-
                         if (lineText.Length > contentWidth)
                         {
-                            lineText = lineText[..(contentWidth - 1)];
-                            needsContinuationGlyph = true;
+                            lineText = lineText.Substring(0, contentWidth - 1) + ">";
                         }
                         else
                         {
@@ -597,15 +561,10 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
                         // Render with selection highlighting
                         this.RenderLineWithSelection(lineIndex, lineText, gutterWidth, contentWidth);
-
-                        if (needsContinuationGlyph)
-                        {
-                            AnsiConsole.Write(continueGlyph);
-                        }
                     }
                     else
                     {
-                        AnsiConsole.Markup($"[{this.glyphColor!.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
+                        AnsiConsole.Markup($"[{this.glyphColor.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
                     }
                 }
             }
@@ -640,11 +599,6 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
             // Help bar
             System.Console.SetCursorPosition(0, windowHeight - 1);
             var help = this.keyBindings.GetShortcutHints();
-            while (help.Length > windowWidth)
-            {
-                help = $"{help[..(help.LastIndexOf(' ', help.LastIndexOf(' ') - 1) - 1)]}...";
-            }
-
             AnsiConsole.Markup($"[{this.hintBarFgColor.ToMarkup()} on {this.hintBarBgColor.ToMarkup()}]{help.PadRight(windowWidth).EscapeMarkup()}[/]");
 
             // Position cursor - account for word wrap

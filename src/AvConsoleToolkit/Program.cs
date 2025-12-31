@@ -11,9 +11,7 @@
 // </copyright>
 
 using System;
-using System.Text;
 using AvConsoleToolkit.Ssh;
-using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace AvConsoleToolkit

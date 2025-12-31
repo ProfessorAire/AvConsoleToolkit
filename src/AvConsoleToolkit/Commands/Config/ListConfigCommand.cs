@@ -20,7 +20,6 @@ using System.Threading;
 using AvConsoleToolkit.Configuration;
 using Spectre.Console;
 using Spectre.Console.Cli;
-using static System.Collections.Specialized.BitVector32;
 
 namespace AvConsoleToolkit.Commands.Config
 {
@@ -45,6 +44,7 @@ namespace AvConsoleToolkit.Commands.Config
         public override int Execute(CommandContext context, ListConfigSettings settings, CancellationToken cancellationToken)
         {
             var config = AppConfig.Settings;
+            var output = new StringBuilder();
             var globalProperties = new List<(string Name, string Value)>();
             var sections = new Dictionary<string, List<(string Name, string Value)>>();
 
@@ -55,7 +55,6 @@ namespace AvConsoleToolkit.Commands.Config
             // Use reflection to get all properties from ISettings
             var settingsType = config.GetType();
             var properties = settingsType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-            var nothingFound = true;
 
             foreach (var prop in properties)
             {
@@ -76,14 +75,12 @@ namespace AvConsoleToolkit.Commands.Config
                     }
 
                     sections[sectionName] = sectionProps;
-                    nothingFound = false;
                 }
                 else
                 {
                     // Top-level property (no section)
                     var displayValue = value?.ToString() ?? string.Empty;
                     globalProperties.Add((prop.Name, displayValue));
-                    nothingFound = false;
                 }
             }
 
@@ -92,30 +89,29 @@ namespace AvConsoleToolkit.Commands.Config
             {
                 foreach (var (name, value) in globalProperties)
                 {
-                    this.WriteProperty(name, value);
+                    output.AppendLine($"[cyan]{name.EscapeMarkup()}[/] = [green]{value.EscapeMarkup()}[/]");
                 }
-
-                AnsiConsole.WriteLine();
+                output.AppendLine();
             }
 
             // Output sections
             foreach (var section in sections.OrderBy(s => s.Key))
             {
-                this.WriteSectionHeader(section.Key);
-                
+                output.AppendLine($"[yellow][[{section.Key.EscapeMarkup()}]][/]");
                 foreach (var (name, value) in section.Value)
                 {
-                    this.WriteProperty(name, value);
+                    output.AppendLine($"[cyan]{name.EscapeMarkup()}[/] = [green]{value.EscapeMarkup()}[/]");
                 }
-
-                AnsiConsole.WriteLine();
+                output.AppendLine();
             }
 
-            if (nothingFound)
+            if (output.Length == 0)
             {
                 AnsiConsole.MarkupLine("[yellow]No configuration properties found.[/]");
                 return 0;
             }
+
+            AnsiConsole.Markup(output.ToString());
 
             // Show config file locations
             if (settings.ShowSources)
@@ -130,20 +126,6 @@ namespace AvConsoleToolkit.Commands.Config
             }
 
             return 0;
-        }
-
-        private void WriteSectionHeader(string name)
-        {
-            AnsiConsole.Write(new Text($"[{name}]", Color.Yellow));
-            AnsiConsole.WriteLine();
-        }
-
-        private void WriteProperty(string name, string value)
-        {
-            AnsiConsole.Write(new Text(name, Color.Aqua));
-            AnsiConsole.Write(" = ");
-            AnsiConsole.Write(new Text(value, Color.Green));
-            AnsiConsole.WriteLine();
         }
     }
 }
