@@ -51,9 +51,6 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
         /// <summary>Undo the last action.</summary>
         Undo,
-
-        /// <summary>Toggle between Dark and Bright themes.</summary>
-        ToggleTheme,
     }
 
     /// <summary>
@@ -74,10 +71,10 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         /// <returns>The editor action to perform.</returns>
         public virtual EditorAction GetAction(ConsoleKeyInfo key)
         {
-            // Ctrl+F2 for theme toggle
-            if (key.Key == ConsoleKey.F2 && key.Modifiers.HasFlag(ConsoleModifiers.Control))
+            // F2 for save (works in all terminals, Ctrl+S is often intercepted by PowerShell)
+            if (key.Key == ConsoleKey.F2 && key.Modifiers == 0)
             {
-                return EditorAction.ToggleTheme;
+                return EditorAction.Save;
             }
 
             if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
@@ -85,7 +82,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                 return key.Key switch
                 {
                     ConsoleKey.Q => EditorAction.Exit,
-                    ConsoleKey.O => EditorAction.Save, // Ctrl+O for save (Ctrl+S is intercepted by PowerShell)
+                    ConsoleKey.S => EditorAction.Save,
                     ConsoleKey.C => EditorAction.Copy,
                     ConsoleKey.X => EditorAction.Cut,
                     ConsoleKey.U => EditorAction.Paste, // Ctrl+V is intercepted by many terminals, so we use Ctrl+U
@@ -129,7 +126,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                 "  Ctrl+A             Select all",
                 "",
                 "Editing:",
-                "  Ctrl+O    Save file",
+                "  F2        Save file (or Ctrl+S)",
                 "  Ctrl+Z    Undo",
                 "  Ctrl+C    Copy selection",
                 "  Ctrl+X    Cut selection",
@@ -139,7 +136,6 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                 "View:",
                 "  Ctrl+`    Toggle line numbers",
                 "  Ctrl+W    Toggle word wrap",
-                "  Ctrl+F2   Toggle Dark/Bright theme",
                 "",
                 "Other:",
                 "  Ctrl+G    Show this help",
@@ -153,7 +149,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         /// <returns>The shortcut hint text.</returns>
         public virtual string GetShortcutHints()
         {
-            return " ^Q Exit  ^O Save  ^Z Undo  ^G Help  ^C Copy  ^U Paste  ^F2 Theme";
+            return " ^Q Exit  F2 Save  ^Z Undo  ^G Help  ^C Copy  ^U Paste";
         }
     }
 }
