@@ -1379,26 +1379,27 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
         private void SaveUndoState()
         {
-            // Create a copy of the current state
-            var linesCopy = new string[this.lines.Count];
-            for (int i = 0; i < this.lines.Count; i++)
-            {
-                linesCopy[i] = this.lines[i].ToString();
-            }
+            var state = new UndoState(
+                this.lines.Select(l => l.ToString()).ToList(),
+                this.cursorRow,
+                this.cursorCol,
+                this.modified);
 
-            var state = new UndoState(linesCopy, this.cursorRow, this.cursorCol, this.modified);
             this.undoStack.Push(state);
 
-            // Limit undo history size by removing oldest entries
-            while (this.undoStack.Count > MaxUndoHistory)
+            // Limit undo history size
+            if (this.undoStack.Count > MaxUndoHistory)
             {
-                // Remove oldest entry by converting to array and creating new stack
-                var items = this.undoStack.ToArray();
-                this.undoStack.Clear();
-                // Push items back except the last one (oldest), in reverse order
-                for (int i = items.Length - 2; i >= 0; i--)
+                var tempStack = new Stack<UndoState>();
+                for (int i = 0; i < MaxUndoHistory; i++)
                 {
-                    this.undoStack.Push(items[i]);
+                    tempStack.Push(this.undoStack.Pop());
+                }
+
+                this.undoStack.Clear();
+                while (tempStack.Count > 0)
+                {
+                    this.undoStack.Push(tempStack.Pop());
                 }
             }
         }
@@ -1413,9 +1414,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 
             var state = this.undoStack.Pop();
 
-            // Restore lines efficiently
             this.lines.Clear();
-            this.lines.Capacity = state.Lines.Length;
             foreach (var line in state.Lines)
             {
                 this.lines.Add(new StringBuilder(line));
@@ -1432,5 +1431,5 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
     /// <summary>
     /// Represents a saved editor state for undo operations.
     /// </summary>
-    internal sealed record UndoState(string[] Lines, int CursorRow, int CursorCol, bool Modified);
+    internal sealed record UndoState(List<string> Lines, int CursorRow, int CursorCol, bool Modified);
 }
