@@ -76,7 +76,8 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                     ConsoleKey.S => EditorAction.Save,
                     ConsoleKey.C => EditorAction.Copy,
                     ConsoleKey.X => EditorAction.Cut,
-                    ConsoleKey.U => EditorAction.Paste, // Ctrl+V is intercepted by many terminals, so we use Ctrl+U
+                    ConsoleKey.V => EditorAction.Paste,
+                    ConsoleKey.U => EditorAction.Paste, // Alternative for terminals that intercept Ctrl+V
                     ConsoleKey.K => EditorAction.CutLine,
                     ConsoleKey.G => EditorAction.Help,
                     ConsoleKey.W => EditorAction.ToggleWordWrap,
@@ -119,7 +120,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                 "  Ctrl+S    Save file",
                 "  Ctrl+C    Copy selection",
                 "  Ctrl+X    Cut selection",
-                "  Ctrl+U    Paste",
+                "  Ctrl+V    Paste (or Ctrl+U)",
                 "  Ctrl+K    Cut line",
                 "",
                 "View:",
@@ -140,7 +141,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         /// <returns>The shortcut hint text.</returns>
         public virtual string GetShortcutHints()
         {
-            return " ^Q Exit  ^S Save  ^G Help  ^K Cut Line  ^C Copy  ^U Paste";
+            return " ^Q Exit  ^S Save  ^G Help  ^K Cut Line  ^C Copy  ^V/^U Paste";
         }
     }
 }
