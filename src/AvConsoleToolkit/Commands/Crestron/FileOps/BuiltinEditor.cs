@@ -406,10 +406,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileOps
                     if (currentSourceLine < this.lines.Count)
                     {
                         var fullLineText = this.lines[currentSourceLine].ToString();
-
-                        // Calculate effective width accounting for indent and wrap glyph space
-                        var indentSpace = currentWrapOffset > 0 ? wrapIndent.Length : 0;
-                        var effectiveWidth = contentWidth - indentSpace - 1; // -1 for wrap glyph space
+                        var effectiveWidth = contentWidth - (currentWrapOffset > 0 ? wrapIndent.Length : 0);
 
                         // Draw gutter
                         if (this.showLineNumbers)
@@ -434,7 +431,6 @@ namespace AvConsoleToolkit.Commands.Crestron.FileOps
 
                         string lineText;
                         var needsWrapGlyph = false;
-                        var lineIndexForSelection = currentSourceLine; // Capture before potential increment
 
                         if (currentWrapOffset > 0)
                         {
@@ -445,21 +441,20 @@ namespace AvConsoleToolkit.Commands.Crestron.FileOps
                         if (remainingText.Length > effectiveWidth)
                         {
                             // Line needs to wrap
-                            lineText = remainingText.Substring(0, effectiveWidth);
+                            lineText = remainingText.Substring(0, effectiveWidth - 1);
                             needsWrapGlyph = true;
-                            currentWrapOffset += effectiveWidth;
+                            currentWrapOffset += effectiveWidth - 1;
                         }
                         else
                         {
-                            // Line fits or is the last segment - use full content width minus indent
-                            var displayWidth = contentWidth - indentSpace;
-                            lineText = remainingText.PadRight(displayWidth);
+                            // Line fits or is the last segment
+                            lineText = remainingText.PadRight(effectiveWidth);
                             currentSourceLine++;
                             currentWrapOffset = 0;
                         }
 
                         // Render the line segment
-                        this.RenderLineWithSelection(lineIndexForSelection, lineText, gutterWidth, contentWidth - indentSpace);
+                        this.RenderLineWithSelection(currentWrapOffset == 0 ? currentSourceLine - 1 : currentSourceLine, lineText, gutterWidth, effectiveWidth);
 
                         if (needsWrapGlyph)
                         {
