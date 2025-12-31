@@ -51,12 +51,6 @@ namespace AvConsoleToolkit.Connections
         int MaxReconnectionAttempts { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether console output should be suppressed.
-        /// When true, the connection will not write status updates or progress information to the console.
-        /// </summary>
-        bool SuppressOutput { get; set; }
-
-        /// <summary>
         /// Asynchronously establishes a shell connection to the remote host.
         /// </summary>
         /// <param name="cancellationToken">A cancellation token that can be used to cancel the connection attempt.</param>
