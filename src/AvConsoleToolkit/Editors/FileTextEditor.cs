@@ -1059,8 +1059,6 @@ namespace AvConsoleToolkit.Editors
                 return;
             }
 
-            this.SaveUndoState();
-
             var (startRow, startCol, endRow, endCol) = this.GetNormalizedSelection();
 
             if (startRow == endRow)
