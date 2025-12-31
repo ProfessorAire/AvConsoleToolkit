@@ -1,4 +1,4 @@
-// <copyright file="ISshConnection.cs">
+﻿// <copyright file="ICompositeConnection.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,23 +10,15 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-namespace AvConsoleToolkit.Ssh
+namespace AvConsoleToolkit.Connections
 {
     /// <summary>
-    /// Provides access to both shell and file transfer functionality over SSH.
+    /// Represents a connection that supports both shell command execution and file transfer operations.
     /// </summary>
-    public interface ISshConnection : IShellConnection, IFileTransferConnection
+    /// <remarks>This interface combines the capabilities of <see cref="IShellConnection"/> and <see cref="IFileTransferConnection"/>,
+    /// allowing implementations to provide both interactive shell access and file transfer functionality over a single
+    /// connection. Members inherited from the base interfaces define the available operations.</remarks>
+    public interface ICompositeConnection : IShellConnection, IFileTransferConnection
     {
-        /// <summary>
-        /// Gets a value indicating whether the connection is established.
-        /// </summary>
-        new bool IsConnected { get; }
-
-        /// <summary>
-        /// Gets or sets the maximum number of reconnection attempts.
-        /// A value of 0 means no automatic reconnection.
-        /// A value of -1 means unlimited reconnection attempts.
-        /// </summary>
-        int MaxReconnectionAttempts { get; set; }
     }
 }

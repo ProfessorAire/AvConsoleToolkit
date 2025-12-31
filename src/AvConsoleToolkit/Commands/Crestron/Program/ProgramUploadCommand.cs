@@ -22,7 +22,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using AvConsoleToolkit.Crestron;
-using AvConsoleToolkit.Ssh;
 using AvConsoleToolkit.Utilities;
 using Renci.SshNet.Sftp;
 using Spectre.Console;
@@ -190,7 +189,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>True if IP table was configured successfully; false on error.</returns>
         private static async Task<bool> ConfigureIpTableAsync(
-            IShellConnection shellStream,
+            Connections.IShellConnection shellStream,
             List<IpTable.Entry> entries,
             int slot,
             bool verbose,
@@ -262,7 +261,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
         /// <returns>Dictionary mapping relative file paths to their stored hashes, or null if manifest doesn't exist.</returns>
         private static async Task<Dictionary<string, string>?> DownloadHashManifestAsync(
-            IFileTransferConnection connection,
+            Connections.IFileTransferConnection connection,
             string remotePath,
             bool verbose = false)
         {
@@ -321,7 +320,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// </summary>
         /// <param name="connection">File transfer connection.</param>
         /// <param name="remotePath">Remote directory path to ensure exists.</param>
-        private static async Task EnsureRemoteDirectoryExistsAsync(IFileTransferConnection connection, string remotePath)
+        private static async Task EnsureRemoteDirectoryExistsAsync(Connections.IFileTransferConnection connection, string remotePath)
         {
             var parts = remotePath.Split('/');
             var currentPath = string.Empty;
@@ -350,7 +349,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
         /// <returns>A dictionary mapping relative remote paths to <see cref="ISftpFile"/> metadata.</returns>
         private static async Task<Dictionary<string, ISftpFile>> GetRemoteFileMetadataAsync(
-            IFileTransferConnection connection,
+            Connections.IFileTransferConnection connection,
             string remotePath,
             bool verbose = false)
         {
@@ -374,7 +373,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <param name="files">Dictionary to populate with relative path => file metadata.</param>
         /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
         private static async Task GetRemoteFilesRecursiveAsync(
-            IFileTransferConnection connection,
+            Connections.IFileTransferConnection connection,
             string currentPath,
             string basePath,
             Dictionary<string, ISftpFile> files,
@@ -532,7 +531,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <param name="tempDirectory">Temporary directory where package contents were extracted.</param>
         /// <param name="cancellationToken">Cancellation token to observe.</param>
         /// <returns>0 on success, non-zero on failure.</returns>
-        private static async Task<int> RegisterProgram(IShellConnection shellStream, int slot, string extension, string tempDirectory, CancellationToken cancellationToken)
+        private static async Task<int> RegisterProgram(Connections.IShellConnection shellStream, int slot, string extension, string tempDirectory, CancellationToken cancellationToken)
         {
             var success = false;
             if (extension == ".lpz")
@@ -638,7 +637,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             CancellationToken cancellationToken)
         {
             // First, analyze files without SSH connection - only need SFTP for listing
-            var connection = ConnectionFactory.Instance.GetSshConnection(settings.Host, 22, settings.Username, settings.Password);
+            var connection = Connections.ConnectionFactory.Instance.GetCompositeConnection(settings.Host, 22, settings.Username, settings.Password);
             await connection.ConnectFileTransferAsync(cancellationToken);
             var analysisResult = await AnsiConsole.Progress()
                 .AutoClear(false)
@@ -1125,7 +1124,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
         /// <param name="hashes">Dictionary of file path to hash mappings.</param>
         /// <param name="verbose">Whether to emit verbose diagnostic output.</param>
         private static async Task UploadHashManifestAsync(
-            IFileTransferConnection connection,
+            Connections.IFileTransferConnection connection,
             string remotePath,
             Dictionary<string, string> hashes,
             bool verbose = false)
@@ -1168,7 +1167,7 @@ namespace AvConsoleToolkit.Commands.Crestron.Program
             string remotePath,
             CancellationToken cancellationToken)
         {
-            var connection = ConnectionFactory.Instance.GetSshConnection(settings.Host, 22, settings.Username, settings.Password);
+            var connection = Connections.ConnectionFactory.Instance.GetCompositeConnection(settings.Host, 22, settings.Username, settings.Password);
 
             // Kill program if requested
             if (settings.KillProgram)

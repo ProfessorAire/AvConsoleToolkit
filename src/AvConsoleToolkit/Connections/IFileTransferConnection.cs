@@ -17,7 +17,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Renci.SshNet.Sftp;
 
-namespace AvConsoleToolkit.Ssh
+namespace AvConsoleToolkit.Connections
 {
     /// <summary>
     /// Provides access to functionality for transferring files to/from a remote device.
@@ -33,11 +33,25 @@ namespace AvConsoleToolkit.Ssh
         /// Occurs when the file transfer connection is reconnected after a disconnection.
         /// </summary>
         event EventHandler? FileTransferReconnected;
+        
+        /// <summary>
+        /// Occurs when the connection status of a file transfer changes.
+        /// </summary>
+        /// <remarks>Subscribers can use this event to monitor changes in the file transfer connection,
+        /// such as when the connection is established, lost, or transitions between states. The event provides the new
+        /// connection status as a parameter.</remarks>
+        event Action<Connections.ConnectionStatus> FileTransferConnectionStatusChanged;
 
         /// <summary>
-        /// Gets a value indicating whether the connection is established.
+        /// Gets a value indicating whether the file transfer connection is established.
         /// </summary>
-        bool IsConnected { get; }
+        bool IsFileTransferConnected { get; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether console output should be suppressed.
+        /// When true, the connection will not write status updates or progress information to the console.
+        /// </summary>
+        bool SuppressOutput { get; set; }
 
         /// <summary>
         /// Establishes a connection for file transfer operations asynchronously.
