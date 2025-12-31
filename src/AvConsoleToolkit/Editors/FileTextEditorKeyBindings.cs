@@ -52,7 +52,6 @@ namespace AvConsoleToolkit.Editors
                     ConsoleKey.G => FileTextEditorAction.Help,
                     ConsoleKey.W => FileTextEditorAction.ToggleWordWrap,
                     ConsoleKey.Z => FileTextEditorAction.Undo,
-                    ConsoleKey.Oem3 => FileTextEditorAction.ToggleLineNumbers, // Backtick ` toggles line numbers.
                     _ => FileTextEditorAction.None
                 };
             }
@@ -99,7 +98,7 @@ namespace AvConsoleToolkit.Editors
                 "View:",
                 "  Ctrl+`    Toggle line numbers",
                 "  Ctrl+W    Toggle word wrap",
-                "  Ctrl+F2   Cycle theme",
+                "  Ctrl+F2   Toggle Dark/Bright theme",
                 "",
                 "Other:",
                 "  Ctrl+G    Show this help",

@@ -10,9 +10,9 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-// Some Console operations are required for cursor positioning, key reading, and visibility
+// Some System.Console operations are required for cursor positioning, key reading, and visibility
 // that AnsiConsole doesn't provide equivalents for.
-#pragma warning disable Spectre1000 // Use AnsiConsole instead of Console
+#pragma warning disable Spectre1000 // Use AnsiConsole instead of System.Console
 
 using System;
 using System.Collections.Generic;
@@ -75,6 +75,8 @@ namespace AvConsoleToolkit.Editors
         private FileTextEditorTheme currentTheme;
 
         // Header colors (may be overridden by file extension)
+        private Color headerBgColor;
+        private Color headerFgColor;
         private Style headerStyle;
 
         /// <summary>
@@ -98,9 +100,11 @@ namespace AvConsoleToolkit.Editors
             this.tabDepth = this.settings.TabDepth;
 
             // Initialize theme
+
+            //TODO: Update the editor to use the user's selected theme by default, instead of always selecting the user theme.
             this.currentTheme = FileTextEditorTheme.User;
-            this.headerStyle = this.LoadHeaderStyle();
             this.SelectTheme();
+            this.LoadHeaderColors();
         }
 
         /// <summary>
@@ -112,12 +116,6 @@ namespace AvConsoleToolkit.Editors
             set
             {
                 this.uploadProgress = value;
-                if (value == 100)
-                {
-                    this.SetStatusMessage($"File Saved -> File Uploaded");
-                }
-
-                this.needsRender = true;
             }
         }
 
@@ -130,6 +128,7 @@ namespace AvConsoleToolkit.Editors
             set
             {
                 this.currentTheme = value;
+                this.LoadHeaderColors();
             }
         }
         /// <summary>
@@ -146,10 +145,7 @@ namespace AvConsoleToolkit.Editors
             };
 
             this.connectionStatus = status == ConnectionStatus.Connected ? "✓" : "X";
-            this.needsRender = true;
         }
-
-        private bool needsRender;
 
         /// <summary>
         /// Runs the editor session.
@@ -160,12 +156,13 @@ namespace AvConsoleToolkit.Editors
         {
             this.LoadFile();
             this.running = true;
-            var lastWindowWidth = Console.WindowWidth;
-            var lastWindowHeight = Console.WindowHeight;
+            var needsRender = true;
+            var lastWindowWidth = System.Console.WindowWidth;
+            var lastWindowHeight = System.Console.WindowHeight;
 
             // Save original console state and enable Ctrl+C as input
-            var originalTreatControlCAsInput = Console.TreatControlCAsInput;
-            Console.TreatControlCAsInput = true;
+            var originalTreatControlCAsInput = System.Console.TreatControlCAsInput;
+            System.Console.TreatControlCAsInput = true;
 
             try
             {
@@ -183,24 +180,24 @@ namespace AvConsoleToolkit.Editors
                         {
                             lastWindowWidth = currentWidth;
                             lastWindowHeight = currentHeight;
-                            this.needsRender = true;
+                            needsRender = true;
                         }
 
                         if (Console.KeyAvailable)
                         {
                             var key = Console.ReadKey(true);
-                            _ = this.HandleKeyAsync(key, cancellationToken);
-                            this.needsRender = true;
+                            await this.HandleKeyAsync(key, cancellationToken);
+                            needsRender = true;
                         }
                         else
                         {
                             Thread.Sleep(50);
                         }
 
-                        if (this.needsRender)
+                        if (needsRender)
                         {
                             this.Render();
-                            this.needsRender = false;
+                            needsRender = false;
                         }
                     }
                 });
@@ -208,19 +205,19 @@ namespace AvConsoleToolkit.Editors
             finally
             {
                 // Restore original console state
-                Console.TreatControlCAsInput = originalTreatControlCAsInput;
+                System.Console.TreatControlCAsInput = originalTreatControlCAsInput;
             }
 
             return !this.modified;
         }
 
-        private Style LoadHeaderStyle()
+        private void LoadHeaderColors()
         {
             var extension = Path.GetExtension(this.filePath)?.TrimStart('.').ToLowerInvariant() ?? string.Empty;
 
             // Start with theme header colors
-            var headerFgColor = this.currentTheme.Header.Foreground;
-            var headerBgColor = this.currentTheme.Header.Background;
+            this.headerFgColor = this.currentTheme.Header.Foreground;
+            this.headerBgColor = this.currentTheme.Header.Background;
 
             // Check for extension-specific header colors
             if (!string.IsNullOrWhiteSpace(this.settings.HeaderColorMappings))
@@ -234,12 +231,12 @@ namespace AvConsoleToolkit.Editors
                         var colors = parts[1].Split(',', StringSplitOptions.TrimEntries);
                         if (colors.Length >= 1)
                         {
-                            headerFgColor = ParseHexColor(colors[0], headerFgColor);
+                            this.headerFgColor = ParseHexColor(colors[0], this.headerFgColor);
                         }
 
                         if (colors.Length >= 2)
                         {
-                            headerBgColor = ParseHexColor(colors[1], headerBgColor);
+                            this.headerBgColor = ParseHexColor(colors[1], this.headerBgColor);
                         }
 
                         break;
@@ -247,7 +244,7 @@ namespace AvConsoleToolkit.Editors
                 }
             }
 
-            return new Style(headerFgColor, headerBgColor);
+            this.headerStyle = new Style(this.headerFgColor, this.headerBgColor);
         }
 
         private static Color ParseHexColor(string hex, Color defaultColor)
@@ -376,7 +373,7 @@ namespace AvConsoleToolkit.Editors
             }
 
             this.modified = false;
-            this.SetStatusMessage("File saved -> File Uploading");
+            this.SetStatusMessage("File saved.");
         }
 
         private Lock syncRoot = new();
@@ -385,16 +382,16 @@ namespace AvConsoleToolkit.Editors
         {
             lock (this.syncRoot)
             {
-                var windowWidth = Console.WindowWidth;
-                var windowHeight = Console.WindowHeight;
-                var editorHeight = windowHeight - 3; // Header = 1, TextEditor = *, status bar = 1, help bar = 1
+                var windowWidth = System.Console.WindowWidth;
+                var windowHeight = System.Console.WindowHeight;
+                var editorHeight = windowHeight - 3; // Header, status bar, help bar
 
                 // Calculate gutter width
                 var gutterWidth = this.showLineNumbers ? Math.Max(4, this.lines.Count.ToString().Length + 1) + 1 : 0;
                 var contentWidth = windowWidth - gutterWidth;
 
-                Console.CursorVisible = false;
-                Console.SetCursorPosition(0, 0);
+                System.Console.CursorVisible = false;
+                System.Console.SetCursorPosition(0, 0);
 
                 // Header bar - centered text with file name
                 var headerText = this.displayName;
@@ -407,209 +404,32 @@ namespace AvConsoleToolkit.Editors
                 if (headerText.Length >= windowWidth)
                 {
                     // Truncate header if it's too long
-                    headerText = headerText.Substring(0, Math.Max(0, windowWidth - 6)) + "...";
+                    headerText = headerText.Substring(0, Math.Max(0, windowWidth - 3)) + "...";
                 }
 
                 var paddingLeft = Math.Max(0, (windowWidth - headerText.Length) / 2);
-                var paddingRight = Math.Max(0, windowWidth - paddingLeft - headerText.Length) - 1;
+                var paddingRight = Math.Max(0, windowWidth - paddingLeft - headerText.Length);
                 var header = new string(' ', paddingLeft) + headerText + new string(' ', paddingRight);
 
-                this.WriteText(header, this.headerStyle);
+                // Ensure header is exactly windowWidth characters
+                if (header.Length > windowWidth)
+                {
+                    header = header[..(windowWidth - 1)];
+                }
+                else if (header.Length < windowWidth)
+                {
+                    header = header.PadRight(windowWidth - 1);
+                }
+
+                AnsiConsole.Write(new Text(header, this.headerStyle));
 
                 // Add the connection status icon:
-                this.WriteText(this.connectionStatus ?? " ", new Style(this.connectionStatus == "✓" ? Color.Lime : Color.Red, this.currentTheme.Header.Background));
+                AnsiConsole.Write(new Text(this.connectionStatus ?? " ", new Style(this.connectionStatus == "✓" ? Color.Lime : Color.Red, this.headerBgColor)));
 
-                // Adjust scroll offset
-                if (this.cursorRow < this.scrollOffsetY)
-                {
-                    this.scrollOffsetY = this.cursorRow;
-                }
-                else if (this.cursorRow >= this.scrollOffsetY + editorHeight)
-                {
-                    this.scrollOffsetY = this.cursorRow - editorHeight + 1;
-                }
-
-                // Horizontal scroll for non-wrap mode
-                if (!this.wordWrapEnabled)
-                {
-                    if (this.cursorCol < this.scrollOffsetX)
-                    {
-                        this.scrollOffsetX = this.cursorCol;
-                    }
-                    else if (this.cursorCol >= this.scrollOffsetX + contentWidth)
-                    {
-                        this.scrollOffsetX = this.cursorCol - contentWidth + 1;
-                    }
-                }
-
-                // Editor content - handle word wrap properly
-                var wrapGlyphText = this.settings.WordWrapGlyph;
-                if (string.IsNullOrEmpty(wrapGlyphText))
-                {
-                    wrapGlyphText = "/";
-                }
-
-                var continueGlyphText = this.settings.ContinuationGlyph;
-                if (string.IsNullOrWhiteSpace(continueGlyphText))
-                {
-                    continueGlyphText = ">";
-                }
-
-                var wrapIndent = "  "; // 2 character indent for wrapped lines
-                var currentSourceLine = this.scrollOffsetY;
-                var currentWrapOffset = 0;
-
-                // When word wrap is enabled, we need to track which source line and offset we're at
-                if (this.wordWrapEnabled)
-                {
-                    // Skip wrapped lines that scrolled off the top
-                    // This is simplified - for now we start at scrollOffsetY source line
-                    currentSourceLine = this.scrollOffsetY;
-                }
-
-                for (int screenRow = 0; screenRow < editorHeight; screenRow++)
-                {
-                    Console.SetCursorPosition(0, screenRow + 1);
-
-                    if (this.wordWrapEnabled)
-                    {
-                        // Word wrap mode
-                        if (currentSourceLine < this.lines.Count)
-                        {
-                            var fullLineText = this.lines[currentSourceLine].ToString();
-
-                            // Calculate effective width accounting for indent and wrap glyph space
-                            var indentSpace = currentWrapOffset > 0 ? wrapIndent.Length : 0;
-                            var effectiveWidth = contentWidth - indentSpace - 1; // -1 for wrap glyph space
-
-                            // Draw gutter
-                            if (this.showLineNumbers)
-                            {
-                                if (currentWrapOffset == 0)
-                                {
-                                    // First segment of line - show line number
-                                    var lineNum = (currentSourceLine + 1).ToString().PadLeft(gutterWidth - 1);
-                                    this.WriteText($"{lineNum} ", this.currentTheme.Gutter);
-                                }
-                                else
-                                {
-                                    // Continuation - blank gutter
-                                    this.WriteText(new string(' ', gutterWidth), this.currentTheme.Gutter);
-                                }
-                            }
-
-                            // Get the segment to display
-                            var remainingText = currentWrapOffset < fullLineText.Length
-                                ? fullLineText.Substring(currentWrapOffset)
-                                : string.Empty;
-
-                            string lineText;
-                            var needsWrapGlyph = false;
-                            var lineIndexForSelection = currentSourceLine; // Capture before potential increment
-
-                            if (currentWrapOffset > 0)
-                            {
-                                // Continuation line - add indent
-                                this.WriteText(wrapIndent, this.currentTheme.TextEditor);
-                            }
-
-                            if (remainingText.Length > effectiveWidth)
-                            {
-                                // Line needs to wrap
-                                lineText = remainingText.Substring(0, effectiveWidth);
-                                needsWrapGlyph = true;
-                                currentWrapOffset += effectiveWidth;
-                            }
-                            else
-                            {
-                                // Line fits or is the last segment - use full content width minus indent
-                                var displayWidth = contentWidth - indentSpace;
-                                lineText = remainingText.PadRight(displayWidth);
-                                currentSourceLine++;
-                                currentWrapOffset = 0;
-                            }
-
-                            // Render the line segment
-                            this.RenderLineWithSelection(lineIndexForSelection, lineText, gutterWidth, contentWidth - indentSpace);
-
-                            if (needsWrapGlyph)
-                            {
-                                this.WriteText(wrapGlyphText, this.currentTheme.Glyph);
-                            }
-                        }
-                        else
-                        {
-                            // Past end of file
-                            if (this.showLineNumbers)
-                            {
-                                this.WriteText(new string(' ', gutterWidth), this.CurrentTheme.Gutter);
-                            }
-
-                            this.WriteText("~".PadRight(contentWidth), this.CurrentTheme.TextEditor);
-                        }
-                    }
-                    else
-                    {
-                        // Horizontal scroll mode (no word wrap)
-                        var lineIndex = this.scrollOffsetY + screenRow;
-
-                        // Draw gutter with line numbers
-                        if (this.showLineNumbers)
-                        {
-                            if (lineIndex < this.lines.Count)
-                            {
-                                var lineNum = (lineIndex + 1).ToString().PadLeft(gutterWidth - 1);
-                                this.WriteText($"{lineNum} ", this.currentTheme.Gutter);
-                            }
-                            else
-                            {
-                                this.WriteText(new string(' ', gutterWidth), this.currentTheme.Gutter);
-                            }
-                        }
-
-                        if (lineIndex < this.lines.Count)
-                        {
-                            var lineText = this.lines[lineIndex].ToString();
-
-                            // Horizontal scroll
-                            if (this.scrollOffsetX < lineText.Length)
-                            {
-                                lineText = lineText.Substring(this.scrollOffsetX);
-                            }
-                            else
-                            {
-                                lineText = string.Empty;
-                            }
-
-                            var needsContinuationGlyph = false;
-
-                            if (lineText.Length > contentWidth)
-                            {
-                                lineText = lineText[..(contentWidth - 1)];
-                                needsContinuationGlyph = true;
-                            }
-                            else
-                            {
-                                lineText = lineText.PadRight(contentWidth);
-                            }
-
-                            // Render with selection highlighting
-                            this.RenderLineWithSelection(lineIndex, lineText, gutterWidth, contentWidth);
-
-                            if (needsContinuationGlyph)
-                            {
-                                this.WriteText(continueGlyphText, this.currentTheme.Glyph);
-                            }
-                        }
-                        else
-                        {
-                            this.WriteText("~".PadRight(contentWidth), this.currentTheme.TextEditor);
-                        }
-                    }
-                }
+                var wrapIndent = this.NewMethod(editorHeight, gutterWidth, contentWidth);
 
                 // Status bar
-                Console.SetCursorPosition(0, windowHeight - 2);
+                System.Console.SetCursorPosition(0, windowHeight - 2);
                 var statusText = this.GetStatusMessage();
 
                 var position = $"Ln {this.cursorRow + 1}, Col {this.cursorCol + 1}";
@@ -618,39 +438,58 @@ namespace AvConsoleToolkit.Editors
                     position += $" Tab:{this.tabDepth}";
                 }
 
-                // Upload Status
-                var uploadStatus = string.Empty;
+                // Progress bar
+                var progressBarWidth = 20;
+                var progressBarSpace = string.Empty;
                 if (this.uploadProgress >= 0)
                 {
-                    uploadStatus = $"Upload: {this.uploadProgress,3}% ";
+                    var filled = (int)((this.uploadProgress / 100.0) * progressBarWidth);
+                    var empty = progressBarWidth - filled;
+                    progressBarSpace = $" [{new string('█', filled)}{new string('░', empty)}] {this.uploadProgress,3}%";
                 }
+
+                // Build status bar content with proper markup handling
+                //var statusBarContent = new StringBuilder();
+                //statusBarContent.Append($"[{this.currentTheme.StatusBar.Foreground.ToMarkup()} on {this.currentTheme.StatusBar.Background.ToMarkup()}]");
 
                 // Add status message or connection status
                 if (!string.IsNullOrEmpty(statusText))
                 {
-                    this.WriteText(statusText, this.currentTheme.StatusBar);
+                    AnsiConsole.Write(new Text(statusText, this.currentTheme.StatusBar));
                 }
 
-                // Calculate padding
-                var statusPadding = windowWidth - statusText.Length - position.Length - uploadStatus.Length;
+                // Calculate padding (need to account for visible text length, not markup length)
+                var visibleStatusLength = this.GetVisibleLength(statusText);
+                var visibleConnectionLength = this.connectionStatus?.Length ?? 0;
+                var totalVisibleStatus = visibleStatusLength;
+                if (visibleStatusLength > 0 && visibleConnectionLength > 0)
+                {
+                    totalVisibleStatus += 3 + visibleConnectionLength; // " | " + connection status
+                }
+                else if (visibleConnectionLength > 0)
+                {
+                    totalVisibleStatus = visibleConnectionLength;
+                }
+
+                var statusPadding = windowWidth - totalVisibleStatus - position.Length - progressBarSpace.Length;
                 if (statusPadding < 0)
                 {
                     statusPadding = 0;
                 }
 
-                this.WriteText(new string(' ', statusPadding), this.CurrentTheme.StatusBar);
-                this.WriteText(position, this.CurrentTheme.StatusBar);
-                this.WriteText(uploadStatus, this.CurrentTheme.StatusBar);
+                AnsiConsole.Write(new Text(new string(' ', statusPadding), this.CurrentTheme.StatusBar));
+                AnsiConsole.Write(position, this.CurrentTheme.StatusBar);
+                AnsiConsole.Write(new Text(progressBarSpace, this.CurrentTheme.StatusBar));
 
                 // Help bar
-                Console.SetCursorPosition(0, windowHeight - 1);
+                System.Console.SetCursorPosition(0, windowHeight - 1);
                 var help = this.keyBindings.GetShortcutHints();
                 while (help.Length > windowWidth)
                 {
                     help = $"{help[..(help.LastIndexOf(' ', help.LastIndexOf(' ') - 1) - 1)]}...";
                 }
 
-                this.WriteText(help.PadRight(windowWidth), this.currentTheme.HintBar);
+                AnsiConsole.Markup($"[{this.currentTheme.HintBar.Foreground.ToMarkup()} on {this.currentTheme.HintBar.Background.ToMarkup()}]{help.PadRight(windowWidth).EscapeMarkup()}[/]");
 
                 // Position cursor - account for word wrap
                 int displayRow;
@@ -736,16 +575,214 @@ namespace AvConsoleToolkit.Editors
 
                 displayCol = Math.Max(gutterWidth, Math.Min(displayCol, windowWidth - 1));
                 displayRow = Math.Max(1, Math.Min(displayRow, editorHeight));
-                Console.SetCursorPosition(displayCol, displayRow);
-                Console.CursorVisible = true;
+                System.Console.SetCursorPosition(displayCol, displayRow);
+                System.Console.CursorVisible = true;
             }
+        }
+
+        private string NewMethod(int editorHeight, int gutterWidth, int contentWidth)
+        {
+            // Adjust scroll offset
+            if (this.cursorRow < this.scrollOffsetY)
+            {
+                this.scrollOffsetY = this.cursorRow;
+            }
+            else if (this.cursorRow >= this.scrollOffsetY + editorHeight)
+            {
+                this.scrollOffsetY = this.cursorRow - editorHeight + 1;
+            }
+
+            // Horizontal scroll for non-wrap mode
+            if (!this.wordWrapEnabled)
+            {
+                if (this.cursorCol < this.scrollOffsetX)
+                {
+                    this.scrollOffsetX = this.cursorCol;
+                }
+                else if (this.cursorCol >= this.scrollOffsetX + contentWidth)
+                {
+                    this.scrollOffsetX = this.cursorCol - contentWidth + 1;
+                }
+            }
+
+            // Editor content - handle word wrap properly
+            var wrapGlyphText = this.settings.WordWrapGlyph;
+            if (string.IsNullOrEmpty(wrapGlyphText))
+            {
+                wrapGlyphText = "/";
+            }
+
+            var wrapGlyph = new Text(wrapGlyphText.EscapeMarkup(), this.currentTheme.Glyph);
+
+            var continueGlyphText = this.settings.ContinuationGlyph;
+            if (string.IsNullOrWhiteSpace(continueGlyphText))
+            {
+                continueGlyphText = ">";
+            }
+
+            var continueGlyph = new Text(continueGlyphText.EscapeMarkup(), this.currentTheme.Glyph);
+
+            var wrapIndent = "  "; // 2 character indent for wrapped lines
+            var currentSourceLine = this.scrollOffsetY;
+            var currentWrapOffset = 0;
+
+            // When word wrap is enabled, we need to track which source line and offset we're at
+            if (this.wordWrapEnabled)
+            {
+                // Skip wrapped lines that scrolled off the top
+                // This is simplified - for now we start at scrollOffsetY source line
+                currentSourceLine = this.scrollOffsetY;
+            }
+
+            for (int screenRow = 0; screenRow < editorHeight; screenRow++)
+            {
+                System.Console.SetCursorPosition(0, screenRow + 1);
+
+                if (this.wordWrapEnabled)
+                {
+                    // Word wrap mode
+                    if (currentSourceLine < this.lines.Count)
+                    {
+                        var fullLineText = this.lines[currentSourceLine].ToString();
+
+                        // Calculate effective width accounting for indent and wrap glyph space
+                        var indentSpace = currentWrapOffset > 0 ? wrapIndent.Length : 0;
+                        var effectiveWidth = contentWidth - indentSpace - 1; // -1 for wrap glyph space
+
+                        // Draw gutter
+                        if (this.showLineNumbers)
+                        {
+                            if (currentWrapOffset == 0)
+                            {
+                                // First segment of line - show line number
+                                var lineNum = (currentSourceLine + 1).ToString().PadLeft(gutterWidth - 1);
+                                AnsiConsole.Markup($"[{this.currentTheme.Gutter.Foreground.ToMarkup()} on {this.currentTheme.Gutter.Background.ToMarkup()}]{lineNum} [/]");
+                            }
+                            else
+                            {
+                                // Continuation - blank gutter
+                                AnsiConsole.Markup($"[{this.currentTheme.Gutter.Foreground.ToMarkup()} on {this.currentTheme.Gutter.Background.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
+                            }
+                        }
+
+                        // Get the segment to display
+                        var remainingText = currentWrapOffset < fullLineText.Length
+                            ? fullLineText.Substring(currentWrapOffset)
+                            : string.Empty;
+
+                        string lineText;
+                        var needsWrapGlyph = false;
+                        var lineIndexForSelection = currentSourceLine; // Capture before potential increment
+
+                        if (currentWrapOffset > 0)
+                        {
+                            // Continuation line - add indent
+                            System.Console.Write(wrapIndent);
+                        }
+
+                        if (remainingText.Length > effectiveWidth)
+                        {
+                            // Line needs to wrap
+                            lineText = remainingText.Substring(0, effectiveWidth);
+                            needsWrapGlyph = true;
+                            currentWrapOffset += effectiveWidth;
+                        }
+                        else
+                        {
+                            // Line fits or is the last segment - use full content width minus indent
+                            var displayWidth = contentWidth - indentSpace;
+                            lineText = remainingText.PadRight(displayWidth);
+                            currentSourceLine++;
+                            currentWrapOffset = 0;
+                        }
+
+                        // Render the line segment
+                        this.RenderLineWithSelection(lineIndexForSelection, lineText, gutterWidth, contentWidth - indentSpace);
+
+                        if (needsWrapGlyph)
+                        {
+                            AnsiConsole.Write(wrapGlyph);
+                        }
+                    }
+                    else
+                    {
+                        // Past end of file
+                        if (this.showLineNumbers)
+                        {
+                            AnsiConsole.Markup($"[{this.currentTheme.Gutter.Foreground.ToMarkup()} on {this.currentTheme.Gutter.Background.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
+                        }
+
+                        AnsiConsole.Markup($"[{this.currentTheme.Glyph.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
+                    }
+                }
+                else
+                {
+                    // Horizontal scroll mode (no word wrap)
+                    var lineIndex = this.scrollOffsetY + screenRow;
+
+                    // Draw gutter with line numbers
+                    if (this.showLineNumbers)
+                    {
+                        if (lineIndex < this.lines.Count)
+                        {
+                            var lineNum = (lineIndex + 1).ToString().PadLeft(gutterWidth - 1);
+                            AnsiConsole.Markup($"[{this.currentTheme.Gutter.Foreground.ToMarkup()} on {this.currentTheme.Gutter.Background.ToMarkup()}]{lineNum} [/]");
+                        }
+                        else
+                        {
+                            AnsiConsole.Markup($"[{this.currentTheme.Gutter.Foreground.ToMarkup()} on {this.currentTheme.Gutter.Background.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
+                        }
+                    }
+
+                    if (lineIndex < this.lines.Count)
+                    {
+                        var lineText = this.lines[lineIndex].ToString();
+
+                        // Horizontal scroll
+                        if (this.scrollOffsetX < lineText.Length)
+                        {
+                            lineText = lineText.Substring(this.scrollOffsetX);
+                        }
+                        else
+                        {
+                            lineText = string.Empty;
+                        }
+
+                        var needsContinuationGlyph = false;
+
+                        if (lineText.Length > contentWidth)
+                        {
+                            lineText = lineText[..(contentWidth - 1)];
+                            needsContinuationGlyph = true;
+                        }
+                        else
+                        {
+                            lineText = lineText.PadRight(contentWidth);
+                        }
+
+                        // Render with selection highlighting
+                        this.RenderLineWithSelection(lineIndex, lineText, gutterWidth, contentWidth);
+
+                        if (needsContinuationGlyph)
+                        {
+                            AnsiConsole.Write(continueGlyph);
+                        }
+                    }
+                    else
+                    {
+                        AnsiConsole.Markup($"[{this.currentTheme.Glyph.ToMarkup()}]~[/]{new string(' ', contentWidth - 1)}");
+                    }
+                }
+            }
+
+            return wrapIndent;
         }
 
         private void RenderLineWithSelection(int lineIndex, string lineText, int gutterWidth, int contentWidth)
         {
             if (!this.hasSelection)
             {
-                this.WriteText(lineText, this.currentTheme.TextEditor);
+                AnsiConsole.Markup($"[{this.currentTheme.TextEditor.Foreground.ToMarkup()} on {this.currentTheme.TextEditor.Background.ToMarkup()}]{lineText.EscapeMarkup()}[/]");
                 return;
             }
 
@@ -755,7 +792,7 @@ namespace AvConsoleToolkit.Editors
             // Check if this line is within selection
             if (lineIndex < startRow || lineIndex > endRow)
             {
-                this.WriteText(lineText, this.currentTheme.TextEditor);
+                AnsiConsole.Markup($"[{this.currentTheme.TextEditor.Foreground.ToMarkup()} on {this.currentTheme.TextEditor.Background.ToMarkup()}]{lineText.EscapeMarkup()}[/]");
                 return;
             }
 
@@ -775,19 +812,19 @@ namespace AvConsoleToolkit.Editors
             // Render before selection
             if (lineStart > 0)
             {
-                this.WriteText(lineText.Substring(0, lineStart), this.currentTheme.TextEditor);
+                AnsiConsole.Markup($"[{this.currentTheme.TextEditor.Foreground.ToMarkup()} on {this.currentTheme.TextEditor.Background.ToMarkup()}]{lineText.Substring(0, lineStart).EscapeMarkup()}[/]");
             }
 
             // Render selection
             if (lineEnd > lineStart)
             {
-                this.WriteText(lineText.Substring(lineStart, lineEnd - lineStart), this.currentTheme.TextEditor, true);
+                AnsiConsole.Markup($"[black on white]{lineText.Substring(lineStart, lineEnd - lineStart).EscapeMarkup()}[/]");
             }
 
             // Render after selection
             if (lineEnd < lineText.Length)
             {
-                this.WriteText(lineText.Substring(lineEnd), this.currentTheme.TextEditor);
+                AnsiConsole.Markup($"[{this.currentTheme.TextEditor.Foreground.ToMarkup()} on {this.currentTheme.TextEditor.Background.ToMarkup()}]{lineText.Substring(lineEnd).EscapeMarkup()}[/]");
             }
         }
 
@@ -802,16 +839,6 @@ namespace AvConsoleToolkit.Editors
             return (this.selectionEndRow, this.selectionEndCol, this.selectionStartRow, this.selectionStartCol);
         }
 
-        private void WriteText(string content, Style style, bool invert = false)
-        {
-            if (invert)
-            {
-                style = new Style(style.Background, style.Foreground, style.Decoration, style.Link);
-            }
-
-            AnsiConsole.Write(new Text(content, style));
-        }
-
         private string GetStatusMessage()
         {
             if (DateTime.Now - this.statusMessageTime < TimeSpan.FromSeconds(3))
@@ -822,11 +849,22 @@ namespace AvConsoleToolkit.Editors
             return string.Empty;
         }
 
+        private int GetVisibleLength(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return 0;
+            }
+
+            // Remove markup tags to get actual visible length
+            var result = System.Text.RegularExpressions.Regex.Replace(text, @"\[.*?\]", string.Empty);
+            return result.Length;
+        }
+
         private void SetStatusMessage(string message)
         {
             this.statusMessage = message;
             this.statusMessageTime = DateTime.Now;
-            this.needsRender = true;
         }
 
         private async Task HandleKeyAsync(ConsoleKeyInfo key, CancellationToken cancellationToken)
@@ -946,14 +984,14 @@ namespace AvConsoleToolkit.Editors
                     break;
 
                 case ConsoleKey.PageUp:
-                    var pageUp = Console.WindowHeight - 3;
+                    var pageUp = System.Console.WindowHeight - 3;
                     this.cursorRow = Math.Max(0, this.cursorRow - pageUp);
                     this.cursorCol = Math.Min(this.cursorCol, this.lines[this.cursorRow].Length);
                     this.UpdateSelection(isSelecting);
                     break;
 
                 case ConsoleKey.PageDown:
-                    var pageDown = Console.WindowHeight - 3;
+                    var pageDown = System.Console.WindowHeight - 3;
                     this.cursorRow = Math.Min(this.lines.Count - 1, this.cursorRow + pageDown);
                     this.cursorCol = Math.Min(this.cursorCol, this.lines[this.cursorRow].Length);
                     this.UpdateSelection(isSelecting);
@@ -1402,9 +1440,9 @@ namespace AvConsoleToolkit.Editors
 
                 while (true)
                 {
-                    if (Console.KeyAvailable)
+                    if (System.Console.KeyAvailable)
                     {
-                        var key = Console.ReadKey(true);
+                        var key = System.Console.ReadKey(true);
                         switch (char.ToUpperInvariant(key.KeyChar))
                         {
                             case 'Y':
@@ -1441,14 +1479,14 @@ namespace AvConsoleToolkit.Editors
                 {
                     if (needsRender)
                     {
-                        var windowHeight = Console.WindowHeight;
-                        var windowWidth = Console.WindowWidth;
+                        var windowHeight = System.Console.WindowHeight;
+                        var windowWidth = System.Console.WindowWidth;
                         var contentHeight = windowHeight - 2; // Header + Footer
 
-                        Console.CursorVisible = false;
+                        System.Console.CursorVisible = false;
 
                         // Header
-                        Console.SetCursorPosition(0, 0);
+                        System.Console.SetCursorPosition(0, 0);
                         var header = "Editor Help";
                         if (header.Length >= windowWidth)
                         {
@@ -1463,12 +1501,12 @@ namespace AvConsoleToolkit.Editors
                             headerLine = headerLine.Substring(0, windowWidth);
                         }
 
-                        this.WriteText(headerLine, this.currentTheme.Header, true);
+                        AnsiConsole.Markup($"[white on blue]{headerLine.EscapeMarkup()}[/]");
 
                         // Content with scrolling
                         for (int i = 0; i < contentHeight; i++)
                         {
-                            Console.SetCursorPosition(0, i + 1);
+                            System.Console.SetCursorPosition(0, i + 1);
                             var lineIndex = scrollOffset + i;
                             if (lineIndex < helpLines.Length)
                             {
@@ -1478,45 +1516,45 @@ namespace AvConsoleToolkit.Editors
                                     line = line.Substring(0, windowWidth);
                                 }
 
-                                this.WriteText(line.PadRight(windowWidth), this.currentTheme.TextEditor);
+                                System.Console.Write(line.PadRight(windowWidth));
                             }
                             else
                             {
-                                this.WriteText(new string(' ', windowWidth), this.currentTheme.TextEditor);
+                                System.Console.Write(new string(' ', windowWidth));
                             }
                         }
 
                         // Footer - always at the last line
-                        Console.SetCursorPosition(0, windowHeight - 1);
+                        System.Console.SetCursorPosition(0, windowHeight - 1);
                         var footerText = helpLines.Length > contentHeight
-                            ? $" ^Q Return | Scroll ({scrollOffset + 1}-{Math.Min(scrollOffset + contentHeight, helpLines.Length)}/{helpLines.Length})"
+                            ? $" ^Q Return | ↑↓ Scroll ({scrollOffset + 1}-{Math.Min(scrollOffset + contentHeight, helpLines.Length)}/{helpLines.Length})"
                             : " Press Ctrl+Q to return to editor";
                         if (footerText.Length > windowWidth)
                         {
                             footerText = footerText.Substring(0, windowWidth);
                         }
 
-                        this.WriteText(footerText.PadRight(windowWidth), this.currentTheme.HintBar);
+                        AnsiConsole.Markup($"[cyan on black]{footerText.PadRight(windowWidth).EscapeMarkup()}[/]");
                         needsRender = false;
                     }
 
-                    if (Console.KeyAvailable)
+                    if (System.Console.KeyAvailable)
                     {
-                        var key = Console.ReadKey(true);
+                        var key = System.Console.ReadKey(true);
                         if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.Key == ConsoleKey.Q)
                         {
                             break;
                         }
                         else if (key.Key == ConsoleKey.UpArrow || key.Key == ConsoleKey.PageUp)
                         {
-                            var scrollAmount = key.Key == ConsoleKey.PageUp ? Console.WindowHeight - 3 : 1;
+                            var scrollAmount = key.Key == ConsoleKey.PageUp ? System.Console.WindowHeight - 3 : 1;
                             scrollOffset = Math.Max(0, scrollOffset - scrollAmount);
                             needsRender = true;
                         }
                         else if (key.Key == ConsoleKey.DownArrow || key.Key == ConsoleKey.PageDown)
                         {
-                            var scrollAmount = key.Key == ConsoleKey.PageDown ? Console.WindowHeight - 3 : 1;
-                            var maxScroll = Math.Max(0, helpLines.Length - (Console.WindowHeight - 2));
+                            var scrollAmount = key.Key == ConsoleKey.PageDown ? System.Console.WindowHeight - 3 : 1;
+                            var maxScroll = Math.Max(0, helpLines.Length - (System.Console.WindowHeight - 2));
                             scrollOffset = Math.Min(maxScroll, scrollOffset + scrollAmount);
                             needsRender = true;
                         }
@@ -1583,7 +1621,7 @@ namespace AvConsoleToolkit.Editors
         private void ToggleTheme()
         {
             // Toggle between Dark and Bright themes
-            var themeName = this.settings.ThemeName ?? "User";
+            var themeName = this.settings.Theme ?? "User";
             switch (themeName)
             {
                 case "User":
@@ -1603,38 +1641,35 @@ namespace AvConsoleToolkit.Editors
                     break;
             }
 
-            this.settings.ThemeName = themeName;
+            this.settings.Theme = themeName;
             this.SelectTheme();
         }
 
         private void SelectTheme()
         {
-            var themeName = this.settings.ThemeName;
-            FileTextEditorTheme theme;
+            var themeName = this.settings.Theme;
             switch (themeName)
             {
                 case "User":
-                    theme = FileTextEditorTheme.User;
+                    this.currentTheme = FileTextEditorTheme.User;
                     break;
                 case "NordDark":
-                    theme = FileTextEditorTheme.NordDark;
+                    this.currentTheme = FileTextEditorTheme.NordDark;
                     break;
                 case "NordLight":
-                    theme = FileTextEditorTheme.NordLight;
+                    this.currentTheme = FileTextEditorTheme.NordLight;
                     break;
                 case "NordSemiDark":
-                    theme = FileTextEditorTheme.NordSemiDark;
+                    this.currentTheme = FileTextEditorTheme.NordSemiDark;
                     break;
                 case "NordSemiLight":
-                    theme = FileTextEditorTheme.NordSemiLight;
+                    this.currentTheme = FileTextEditorTheme.NordSemiLight;
                     break;
                 default:
-                    theme = FileTextEditorTheme.User;
+                    this.currentTheme = FileTextEditorTheme.User;
                     break;
             }
 
-            theme.Header = this.headerStyle;
-            this.currentTheme = theme;
             this.SetStatusMessage($"Theme: {themeName}");
         }
     }
