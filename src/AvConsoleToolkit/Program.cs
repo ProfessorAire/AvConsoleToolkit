@@ -74,9 +74,10 @@ namespace AvConsoleToolkit
                             .WithAlias("u")
                             .WithAlias("load")
                             .WithAlias("l")
-                            .WithDescription("Upload a program to Crestron hardware")
+                            .WithDescription("Upload a program to Crestron hardware (supports glob patterns)")
                             .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "--address", "192.168.1.100", "-u", "admin", "-p", "password"])
-                            .WithExample(["crestron", "program", "upload", "myprogram.cpz", "-s", "1", "-a", "192.168.1.100", "-u", "admin", "-p", "password", "-c"]);
+                            .WithExample(["crestron", "program", "upload", "*.lpz", "-s", "1", "-a", "192.168.1.100"])
+                            .WithExample(["crestron", "program", "upload", "programs/test_*.cpz", "-s", "2", "-a", "192.168.1.100", "-c"]);
                     })
                     .WithAlias("p");
                 })

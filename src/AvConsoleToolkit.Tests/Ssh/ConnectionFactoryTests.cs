@@ -1,8 +1,3 @@
-// <copyright file="ConnectionFactoryTests.cs">
-// The MIT License
-// Copyright © Christopher McNeely
-// </copyright>
-
 using System;
 using AvConsoleToolkit.Ssh;
 using NUnit.Framework;

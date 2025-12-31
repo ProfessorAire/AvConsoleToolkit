@@ -70,6 +70,14 @@ namespace AvConsoleToolkit.Connections
         Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Deletes files matching a glob pattern on the remote server.
+        /// </summary>
+        /// <param name="pattern">The glob pattern for files to delete.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The number of files deleted.</returns>
+        Task<int> DeleteFilesByGlobAsync(string pattern, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Downloads a file from the remote server.
         /// </summary>
         /// <param name="remotePath">The remote file path.</param>
@@ -77,6 +85,16 @@ namespace AvConsoleToolkit.Connections
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
         Task DownloadFileAsync(string remotePath, Stream destination, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Downloads files matching a glob pattern from the remote server to a local directory.
+        /// </summary>
+        /// <param name="pattern">The glob pattern for remote files.</param>
+        /// <param name="localDirectory">The local directory to download files to.</param>
+        /// <param name="preserveStructure">Whether to preserve the directory structure (default: true).</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The number of files downloaded.</returns>
+        Task<int> DownloadFilesByGlobAsync(string pattern, string localDirectory, bool preserveStructure = true, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Checks whether a file or directory exists on the remote server.
@@ -93,6 +111,15 @@ namespace AvConsoleToolkit.Connections
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>An enumerable collection of file system entries.</returns>
         Task<IEnumerable<ISftpFile>> ListDirectoryAsync(string path, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Lists files on the remote server matching a glob pattern.
+        /// Supports wildcards: * (any characters except /), ** (any characters including /), ? (single character), [abc] (character class).
+        /// </summary>
+        /// <param name="pattern">The glob pattern (e.g., "*.txt", "**/*.log", "program*/file_[0-9].dat").</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>An enumerable collection of file entries matching the pattern.</returns>
+        Task<IEnumerable<ISftpFile>> ListFilesByGlobAsync(string pattern, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Sets the last write time of a file on the remote server.
