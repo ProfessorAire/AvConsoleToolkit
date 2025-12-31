@@ -10,6 +10,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
+#pragma warning disable Spectre1000 // Use AnsiConsole instead of Console
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -20,10 +21,30 @@ using System.Threading.Tasks;
 using AvConsoleToolkit.Configuration;
 using AvConsoleToolkit.Connections;
 using Spectre.Console;
-using TextCopy;
 
 namespace AvConsoleToolkit.Editors
 {
+    /// <summary>
+    /// Represents the current focus in the editor.
+    /// </summary>
+    public enum FileTextEditorFocus
+    {
+        /// <summary>
+        /// Focus is on the text editor.
+        /// </summary>
+        Editor,
+
+        /// <summary>
+        /// Focus is on the search text box.
+        /// </summary>
+        Search,
+
+        /// <summary>
+        /// Focus is on the replace text box.
+        /// </summary>
+        Replace,
+    }
+
     /// <summary>
     /// A built-in nano-like text editor that operates in an alternate screen buffer.
     /// Provides text editing capabilities with keyboard navigation, selection, and configurable display options.
@@ -42,9 +63,6 @@ namespace AvConsoleToolkit.Editors
 
         private readonly Func<Task> onSaveCallback;
 
-        // Redo stack - stores states that were undone
-        private readonly Stack<UndoState> redoStack = new();
-
         private readonly IBuiltInEditorSettings settings;
 
         private readonly Lock syncRoot = new();
@@ -52,12 +70,16 @@ namespace AvConsoleToolkit.Editors
         // Undo stack - stores full document state and cursor position
         private readonly Stack<UndoState> undoStack = new();
 
+        // Clipboard
+        private string? clipboard;
+
         private string? connectionStatus;
 
         private SearchReplaceFocus currentFocus = SearchReplaceFocus.Editor;
 
         private int currentSearchMatchIndex = -1;
 
+        // Theme
         private FileTextEditorTheme currentTheme;
 
         private int cursorCol;
@@ -133,13 +155,12 @@ namespace AvConsoleToolkit.Editors
         /// <param name="displayName">Display name shown in the editor header.</param>
         /// <param name="onSaveCallback">Callback invoked when the file is saved.</param>
         /// <param name="keyBindings">Optional custom key bindings.</param>
-        public FileTextEditor(string filePath, string displayName, Func<Task> onSaveCallback, FileTextEditorKeyBindings? keyBindings = null, bool verbose = false)
+        public FileTextEditor(string filePath, string displayName, Func<Task> onSaveCallback, FileTextEditorKeyBindings? keyBindings = null)
         {
             this.filePath = filePath;
             this.displayName = displayName;
             this.onSaveCallback = onSaveCallback;
             this.keyBindings = keyBindings ?? FileTextEditorKeyBindings.Default;
-            this.verbose = verbose;
             this.settings = AppConfig.Settings.BuiltInEditor;
 
             // Load settings
@@ -149,7 +170,7 @@ namespace AvConsoleToolkit.Editors
 
             // Initialize theme
             this.currentTheme = FileTextEditorTheme.User;
-            this.headerStyle = this.currentTheme.GetHeaderForFile(this.filePath);
+            this.headerStyle = this.LoadHeaderStyle();
             this.SelectTheme();
         }
 
@@ -298,14 +319,6 @@ namespace AvConsoleToolkit.Editors
             this.needsRender = true;
         }
 
-        /// <summary>
-        /// Calculates the greatest common divisor (GCD) of two integers using the Euclidean algorithm.
-        /// </summary>
-        /// <remarks>The result is always non-negative, regardless of the sign of the input
-        /// values.</remarks>
-        /// <param name="a">The first integer value. Can be positive, negative, or zero.</param>
-        /// <param name="b">The second integer value. Can be positive, negative, or zero.</param>
-        /// <returns>The greatest common divisor of the two specified integers. If both values are zero, returns zero.</returns>
         private static int Gcd(int a, int b)
         {
             while (b != 0)
@@ -318,15 +331,6 @@ namespace AvConsoleToolkit.Editors
             return a;
         }
 
-        /// <summary>
-        /// Parses a hexadecimal color string in the format RRGGBB and returns the corresponding Color value.
-        /// </summary>
-        /// <remarks>The method ignores a leading '#' character if present. If the input string does not
-        /// represent a valid 6-digit hexadecimal color, the defaultColor is returned.</remarks>
-        /// <param name="hex">A string containing a hexadecimal color code in the format RRGGBB, optionally prefixed with '#'.</param>
-        /// <param name="defaultColor">The Color value to return if the input string is null, empty, or not a valid hexadecimal color.</param>
-        /// <returns>A Color value corresponding to the parsed hexadecimal color code, or the specified defaultColor if parsing
-        /// fails.</returns>
         private static Color ParseHexColor(string hex, Color defaultColor)
         {
             if (string.IsNullOrWhiteSpace(hex))
@@ -346,9 +350,6 @@ namespace AvConsoleToolkit.Editors
             return defaultColor;
         }
 
-        /// <summary>
-        /// Clears the current selection, resetting all selection-related state to indicate that no selection is active.
-        /// </summary>
         private void ClearSelection()
         {
             this.hasSelection = false;
@@ -358,12 +359,6 @@ namespace AvConsoleToolkit.Editors
             this.selectionEndCol = -1;
         }
 
-        /// <summary>
-        /// Closes the search and replace panes and resets related search state.
-        /// </summary>
-        /// <remarks>Call this method to hide both the search and replace interfaces and clear any active
-        /// search results. After calling this method, the editor regains focus and any previous search context is
-        /// discarded.</remarks>
         private void CloseSearchReplace()
         {
             this.searchPaneVisible = false;
@@ -373,42 +368,6 @@ namespace AvConsoleToolkit.Editors
             this.currentSearchMatchIndex = -1;
         }
 
-        /// <summary>
-        /// Cycles through the available application themes in a predefined order and applies the next theme.
-        /// </summary>
-        private void CycleTheme()
-        {
-            // Toggle between Dark and Bright themes
-            var themeName = this.settings.ThemeName ?? "User";
-            switch (themeName)
-            {
-                case "User":
-                    themeName = "NordDark";
-                    break;
-                case "NordDark":
-                    themeName = "NordSemiDark";
-                    break;
-                case "NordSemiDark":
-                    themeName = "NordSemiLight";
-                    break;
-                case "NordSemiLight":
-                    themeName = "NordLight";
-                    break;
-                default:
-                    themeName = "User";
-                    break;
-            }
-
-            this.settings.ThemeName = themeName;
-            this.SelectTheme();
-        }
-
-        /// <summary>
-        /// Deletes the currently selected text from the document, if a selection exists.
-        /// </summary>
-        /// <remarks>After deletion, the cursor is placed at the start of the former selection, and the
-        /// selection is cleared. If no text is selected, this method performs no action. The operation is recorded for
-        /// undo functionality.</remarks>
         private void DeleteSelection()
         {
             if (!this.hasSelection)
@@ -445,17 +404,6 @@ namespace AvConsoleToolkit.Editors
             this.modified = true;
         }
 
-        /// <summary>
-        /// Analyzes the provided lines of text to detect the most likely number of spaces used for indentation per
-        /// level, based on leading spaces in non-empty lines.
-        /// </summary>
-        /// <remarks>This method assumes that indentation is done using spaces only. If any line contains
-        /// a leading tab character, the method returns 0 to indicate that tab-based indentation was detected. If no
-        /// indented lines are found, or if a consistent indentation depth cannot be determined, the method returns
-        /// -1.</remarks>
-        /// <param name="content">An array of strings representing the lines of text to analyze for indentation depth.</param>
-        /// <returns>The number of spaces per indentation level if a consistent depth is detected and no tabs are present; 0 if
-        /// any line uses tab characters for indentation; or -1 if no indentation could be determined.</returns>
         private int DetectTabDepth(string[] content)
         {
             var indentCounts = new Dictionary<int, int>();
@@ -506,13 +454,6 @@ namespace AvConsoleToolkit.Editors
             return gcd > 0 && gcd <= 8 ? gcd : -1;
         }
 
-        /// <summary>
-        /// Moves the selection to the next occurrence of the current search text within the document.
-        /// </summary>
-        /// <remarks>If no search text is specified or no matches are found, the method updates the status
-        /// message accordingly and does not change the selection. When the selection is already on a match, calling
-        /// this method advances to the next match, wrapping to the first match if necessary. The method also updates
-        /// the status message to indicate the current match position.</remarks>
         private void FindNext()
         {
             if (string.IsNullOrEmpty(this.searchText))
@@ -562,15 +503,6 @@ namespace AvConsoleToolkit.Editors
             this.SetStatusMessage($"Match {this.currentSearchMatchIndex + 1} of {this.searchMatches.Count}");
         }
 
-        /// <summary>
-        /// Returns the current selection coordinates with the start and end positions ordered from top-left to
-        /// bottom-right.
-        /// </summary>
-        /// <remarks>Use this method to obtain selection coordinates in a consistent order, regardless of
-        /// the direction in which the selection was made.</remarks>
-        /// <returns>A tuple containing the normalized selection coordinates: (startRow, startCol, endRow, endCol), where
-        /// (startRow, startCol) is the upper-left corner and (endRow, endCol) is the lower-right corner of the
-        /// selection.</returns>
         private (int startRow, int startCol, int endRow, int endCol) GetNormalizedSelection()
         {
             if (this.selectionStartRow < this.selectionEndRow ||
@@ -582,12 +514,6 @@ namespace AvConsoleToolkit.Editors
             return (this.selectionEndRow, this.selectionEndCol, this.selectionStartRow, this.selectionStartCol);
         }
 
-        /// <summary>
-        /// Retrieves the text currently selected in the editor.
-        /// </summary>
-        /// <remarks>The returned text preserves line breaks as they appear in the selection. If the
-        /// selection spans multiple lines, each line is separated by a line break.</remarks>
-        /// <returns>A string containing the selected text. Returns an empty string if no text is selected.</returns>
         private string GetSelectedText()
         {
             if (!this.hasSelection)
@@ -614,13 +540,6 @@ namespace AvConsoleToolkit.Editors
             return sb.ToString();
         }
 
-        /// <summary>
-        /// Retrieves the current status message if it is recent.
-        /// </summary>
-        /// <remarks>Use this method to obtain a status message that is only considered valid for a short
-        /// period after it is set. If the message is outdated, the method returns an empty string.</remarks>
-        /// <returns>A string containing the current status message if it was set within the last three seconds; otherwise, an
-        /// empty string.</returns>
         private string GetStatusMessage()
         {
             if (DateTime.Now - this.statusMessageTime < TimeSpan.FromSeconds(3))
@@ -631,14 +550,6 @@ namespace AvConsoleToolkit.Editors
             return string.Empty;
         }
 
-        /// <summary>
-        /// Handles the backspace operation at the current cursor position, removing a character or merging lines as
-        /// appropriate.
-        /// </summary>
-        /// <remarks>This method updates the text buffer and cursor position to reflect the effect of a
-        /// backspace key press. If the cursor is at the start of a line, the current line is merged with the previous
-        /// line. The method also records the operation for undo functionality and marks the buffer as
-        /// modified.</remarks>
         private void HandleBackspace()
         {
             if (this.cursorCol > 0)
@@ -660,17 +571,11 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Copies the currently selected text to the clipboard if a selection exists and updates the status message
-        /// accordingly.
-        /// </summary>
-        /// <remarks>If no text is selected, the method updates the status message to indicate that there
-        /// is no selection to copy.</remarks>
         private void HandleCopy()
         {
             if (this.hasSelection)
             {
-                ClipboardService.SetText(this.GetSelectedText());
+                this.clipboard = this.GetSelectedText();
                 this.SetStatusMessage("Text copied.");
             }
             else
@@ -679,17 +584,12 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Handles the cut operation by removing the selected text and placing it on the clipboard.
-        /// </summary>
-        /// <remarks>If no text is selected, the method does not modify the clipboard and displays a
-        /// status message indicating that there is no selection to cut.</remarks>
         private void HandleCut()
         {
             if (this.hasSelection)
             {
                 this.SaveUndoState();
-                ClipboardService.SetText(this.GetSelectedText());
+                this.clipboard = this.GetSelectedText();
                 this.DeleteSelection();
                 this.SetStatusMessage("Text cut.");
             }
@@ -699,17 +599,10 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Cuts the current line at the cursor position and copies it to the clipboard, removing the line from the
-        /// document.
-        /// </summary>
-        /// <remarks>If the document contains only one line, the line is cleared instead of being removed.
-        /// After the operation, the cursor is repositioned to a valid location, and any active selection is cleared.
-        /// The document is marked as modified.</remarks>
         private void HandleCutLine()
         {
             this.SaveUndoState();
-            ClipboardService.SetText($"{this.lines[this.cursorRow]}{Environment.NewLine}");
+            this.clipboard = $"{this.lines[this.cursorRow]}{Environment.NewLine}";
             if (this.lines.Count > 1)
             {
                 this.lines.RemoveAt(this.cursorRow);
@@ -731,13 +624,6 @@ namespace AvConsoleToolkit.Editors
             this.SetStatusMessage("Line cut to clipboard.");
         }
 
-        /// <summary>
-        /// Handles the delete operation at the current cursor position, removing the character after the cursor or
-        /// merging lines as appropriate.
-        /// </summary>
-        /// <remarks>If the cursor is positioned at the end of a line and there is a subsequent line, this
-        /// method merges the next line into the current one. The method also updates the undo state and marks the
-        /// content as modified.</remarks>
         private void HandleDelete()
         {
             if (this.cursorCol < this.lines[this.cursorRow].Length)
@@ -756,14 +642,6 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Handles the insertion of a new line at the current cursor position, updating the text buffer and cursor
-        /// accordingly.
-        /// </summary>
-        /// <remarks>This method is typically called in response to an Enter key press within a text
-        /// editing context. It splits the current line at the cursor position, moves the text after the cursor to a new
-        /// line, and updates the cursor to the start of the new line. The operation also marks the buffer as modified
-        /// and saves the current state for undo functionality.</remarks>
         private void HandleEnter()
         {
             this.SaveUndoState();
@@ -777,15 +655,6 @@ namespace AvConsoleToolkit.Editors
             this.modified = true;
         }
 
-        /// <summary>
-        /// Handles the exit process, prompting the user to save changes if modifications have been made.
-        /// </summary>
-        /// <remarks>If there are unsaved changes, the method prompts the user to save, discard, or cancel
-        /// the exit. If no response is received within 30 seconds, the operation times out and exits without saving.
-        /// The method sets the application's running state to false when the exit process completes or is
-        /// cancelled.</remarks>
-        /// <param name="cancellationToken">A cancellation token that can be used to cancel the exit operation.</param>
-        /// <returns>A task that represents the asynchronous exit handling operation.</returns>
         private async Task HandleExitAsync(CancellationToken cancellationToken)
         {
             if (this.modified)
@@ -839,14 +708,6 @@ namespace AvConsoleToolkit.Editors
             this.running = false;
         }
 
-        /// <summary>
-        /// Handles user input while the help screen is active, updating the help screen's visibility or scroll position
-        /// based on the specified key.
-        /// </summary>
-        /// <remarks>This method processes navigation and exit commands for the help screen, such as
-        /// scrolling with arrow keys or closing the help screen with Escape or Ctrl+Q. It should be called only when
-        /// the help screen is currently visible.</remarks>
-        /// <param name="key">A structure that describes the console key pressed, including any modifier keys.</param>
         private void HandleHelpInput(ConsoleKeyInfo key)
         {
             var helpLines = this.keyBindings.GetHelpText();
@@ -904,17 +765,6 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Processes a keyboard input event and updates the editor state or performs actions based on the specified key
-        /// and current editor context.
-        /// </summary>
-        /// <remarks>This method interprets the provided key according to the current focus and state of
-        /// the editor, including handling help navigation, search/replace input, editor commands, and text navigation
-        /// or editing. Some actions may be performed asynchronously, such as saving or exiting. If the operation is
-        /// canceled via the provided token, pending asynchronous actions may be aborted.</remarks>
-        /// <param name="key">The key information representing the user's keyboard input to handle.</param>
-        /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
-        /// <returns>A task that represents the asynchronous operation of handling the key input.</returns>
         private async Task HandleKeyAsync(ConsoleKeyInfo key, CancellationToken cancellationToken)
         {
             try
@@ -975,11 +825,8 @@ namespace AvConsoleToolkit.Editors
                     case FileTextEditorAction.Undo:
                         this.Undo();
                         return;
-                    case FileTextEditorAction.Redo:
-                        this.Redo();
-                        return;
-                    case FileTextEditorAction.CycleTheme:
-                        this.CycleTheme();
+                    case FileTextEditorAction.ToggleTheme:
+                        this.ToggleTheme();
                         return;
                     case FileTextEditorAction.Search:
                         this.OpenSearch();
@@ -1274,21 +1121,13 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Handles pasting text from the clipboard into the current document, replacing any selected content with the
-        /// clipboard contents.
-        /// </summary>
-        /// <remarks>If the clipboard contains multiple lines, each line is inserted as a separate line in
-        /// the document. If the clipboard is empty or null, no changes are made to the document and a status message is
-        /// displayed.</remarks>
         private void HandlePaste()
         {
-            var clipboardData = ClipboardService.GetText();
-            if (!string.IsNullOrEmpty(clipboardData))
+            if (!string.IsNullOrEmpty(this.clipboard))
             {
                 this.DeleteSelection();
 
-                var clipboardLines = clipboardData.Split(["\r\n", "\n"], StringSplitOptions.None);
+                var clipboardLines = this.clipboard.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
                 for (var i = 0; i < clipboardLines.Length; i++)
                 {
                     if (i > 0)
@@ -1307,11 +1146,6 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Performs the save operation and invokes the associated save callback asynchronously.
-        /// </summary>
-        /// <param name="cancellationToken">A cancellation token that can be used to cancel the asynchronous save operation.</param>
-        /// <returns>A task that represents the asynchronous save operation.</returns>
         private async Task HandleSaveAsync(CancellationToken cancellationToken)
         {
             this.SaveFile();
@@ -1326,14 +1160,6 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Processes a keyboard input event for the search or replace text box and updates the state accordingly.
-        /// </summary>
-        /// <remarks>This method handles navigation keys, text editing, and focus changes within the
-        /// search and replace UI. It should be called when the search or replace input box has focus to process user
-        /// input appropriately.</remarks>
-        /// <param name="key">A <see cref="ConsoleKeyInfo"/> structure representing the key that was pressed.</param>
-        /// <returns>true if the key was handled by the search or replace input logic; otherwise, false.</returns>
         private async Task<bool> HandleSearchReplaceInputAsync(ConsoleKeyInfo key)
         {
             var isSearch = this.currentFocus == SearchReplaceFocus.Search;
@@ -1462,10 +1288,6 @@ namespace AvConsoleToolkit.Editors
             return false;
         }
 
-        /// <summary>
-        /// Inserts the specified character at the current cursor position in the text buffer.
-        /// </summary>
-        /// <param name="c">The character to insert at the current cursor location.</param>
         private void InsertChar(char c)
         {
             this.SaveUndoState();
@@ -1474,10 +1296,6 @@ namespace AvConsoleToolkit.Editors
             this.modified = true;
         }
 
-        /// <summary>
-        /// Inserts the specified text at the current cursor position within the document.
-        /// </summary>
-        /// <param name="text">The text to insert at the current cursor position. Cannot be null.</param>
         private void InsertText(string text)
         {
             this.SaveUndoState();
@@ -1486,14 +1304,6 @@ namespace AvConsoleToolkit.Editors
             this.modified = true;
         }
 
-        /// <summary>
-        /// Loads the contents of the file specified by the current file path into the editor, replacing any existing
-        /// lines and resetting the editor state.
-        /// </summary>
-        /// <remarks>If the file does not exist or is empty, the editor is initialized with a single empty
-        /// line. The method also attempts to detect the tab depth from the file's contents and updates the editor's tab
-        /// settings accordingly. Cursor position, scroll offsets, and selection are reset, and the modified state is
-        /// cleared.</remarks>
         private void LoadFile()
         {
             this.lines.Clear();
@@ -1526,11 +1336,42 @@ namespace AvConsoleToolkit.Editors
             this.ClearSelection();
         }
 
-        /// <summary>
-        /// Moves the cursor down by one line, optionally extending the current selection.
-        /// </summary>
-        /// <param name="isSelecting"><see langword="true"/> to extend the current selection while moving the cursor; <see langword="false"/> to move the cursor without modifying the
-        /// selection.</param>
+        private Style LoadHeaderStyle()
+        {
+            var extension = Path.GetExtension(this.filePath)?.TrimStart('.').ToLowerInvariant() ?? string.Empty;
+
+            // Start with theme header colors
+            var headerFgColor = this.currentTheme.Header.Foreground;
+            var headerBgColor = this.currentTheme.Header.Background;
+
+            // Check for extension-specific header colors
+            if (!string.IsNullOrWhiteSpace(this.settings.HeaderColorMappings))
+            {
+                var mappings = this.settings.HeaderColorMappings.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                foreach (var mapping in mappings)
+                {
+                    var parts = mapping.Split('=', 2, StringSplitOptions.TrimEntries);
+                    if (parts.Length == 2 && parts[0].Equals(extension, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var colors = parts[1].Split(',', StringSplitOptions.TrimEntries);
+                        if (colors.Length >= 1)
+                        {
+                            headerFgColor = ParseHexColor(colors[0], headerFgColor);
+                        }
+
+                        if (colors.Length >= 2)
+                        {
+                            headerBgColor = ParseHexColor(colors[1], headerBgColor);
+                        }
+
+                        break;
+                    }
+                }
+            }
+
+            return new Style(headerFgColor, headerBgColor);
+        }
+
         private void MoveCursorDown(bool isSelecting)
         {
             if (this.cursorRow < this.lines.Count - 1)
@@ -1542,10 +1383,6 @@ namespace AvConsoleToolkit.Editors
             this.UpdateSelection(isSelecting);
         }
 
-        /// <summary>
-        /// Moves the cursor one position to the left, optionally updating the selection.
-        /// </summary>
-        /// <param name="isSelecting"><see langword="true"/> to extend the current selection; <see langword="false"/> to move the cursor without modifying the selection.</param>
         private void MoveCursorLeft(bool isSelecting)
         {
             if (this.cursorCol > 0)
@@ -1561,10 +1398,6 @@ namespace AvConsoleToolkit.Editors
             this.UpdateSelection(isSelecting);
         }
 
-        /// <summary>
-        /// Moves the cursor one position to the right, optionally extending the current selection.
-        /// </summary>
-        /// <param name="isSelecting"><see langword="true"/> to extend the current selection while moving the cursor; otherwise, <see langword="false"/> to clear any selection.</param>
         private void MoveCursorRight(bool isSelecting)
         {
             if (this.cursorCol < this.lines[this.cursorRow].Length)
@@ -1580,11 +1413,6 @@ namespace AvConsoleToolkit.Editors
             this.UpdateSelection(isSelecting);
         }
 
-        /// <summary>
-        /// Moves the cursor up by one line, optionally extending the current selection.
-        /// </summary>
-        /// <param name="isSelecting"><see langword="true"/> to extend the current selection while moving the cursor; <see langword="false"/> to move the cursor without modifying the
-        /// selection.</param>
         private void MoveCursorUp(bool isSelecting)
         {
             if (this.cursorRow > 0)
@@ -1596,12 +1424,6 @@ namespace AvConsoleToolkit.Editors
             this.UpdateSelection(isSelecting);
         }
 
-        /// <summary>
-        /// Moves the cursor to the beginning of the previous word in the text editor, optionally extending the current
-        /// selection.
-        /// </summary>
-        /// <param name="isSelecting"><see langword="true"/> to extend the current selection to the new cursor position; <see langword="false"/> to move the cursor without modifying
-        /// the selection.</param>
         private void MoveCursorWordLeft(bool isSelecting)
         {
             if (this.cursorCol == 0 && this.cursorRow > 0)
@@ -1632,11 +1454,6 @@ namespace AvConsoleToolkit.Editors
             this.UpdateSelection(isSelecting);
         }
 
-        /// <summary>
-        /// Moves the cursor to the beginning of the next word to the right, optionally extending the current selection.
-        /// </summary>
-        /// <param name="isSelecting"><see langword="true"/> to extend the current selection to the new cursor position; <see langword="false"/> to move the cursor without selecting
-        /// text.</param>
         private void MoveCursorWordRight(bool isSelecting)
         {
             var line = this.lines[this.cursorRow].ToString();
@@ -1668,12 +1485,6 @@ namespace AvConsoleToolkit.Editors
             this.UpdateSelection(isSelecting);
         }
 
-        /// <summary>
-        /// Opens the replace pane and prepares the search and replace interface for user input.
-        /// </summary>
-        /// <remarks>If the search pane is not already open and there is a current selection in the
-        /// editor, the selected text is used to initialize the search text. The method also ensures that the search
-        /// pane is focused and updates the current search matches.</remarks>
         private void OpenReplace()
         {
             this.searchPaneVisible = true;
@@ -1703,13 +1514,6 @@ namespace AvConsoleToolkit.Editors
             this.UpdateSearchMatches();
         }
 
-        /// <summary>
-        /// Displays the search pane and initializes the search input, optionally using the current selection as the
-        /// initial search text.
-        /// </summary>
-        /// <remarks>If a text selection exists and does not span multiple lines, the selected text is
-        /// used as the initial search query. The search pane receives focus, and search matches are updated to reflect
-        /// the current input.</remarks>
         private void OpenSearch()
         {
             this.searchPaneVisible = true;
@@ -1729,50 +1533,6 @@ namespace AvConsoleToolkit.Editors
             this.UpdateSearchMatches();
         }
 
-        /// <summary>
-        /// Performs the most recent undone action, restoring the editor state to its next redoable state if available.
-        /// </summary>
-        /// <remarks>If there are no actions available to redo, the method does nothing and displays a
-        /// status message indicating that there is nothing to redo. This method updates the undo stack to allow the
-        /// redone action to be undone again.</remarks>
-        private void Redo()
-        {
-            if (this.redoStack.Count == 0)
-            {
-                this.SetStatusMessage("Nothing to redo.");
-                return;
-            }
-
-            // Save current state to undo stack before redoing
-            var currentLinesCopy = new string[this.lines.Count];
-            for (var i = 0; i < this.lines.Count; i++)
-            {
-                currentLinesCopy[i] = this.lines[i].ToString();
-            }
-            var currentState = new UndoState(currentLinesCopy, this.cursorRow, this.cursorCol, this.modified);
-            this.undoStack.Push(currentState);
-
-            var state = this.redoStack.Pop();
-
-            // Restore lines efficiently
-            this.lines.Clear();
-            this.lines.Capacity = state.Lines.Length;
-            foreach (var line in state.Lines)
-            {
-                this.lines.Add(new StringBuilder(line));
-            }
-
-            this.cursorRow = Math.Min(state.CursorRow, this.lines.Count - 1);
-            this.cursorCol = Math.Min(state.CursorCol, this.lines[this.cursorRow].Length);
-            this.modified = state.Modified;
-            this.ClearSelection();
-            this.SetStatusMessage("Redo.");
-        }
-
-        /// <summary>
-        /// Renders the editor interface, including the header, content area, status bar, and help bar, to the console
-        /// window.
-        /// </summary>
         private void Render()
         {
             // Don't render if we're shutting down
@@ -2006,8 +1766,7 @@ namespace AvConsoleToolkit.Editors
 
                             if (lineText.Length > contentWidth)
                             {
-                                var length = contentWidth - 1;
-                                lineText = lineText[..length];
+                                lineText = lineText[..contentWidth - 1];
                                 needsContinuationGlyph = true;
                             }
                             else
@@ -2069,8 +1828,7 @@ namespace AvConsoleToolkit.Editors
                 var help = this.keyBindings.GetShortcutHints();
                 while (help.Length > windowWidth)
                 {
-                    var length = help.LastIndexOf(' ', help.LastIndexOf(' ') - 1) - 1;
-                    help = $"{help[..length]}...";
+                    help = $"{help[..help.LastIndexOf(' ', help.LastIndexOf(' ') - 1) - 1]}...";
                 }
 
                 this.WriteText(help.PadRight(windowWidth), this.currentTheme.HintBar);
@@ -2213,13 +1971,6 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Renders the help screen, displaying available key bindings and usage instructions in the console window.
-        /// </summary>
-        /// <remarks>The help screen is centered within the current console window and supports scrolling
-        /// if the content exceeds the visible area. The footer provides navigation hints and indicates the current
-        /// scroll position when applicable. This method modifies the console's cursor visibility and position while
-        /// rendering.</remarks>
         private void RenderHelp()
         {
             var helpLines = this.keyBindings.GetHelpText();
@@ -2282,18 +2033,6 @@ namespace AvConsoleToolkit.Editors
             Console.CursorVisible = false;
         }
 
-        /// <summary>
-        /// Renders a single line of text with visual highlighting for search matches and text selection within the
-        /// line.
-        /// </summary>
-        /// <remarks>This method applies visual highlights to regions of the line that correspond to
-        /// active search matches and the current text selection. If both a search match and a selection overlap, the
-        /// selection highlight takes precedence. The method does not modify the underlying text data.</remarks>
-        /// <param name="lineIndex">The zero-based index of the line to render.</param>
-        /// <param name="lineText">The text content of the line to be rendered.</param>
-        /// <param name="gutterWidth">The width, in pixels or character units, of the gutter area to the left of the content. Used to align the
-        /// rendered line.</param>
-        /// <param name="contentWidth">The width, in pixels or character units, available for rendering the line's content.</param>
         private void RenderLineWithSelection(int lineIndex, string lineText, int gutterWidth, int contentWidth)
         {
             // Check for search matches in this line
@@ -2418,16 +2157,6 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Renders the search and replace input line in the console status bar, adjusting layout based on the specified
-        /// window width and the visibility of the replace pane.
-        /// </summary>
-        /// <remarks>This method positions the cursor and draws the search and, if visible, replace fields
-        /// in the status bar area. The layout dynamically splits available space between the fields based on the
-        /// current window width and whether the replace pane is shown. If the replace pane is hidden, the search field
-        /// uses the majority of the available width.</remarks>
-        /// <param name="windowWidth">The total width of the console window, in characters, used to determine the layout of the search and replace
-        /// fields.</param>
         private void RenderSearchReplaceLine(int windowWidth)
         {
             Console.SetCursorPosition(0, 1);
@@ -2494,13 +2223,6 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Replaces all occurrences of the current search text with the specified replacement text in the document.
-        /// </summary>
-        /// <remarks>This method performs a bulk replacement of all found matches for the current search
-        /// text. If no search text is specified or no matches are found, no changes are made. After replacement, the
-        /// undo state is saved, the selection is cleared, and the list of search matches is reset. The method also
-        /// updates the status message to indicate the number of replacements performed.</remarks>
         private void ReplaceAll()
         {
             if (string.IsNullOrEmpty(this.searchText))
@@ -2556,14 +2278,6 @@ namespace AvConsoleToolkit.Editors
             this.SetStatusMessage($"Replaced {replaceCount} occurrence(s)");
         }
 
-        /// <summary>
-        /// Replaces the currently selected occurrence of the search text with the specified replacement text, if a
-        /// match is found.
-        /// </summary>
-        /// <remarks>If no search text is specified or no match is currently selected, the method attempts
-        /// to find the next occurrence before performing the replacement. After replacing, the method updates the
-        /// search matches and moves the selection to the next occurrence, if available. This method is intended to be
-        /// used as part of a find-and-replace workflow in a text editing context.</remarks>
         private void ReplaceCurrent()
         {
             if (string.IsNullOrEmpty(this.searchText))
@@ -2612,12 +2326,6 @@ namespace AvConsoleToolkit.Editors
             this.SetStatusMessage("Replaced 1 occurrence");
         }
 
-        /// <summary>
-        /// Saves the current content to the file specified by the file path, overwriting any existing file.
-        /// </summary>
-        /// <remarks>This method writes all lines to the file using UTF-8 encoding. After saving, the
-        /// modified state is reset and a status message is updated. This method does not prompt for confirmation before
-        /// overwriting the file.</remarks>
         private void SaveFile()
         {
             using var writer = new StreamWriter(this.filePath, false, Encoding.UTF8);
@@ -2634,12 +2342,6 @@ namespace AvConsoleToolkit.Editors
             this.SetStatusMessage("File saved -> File Uploading");
         }
 
-        /// <summary>
-        /// Saves the current editor state to the undo history stack, enabling the user to undo recent changes.
-        /// </summary>
-        /// <remarks>This method should be called after any operation that modifies the editor's content
-        /// or state. Saving a new undo state clears the redo history and enforces the maximum undo history size limit.
-        /// This method does not throw exceptions under normal usage.</remarks>
         private void SaveUndoState()
         {
             // Create a copy of the current state
@@ -2651,9 +2353,6 @@ namespace AvConsoleToolkit.Editors
 
             var state = new UndoState(linesCopy, this.cursorRow, this.cursorCol, this.modified);
             this.undoStack.Push(state);
-
-            // Clear redo stack when a new change is made
-            this.redoStack.Clear();
 
             // Limit undo history size by removing oldest entries
             while (this.undoStack.Count > MaxUndoHistory)
@@ -2670,12 +2369,6 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Scrolls the editor view to ensure that the current selection is visible within the viewport.
-        /// </summary>
-        /// <remarks>If no selection is present, this method does nothing. The method adjusts both
-        /// vertical and horizontal scroll offsets as needed to bring the selection into view. Horizontal scrolling is
-        /// only applied when word wrap is disabled.</remarks>
         private void ScrollSelectionIntoView()
         {
             if (!this.hasSelection)
@@ -2719,11 +2412,6 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Selects all content within the current document or text buffer.
-        /// </summary>
-        /// <remarks>After calling this method, the entire content is marked as selected, and the cursor
-        /// is moved to the end of the selection. Any previous selection is replaced.</remarks>
         private void SelectAll()
         {
             this.selectionStartRow = 0;
@@ -2735,9 +2423,6 @@ namespace AvConsoleToolkit.Editors
             this.cursorCol = this.selectionEndCol;
         }
 
-        /// <summary>
-        /// Selects and applies the file text editor theme based on the current settings.
-        /// </summary>
         private void SelectTheme()
         {
             var themeName = this.settings.ThemeName;
@@ -2769,10 +2454,6 @@ namespace AvConsoleToolkit.Editors
             this.SetStatusMessage($"Theme: {themeName}");
         }
 
-        /// <summary>
-        /// Sets the current status message to display to the user.
-        /// </summary>
-        /// <param name="message">The status message text to display. Can be null or empty to clear the current message.</param>
         private void SetStatusMessage(string message)
         {
             this.statusMessage = message;
@@ -2780,9 +2461,6 @@ namespace AvConsoleToolkit.Editors
             this.needsRender = true;
         }
 
-        /// <summary>
-        /// Displays the help screen to the user.
-        /// </summary>
         private void ShowHelp()
         {
             this.helpScreenVisible = true;
@@ -2790,9 +2468,6 @@ namespace AvConsoleToolkit.Editors
             this.needsRender = true;
         }
 
-        /// <summary>
-        /// Begins a new selection at the current cursor position.
-        /// </summary>
         private void StartSelection()
         {
             this.selectionStartRow = this.cursorRow;
@@ -2802,12 +2477,33 @@ namespace AvConsoleToolkit.Editors
             this.hasSelection = true;
         }
 
-        /// <summary>
-        /// Attempts to retrieve the current selection as a normalized rectangular region.
-        /// </summary>
-        /// <param name="selection">When this method returns, contains a tuple representing the normalized selection as (startRow, startCol,
-        /// endRow, endCol) if a valid selection exists; otherwise, all values are set to -1.</param>
-        /// <returns>true if a valid, non-empty selection exists and was returned in selection; otherwise, false.</returns>
+        private void ToggleTheme()
+        {
+            // Toggle between Dark and Bright themes
+            var themeName = this.settings.ThemeName ?? "User";
+            switch (themeName)
+            {
+                case "User":
+                    themeName = "NordDark";
+                    break;
+                case "NordDark":
+                    themeName = "NordSemiDark";
+                    break;
+                case "NordSemiDark":
+                    themeName = "NordSemiLight";
+                    break;
+                case "NordSemiLight":
+                    themeName = "NordLight";
+                    break;
+                default:
+                    themeName = "User";
+                    break;
+            }
+
+            this.settings.ThemeName = themeName;
+            this.SelectTheme();
+        }
+
         private bool TryGetNormalizedSelection(out (int startRow, int startCol, int endRow, int endCol) selection)
         {
             if (!this.hasSelection)
@@ -2826,12 +2522,6 @@ namespace AvConsoleToolkit.Editors
             return true;
         }
 
-        /// <summary>
-        /// Reverses the most recent change to the document, restoring the previous state if available.
-        /// </summary>
-        /// <remarks>If there are no actions to undo, the method does nothing. The undone action can be
-        /// redone using the corresponding redo functionality. Calling this method updates the document's content,
-        /// cursor position, and modification state to match the previous state.</remarks>
         private void Undo()
         {
             if (this.undoStack.Count == 0)
@@ -2839,15 +2529,6 @@ namespace AvConsoleToolkit.Editors
                 this.SetStatusMessage("Nothing to undo.");
                 return;
             }
-
-            // Save current state to redo stack before undoing
-            var currentLinesCopy = new string[this.lines.Count];
-            for (var i = 0; i < this.lines.Count; i++)
-            {
-                currentLinesCopy[i] = this.lines[i].ToString();
-            }
-            var currentState = new UndoState(currentLinesCopy, this.cursorRow, this.cursorCol, this.modified);
-            this.redoStack.Push(currentState);
 
             var state = this.undoStack.Pop();
 
@@ -2866,13 +2547,6 @@ namespace AvConsoleToolkit.Editors
             this.SetStatusMessage("Undo.");
         }
 
-        /// <summary>
-        /// Updates the collection of search matches based on the current search text and cursor position.
-        /// </summary>
-        /// <remarks>Clears any existing search matches and recalculates them using a case-insensitive
-        /// search. If matches are found, sets the current match index to the first match at or after the cursor
-        /// position, or wraps to the first match if none are found after the cursor. Updates the status message to
-        /// reflect the number of matches found.</remarks>
         private void UpdateSearchMatches()
         {
             this.searchMatches.Clear();
@@ -2921,7 +2595,7 @@ namespace AvConsoleToolkit.Editors
                     this.currentSearchMatchIndex = 0;
                 }
 
-                this.SetStatusMessage($"Found {this.searchMatches.Count} match{(this.searchMatches.Count > 1 ? "es" : string.Empty)}");
+                this.SetStatusMessage($"Found {this.searchMatches.Count} match(es)");
             }
             else
             {
@@ -2929,13 +2603,6 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Updates the current selection state based on whether selection mode is active.
-        /// </summary>
-        /// <remarks>Call this method to update the selection endpoints when the selection state changes,
-        /// such as during mouse or keyboard interactions. If selection mode is not active, any existing selection will
-        /// be cleared.</remarks>
-        /// <param name="isSelecting"><see langword="true"/> to continue or update the current selection; <see langword="false"/> to clear the selection.</param>
         private void UpdateSelection(bool isSelecting)
         {
             if (isSelecting && this.hasSelection)
@@ -2949,13 +2616,6 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
-        /// <summary>
-        /// Writes the specified text to the console using the given style, with an option to invert foreground and
-        /// background colors.
-        /// </summary>
-        /// <param name="content">The text content to write to the console. Can be null or empty, in which case no text is displayed.</param>
-        /// <param name="style">The style to apply to the text, including foreground and background colors, decoration, and link formatting.</param>
-        /// <param name="invert"><see langword="true"/> to swap the foreground and background colors of the specified style; otherwise, <see langword="false"/>.</param>
         private void WriteText(string content, Style style, bool invert = false)
         {
             if (invert)

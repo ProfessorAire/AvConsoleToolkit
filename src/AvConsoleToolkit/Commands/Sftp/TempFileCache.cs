@@ -23,37 +23,13 @@ namespace AvConsoleToolkit.Commands.Sftp
     /// </summary>
     public sealed class TempFileCache : IDisposable
     {
-        /// <summary>
-        /// Provides a lazily initialized, thread-safe singleton instance of the TempFileCache class.
-        /// </summary>
         private static readonly Lazy<TempFileCache> instance = new(() => new TempFileCache());
 
-        /// <summary>
-        /// Contains the currently cached files.
-        /// </summary>
         private readonly Dictionary<string, string> cachedFiles = new(StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>
-        /// The directory the cache exists in.
-        /// </summary>
         private readonly string cacheDirectory;
-
-        /// <summary>
-        /// Locking object for thread safety.
-        /// </summary>
         private readonly Lock lockObject = new();
-
-        /// <summary>
-        /// Indicates whether this instance has been disposed.
-        /// </summary>
         private bool disposed;
 
-        /// <summary>
-        /// Initializes a new instance of the TempFileCache class and prepares the cache directory for use.
-        /// </summary>
-        /// <remarks>This constructor creates a dedicated temporary directory for file caching under the
-        /// system's temporary path. The directory is created if it does not already exist. Cleanup of cached files is
-        /// automatically registered to occur when the application process exits.</remarks>
         private TempFileCache()
         {
             this.cacheDirectory = Path.Combine(Path.GetTempPath(), "AvConsoleToolkit", "FileCache");
@@ -69,42 +45,6 @@ namespace AvConsoleToolkit.Commands.Sftp
         public static TempFileCache Instance => instance.Value;
 
         /// <summary>
-        /// Clears all cached files.
-        /// </summary>
-        public void ClearCache()
-        {
-            lock (this.lockObject)
-            {
-                this.cachedFiles.Clear();
-                try
-                {
-                    if (Directory.Exists(this.cacheDirectory))
-                    {
-                        Directory.Delete(this.cacheDirectory, true);
-                        Directory.CreateDirectory(this.cacheDirectory);
-                    }
-                }
-                catch
-                {
-                    // Ignore deletion errors
-                }
-            }
-        }
-
-        /// <inheritdoc/>
-        public void Dispose()
-        {
-            if (this.disposed)
-            {
-                return;
-            }
-
-            this.disposed = true;
-            AppDomain.CurrentDomain.ProcessExit -= this.OnProcessExit;
-            this.CleanupCache();
-        }
-
-        /// <summary>
         /// Gets the local file path for a cached file, or null if not cached.
         /// </summary>
         /// <param name="hostAddress">The host address the file was downloaded from.</param>
@@ -115,7 +55,7 @@ namespace AvConsoleToolkit.Commands.Sftp
             lock (this.lockObject)
             {
                 var key = this.GetCacheKey(hostAddress, remotePath);
-                if (this.cachedFiles.TryGetValue(key, out var localPath) && File.Exists(localPath))
+                if (this.cachedFiles.TryGetValue(key, out var localPath) && System.IO.File.Exists(localPath))
                 {
                     return localPath;
                 }
@@ -182,9 +122,9 @@ namespace AvConsoleToolkit.Commands.Sftp
                     this.cachedFiles.Remove(key);
                     try
                     {
-                        if (File.Exists(localPath))
+                        if (System.IO.File.Exists(localPath))
                         {
-                            File.Delete(localPath);
+                            System.IO.File.Delete(localPath);
                         }
                     }
                     catch
@@ -196,10 +136,46 @@ namespace AvConsoleToolkit.Commands.Sftp
         }
 
         /// <summary>
-        /// Removes all files and subdirectories from the cache directory, if it exists.
+        /// Clears all cached files.
         /// </summary>
-        /// <remarks>This method is typically called during application shutdown to clean up temporary
-        /// cache data. Any errors encountered during the cleanup process are ignored.</remarks>
+        public void ClearCache()
+        {
+            lock (this.lockObject)
+            {
+                this.cachedFiles.Clear();
+                try
+                {
+                    if (Directory.Exists(this.cacheDirectory))
+                    {
+                        Directory.Delete(this.cacheDirectory, true);
+                        Directory.CreateDirectory(this.cacheDirectory);
+                    }
+                }
+                catch
+                {
+                    // Ignore deletion errors
+                }
+            }
+        }
+
+        /// <inheritdoc />
+        public void Dispose()
+        {
+            if (this.disposed)
+            {
+                return;
+            }
+
+            this.disposed = true;
+            AppDomain.CurrentDomain.ProcessExit -= this.OnProcessExit;
+            this.CleanupCache();
+        }
+
+        private void OnProcessExit(object? sender, EventArgs e)
+        {
+            this.CleanupCache();
+        }
+
         private void CleanupCache()
         {
             try
@@ -215,36 +191,11 @@ namespace AvConsoleToolkit.Commands.Sftp
             }
         }
 
-        /// <summary>
-        /// Generates a unique cache key based on the specified host address and remote path.
-        /// </summary>
-        /// <param name="hostAddress">The host address to include in the cache key. Cannot be null.</param>
-        /// <param name="remotePath">The remote path to include in the cache key. Cannot be null.</param>
-        /// <returns>A string representing the cache key composed of the host address and remote path.</returns>
         private string GetCacheKey(string hostAddress, string remotePath)
         {
             return $"{hostAddress}:{remotePath}";
         }
 
-        /// <summary>
-        /// Handles the process exit event to perform necessary cleanup operations before the application terminates.
-        /// </summary>
-        /// <param name="sender">The source of the event, typically the current application domain.</param>
-        /// <param name="e">An object that contains the event data.</param>
-        private void OnProcessExit(object? sender, EventArgs e)
-        {
-            this.CleanupCache();
-        }
-
-        /// <summary>
-        /// Replaces invalid file name characters in the specified string with underscores to produce a file-system-safe
-        /// file name.
-        /// </summary>
-        /// <remarks>This method uses the set of invalid file name characters defined by the current
-        /// operating system. The original length of the input string is preserved in the output.</remarks>
-        /// <param name="input">The input string to sanitize for use as a file name.</param>
-        /// <returns>A string in which all characters that are invalid in file names are replaced with underscores. The returned
-        /// string is safe to use as a file name on the current platform.</returns>
         private string SanitizeFileName(string input)
         {
             var invalidChars = new HashSet<char>(Path.GetInvalidFileNameChars());

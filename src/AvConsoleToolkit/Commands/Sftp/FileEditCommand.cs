@@ -125,22 +125,6 @@ namespace AvConsoleToolkit.Commands.Sftp
             }
         }
 
-        /// <summary>
-        /// Asynchronously downloads a remote file to the specified local path using the provided file transfer
-        /// connection and settings.
-        /// </summary>
-        /// <remarks>If the directory for <paramref name="localPath"/> does not exist, it is created
-        /// automatically. The method overwrites the file at <paramref name="localPath"/> if it already
-        /// exists.</remarks>
-        /// <param name="connection">The file transfer connection used to access the remote file and perform the download operation. Must be
-        /// connected and capable of file transfer.</param>
-        /// <param name="settings">The settings that specify details for the file download, including the remote file path and any transfer
-        /// options.</param>
-        /// <param name="localPath">The full path to the local file where the downloaded content will be saved. The method creates the directory
-        /// if it does not exist.</param>
-        /// <param name="cancellationToken">A cancellation token that can be used to cancel the download operation.</param>
-        /// <returns>A task that represents the asynchronous download operation.</returns>
-        /// <exception cref="FileNotFoundException">Thrown if the remote file specified in <paramref name="settings"/> does not exist.</exception>
         private async Task DownloadFileAsync(IFileTransferConnection connection, FileEditSettings settings, string localPath, CancellationToken cancellationToken)
         {
             await AnsiConsole.Progress()
@@ -155,7 +139,6 @@ namespace AvConsoleToolkit.Commands.Sftp
                 .StartAsync(async ctx =>
                 {
                     var displayName = settings.Verbose ? settings.RemoteFilePath : Path.GetFileName(settings.RemoteFilePath);
-                    
                     var downloadTask = ctx.AddTask($"[cyan]Downloading {displayName}[/]");
 
                     await connection.ConnectFileTransferAsync(cancellationToken);
@@ -187,19 +170,6 @@ namespace AvConsoleToolkit.Commands.Sftp
             AnsiConsole.MarkupLine("[green]Download complete.[/]");
         }
 
-        /// <summary>
-        /// Asynchronously uploads a local file to a remote destination using the specified file transfer connection and
-        /// settings.
-        /// </summary>
-        /// <remarks>After the upload completes, the remote file's last write time is set to match the
-        /// local file's last write time. The method reports progress only if a progress callback is provided.</remarks>
-        /// <param name="connection">The file transfer connection to use for uploading the file. Must be connected before the transfer begins.</param>
-        /// <param name="settings">The settings that specify how the file should be uploaded, including the remote file path.</param>
-        /// <param name="localPath">The full path to the local file to upload. The file must exist and be accessible for reading.</param>
-        /// <param name="cancellationToken">A cancellation token that can be used to cancel the upload operation.</param>
-        /// <param name="progressCallback">An optional callback that receives progress updates as a percentage (from 0 to 100) of the file upload
-        /// completion. If null, progress is not reported.</param>
-        /// <returns>A task that represents the asynchronous upload operation.</returns>
         private async Task UploadFileAsync(IFileTransferConnection connection, FileEditSettings settings, string localPath, CancellationToken cancellationToken, Action<double>? progressCallback = null)
         {
             await connection.ConnectFileTransferAsync(cancellationToken);
@@ -223,21 +193,6 @@ namespace AvConsoleToolkit.Commands.Sftp
             await connection.SetLastWriteTimeUtcAsync(settings.RemoteFilePath, lastWriteTime, cancellationToken);
         }
 
-        /// <summary>
-        /// Opens the specified local file in the built-in text editor for editing and uploads changes to the remote
-        /// location using the provided file transfer connection.
-        /// </summary>
-        /// <remarks>While the editor is open, connection status changes are reflected in the editor
-        /// interface. Upload progress is displayed during save operations. If the connection is lost, the editor will
-        /// indicate the status and attempt to reconnect as needed.</remarks>
-        /// <param name="connection">The file transfer connection used to upload the edited file and receive connection status updates. Must be
-        /// connected to the target remote system.</param>
-        /// <param name="settings">The settings that specify details for editing and uploading the file, including the remote file path and
-        /// editor options.</param>
-        /// <param name="localPath">The full path to the local file to be edited. The file must exist and be accessible for reading and writing.</param>
-        /// <param name="cancellationToken">A cancellation token that can be used to cancel the editing or upload operation.</param>
-        /// <returns>A task that represents the asynchronous operation. The task completes when the editor is closed and any
-        /// changes have been uploaded.</returns>
         private async Task EditWithBuiltinEditorAsync(IFileTransferConnection connection, FileEditSettings settings, string localPath, CancellationToken cancellationToken)
         {
             var displayName = Path.GetFileName(settings.RemoteFilePath);
@@ -280,7 +235,7 @@ namespace AvConsoleToolkit.Commands.Sftp
                 }
             }
 
-            editor = new FileTextEditor(localPath, displayName, OnSaveAsync, verbose: settings.Verbose);
+            editor = new FileTextEditor(localPath, displayName, OnSaveAsync);
 
             var statusTask = new Action<ConnectionStatus>(status => editor?.UpdateConnectionStatus(status));
             connection.FileTransferConnectionStatusChanged += statusTask;
@@ -291,26 +246,6 @@ namespace AvConsoleToolkit.Commands.Sftp
             connection.SuppressOutput = false;
         }
 
-        /// <summary>
-        /// Opens a remote file in an external editor, monitors for changes, and uploads modifications automatically
-        /// until the editor is closed or the operation is cancelled.
-        /// </summary>
-        /// <remarks>While the external editor is open, changes to the local file are detected and
-        /// automatically uploaded to the remote location. Some editors may require specific command-line flags (such as
-        /// '--wait') to block until the file is closed; otherwise, monitoring may end prematurely. The user can press
-        /// Ctrl+K in the console to manually stop monitoring and cancel the operation. If the editor closes within a
-        /// few seconds, a warning is displayed indicating that the editor may not be blocking as expected.</remarks>
-        /// <param name="connection">The file transfer connection used to upload the file when changes are detected. Must be a valid, open
-        /// connection.</param>
-        /// <param name="settings">The settings describing the remote file to edit, including its path and transfer options. Cannot be null.</param>
-        /// <param name="localPath">The full path to the local copy of the file to be edited. The file at this path will be monitored for
-        /// changes and uploaded when modified.</param>
-        /// <param name="editorPath">The path to the external editor executable to launch. The editor should support blocking or waiting for the
-        /// file to close if possible.</param>
-        /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation. If cancellation is requested, monitoring and
-        /// uploading will stop and the editor process will no longer be tracked.</param>
-        /// <returns>A task that represents the asynchronous operation of editing and uploading the file. The task completes when
-        /// the editor is closed or the operation is cancelled.</returns>
         private async Task EditWithExternalEditorAsync(IFileTransferConnection connection, FileEditSettings settings, string localPath, string editorPath, CancellationToken cancellationToken)
         {
             var displayName = Path.GetFileName(settings.RemoteFilePath);
@@ -465,20 +400,6 @@ namespace AvConsoleToolkit.Commands.Sftp
             }
         }
 
-        /// <summary>
-        /// Determines the appropriate editor to use for the specified file based on the provided settings and
-        /// application configuration.
-        /// </summary>
-        /// <remarks>If the settings specify the use of the built-in editor, or if no external editor is
-        /// configured for the file type, the method returns null. Otherwise, it returns the path to the configured
-        /// external editor, either from user settings or from extension-specific mappings in the application
-        /// configuration.</remarks>
-        /// <param name="filePath">The full path of the file for which to select an editor. The file extension is used to determine editor
-        /// mappings.</param>
-        /// <param name="settings">The settings that control editor selection, including whether to use the built-in editor and any
-        /// user-specified external editor.</param>
-        /// <returns>The path to the external editor executable to use for the file, or null if the built-in editor should be
-        /// used.</returns>
         private string? GetEditorForFile(string filePath, FileEditSettings settings)
         {
             if (settings.UseBuiltinEditor)

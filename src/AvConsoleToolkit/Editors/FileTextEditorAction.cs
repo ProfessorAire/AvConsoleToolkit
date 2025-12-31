@@ -17,70 +17,41 @@ namespace AvConsoleToolkit.Editors
     /// </summary>
     public enum FileTextEditorAction
     {
-        /// <summary>
-        /// No action.
-        /// </summary>
+        /// <summary>No action.</summary>
         None,
 
-        /// <summary>
-        /// Exit the editor.
-        /// </summary>
+        /// <summary>Exit the editor.</summary>
         Exit,
 
-        /// <summary>
-        /// Save the file.
-        /// </summary>
+        /// <summary>Save the file.</summary>
         Save,
 
-        /// <summary>
-        /// Copy selected text.
-        /// </summary>
+        /// <summary>Copy selected text.</summary>
         Copy,
 
-        /// <summary>
-        /// Cut selected text.
-        /// </summary>
+        /// <summary>Cut selected text.</summary>
         Cut,
 
-        /// <summary>
-        /// Paste from clipboard.
-        /// </summary>
+        /// <summary>Paste from clipboard.</summary>
         Paste,
 
-        /// <summary>
-        /// Cut the current line.
-        /// </summary>
+        /// <summary>Cut the current line.</summary>
         CutLine,
 
-        /// <summary>
-        /// Show help screen.
-        /// </summary>
+        /// <summary>Show help screen.</summary>
         Help,
 
-        /// <summary>
-        /// Toggle line numbers.
-        /// </summary>
+        /// <summary>Toggle line numbers.</summary>
         ToggleLineNumbers,
 
-        /// <summary>
-        /// Toggle word wrap.
-        /// </summary>
+        /// <summary>Toggle word wrap.</summary>
         ToggleWordWrap,
 
-        /// <summary>
-        /// Undo the last action.
-        /// </summary>
+        /// <summary>Undo the last action.</summary>
         Undo,
 
-        /// <summary>
-        /// Redo the last undone action.
-        /// </summary>
-        Redo,
-
-        /// <summary>
-        /// Cycles between available themes.
-        /// </summary>
-        CycleTheme,
+        /// <summary>Toggle between Dark and Bright themes.</summary>
+        ToggleTheme,
 
         /// <summary>
         /// Search for text in the editor.
