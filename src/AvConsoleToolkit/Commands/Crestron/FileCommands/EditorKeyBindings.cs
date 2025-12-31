@@ -135,6 +135,8 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                 "Other:",
                 "  Ctrl+G    Show this help",
                 "  Ctrl+Q    Exit editor",
+                "",
+                "Press Ctrl+Q to close this help screen.",
             };
         }
 
