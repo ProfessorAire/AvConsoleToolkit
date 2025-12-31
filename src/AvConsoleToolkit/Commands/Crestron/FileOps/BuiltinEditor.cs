@@ -84,7 +84,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileOps
             this.displayName = displayName;
             this.onSaveCallback = onSaveCallback;
             this.keyBindings = keyBindings ?? EditorKeyBindings.Default;
-            this.settings = AppConfig.Settings.BuiltInEditor;
+            this.settings = AppConfig.Settings.Editor.BuiltIn;
 
             // Load settings
             this.showLineNumbers = this.settings.ShowLineNumbers;
@@ -114,56 +114,32 @@ namespace AvConsoleToolkit.Commands.Crestron.FileOps
             this.LoadFile();
             this.running = true;
             var needsRender = true;
-            var lastWindowWidth = System.Console.WindowWidth;
-            var lastWindowHeight = System.Console.WindowHeight;
 
-            // Save original console state and enable Ctrl+C as input
-            var originalTreatControlCAsInput = System.Console.TreatControlCAsInput;
-            System.Console.TreatControlCAsInput = true;
-
-            try
+            AnsiConsole.AlternateScreen(() =>
             {
-                AnsiConsole.AlternateScreen(() =>
+                // Initial render
+                this.Render();
+
+                while (this.running && !cancellationToken.IsCancellationRequested)
                 {
-                    // Initial render
-                    this.Render();
-
-                    while (this.running && !cancellationToken.IsCancellationRequested)
+                    if (System.Console.KeyAvailable)
                     {
-                        // Check for window resize
-                        var currentWidth = System.Console.WindowWidth;
-                        var currentHeight = System.Console.WindowHeight;
-                        if (currentWidth != lastWindowWidth || currentHeight != lastWindowHeight)
-                        {
-                            lastWindowWidth = currentWidth;
-                            lastWindowHeight = currentHeight;
-                            needsRender = true;
-                        }
-
-                        if (System.Console.KeyAvailable)
-                        {
-                            var key = System.Console.ReadKey(true);
-                            this.HandleKeySync(key, cancellationToken);
-                            needsRender = true;
-                        }
-                        else
-                        {
-                            Thread.Sleep(50);
-                        }
-
-                        if (needsRender)
-                        {
-                            this.Render();
-                            needsRender = false;
-                        }
+                        var key = System.Console.ReadKey(true);
+                        this.HandleKeySync(key, cancellationToken);
+                        needsRender = true;
                     }
-                });
-            }
-            finally
-            {
-                // Restore original console state
-                System.Console.TreatControlCAsInput = originalTreatControlCAsInput;
-            }
+                    else
+                    {
+                        Thread.Sleep(50);
+                    }
+
+                    if (needsRender)
+                    {
+                        this.Render();
+                        needsRender = false;
+                    }
+                }
+            });
 
             return !this.modified;
         }
@@ -382,120 +358,45 @@ namespace AvConsoleToolkit.Commands.Crestron.FileOps
                 }
             }
 
-            // Editor content - handle word wrap properly
-            var wrapGlyph = this.settings.WordWrapGlyph ?? "\uEBEA";
-            var wrapIndent = "  "; // 2 character indent for wrapped lines
-            var currentSourceLine = this.scrollOffsetY;
-            var currentWrapOffset = 0;
-
-            // When word wrap is enabled, we need to track which source line and offset we're at
-            if (this.wordWrapEnabled)
+            // Editor content
+            for (int i = 0; i < editorHeight; i++)
             {
-                // Skip wrapped lines that scrolled off the top
-                // This is simplified - for now we start at scrollOffsetY source line
-                currentSourceLine = this.scrollOffsetY;
-            }
+                var lineIndex = this.scrollOffsetY + i;
+                System.Console.SetCursorPosition(0, i + 1);
 
-            for (int screenRow = 0; screenRow < editorHeight; screenRow++)
-            {
-                System.Console.SetCursorPosition(0, screenRow + 1);
-
-                if (this.wordWrapEnabled)
+                // Draw gutter with line numbers
+                if (this.showLineNumbers)
                 {
-                    // Word wrap mode
-                    if (currentSourceLine < this.lines.Count)
+                    if (lineIndex < this.lines.Count)
                     {
-                        var fullLineText = this.lines[currentSourceLine].ToString();
-                        var effectiveWidth = contentWidth - (currentWrapOffset > 0 ? wrapIndent.Length : 0);
+                        var lineNum = (lineIndex + 1).ToString().PadLeft(gutterWidth - 1);
+                        AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{lineNum} [/]");
+                    }
+                    else
+                    {
+                        AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
+                    }
+                }
 
-                        // Draw gutter
-                        if (this.showLineNumbers)
+                if (lineIndex < this.lines.Count)
+                {
+                    var lineText = this.lines[lineIndex].ToString();
+
+                    if (this.wordWrapEnabled)
+                    {
+                        // Word wrap mode - just show what fits
+                        if (lineText.Length > contentWidth)
                         {
-                            if (currentWrapOffset == 0)
-                            {
-                                // First segment of line - show line number
-                                var lineNum = (currentSourceLine + 1).ToString().PadLeft(gutterWidth - 1);
-                                AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{lineNum} [/]");
-                            }
-                            else
-                            {
-                                // Continuation - blank gutter
-                                AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
-                            }
-                        }
-
-                        // Get the segment to display
-                        var remainingText = currentWrapOffset < fullLineText.Length
-                            ? fullLineText.Substring(currentWrapOffset)
-                            : string.Empty;
-
-                        string lineText;
-                        var needsWrapGlyph = false;
-
-                        if (currentWrapOffset > 0)
-                        {
-                            // Continuation line - add indent
-                            System.Console.Write(wrapIndent);
-                        }
-
-                        if (remainingText.Length > effectiveWidth)
-                        {
-                            // Line needs to wrap
-                            lineText = remainingText.Substring(0, effectiveWidth - 1);
-                            needsWrapGlyph = true;
-                            currentWrapOffset += effectiveWidth - 1;
+                            lineText = lineText.Substring(0, contentWidth - 1) + "↩";
                         }
                         else
                         {
-                            // Line fits or is the last segment
-                            lineText = remainingText.PadRight(effectiveWidth);
-                            currentSourceLine++;
-                            currentWrapOffset = 0;
-                        }
-
-                        // Render the line segment
-                        this.RenderLineWithSelection(currentWrapOffset == 0 ? currentSourceLine - 1 : currentSourceLine, lineText, gutterWidth, effectiveWidth);
-
-                        if (needsWrapGlyph)
-                        {
-                            AnsiConsole.Markup($"[dim]{wrapGlyph.EscapeMarkup()}[/]");
+                            lineText = lineText.PadRight(contentWidth);
                         }
                     }
                     else
                     {
-                        // Past end of file
-                        if (this.showLineNumbers)
-                        {
-                            AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
-                        }
-
-                        AnsiConsole.Markup($"[dim]~[/]{new string(' ', contentWidth - 1)}");
-                    }
-                }
-                else
-                {
-                    // Horizontal scroll mode (no word wrap)
-                    var lineIndex = this.scrollOffsetY + screenRow;
-
-                    // Draw gutter with line numbers
-                    if (this.showLineNumbers)
-                    {
-                        if (lineIndex < this.lines.Count)
-                        {
-                            var lineNum = (lineIndex + 1).ToString().PadLeft(gutterWidth - 1);
-                            AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{lineNum} [/]");
-                        }
-                        else
-                        {
-                            AnsiConsole.Markup($"[{this.gutterFgColor.ToMarkup()} on {this.gutterBgColor.ToMarkup()}]{new string(' ', gutterWidth)}[/]");
-                        }
-                    }
-
-                    if (lineIndex < this.lines.Count)
-                    {
-                        var lineText = this.lines[lineIndex].ToString();
-
-                        // Horizontal scroll
+                        // Horizontal scroll mode
                         if (this.scrollOffsetX < lineText.Length)
                         {
                             lineText = lineText.Substring(this.scrollOffsetX);
@@ -513,14 +414,14 @@ namespace AvConsoleToolkit.Commands.Crestron.FileOps
                         {
                             lineText = lineText.PadRight(contentWidth);
                         }
+                    }
 
-                        // Render with selection highlighting
-                        this.RenderLineWithSelection(lineIndex, lineText, gutterWidth, contentWidth);
-                    }
-                    else
-                    {
-                        AnsiConsole.Markup($"[dim]~[/]{new string(' ', contentWidth - 1)}");
-                    }
+                    // Render with selection highlighting
+                    this.RenderLineWithSelection(lineIndex, lineText, gutterWidth, contentWidth);
+                }
+                else
+                {
+                    AnsiConsole.Markup($"[dim]~[/]{new string(' ', contentWidth - 1)}");
                 }
             }
 

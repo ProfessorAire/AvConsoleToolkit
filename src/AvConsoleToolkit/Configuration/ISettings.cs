@@ -27,14 +27,8 @@ namespace AvConsoleToolkit.Configuration
 
         /// <summary>
         /// Gets the current editor settings used to configure file editing functionality.
-        /// Maps file extensions (without the dot) to external editor paths.
         /// </summary>
         IEditorSettings Editor { get; }
-
-        /// <summary>
-        /// Gets the settings for the built-in text editor.
-        /// </summary>
-        IBuiltInEditorSettings BuiltInEditor { get; }
 
         /// <summary>
         /// Gets the current connection settings used to configure Pass Through specific functionality.

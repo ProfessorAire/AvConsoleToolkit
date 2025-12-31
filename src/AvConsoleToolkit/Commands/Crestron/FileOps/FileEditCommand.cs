@@ -373,8 +373,9 @@ namespace AvConsoleToolkit.Commands.Crestron.FileOps
             var editorSettings = AppConfig.Settings.Editor;
 
             // Check for extension-specific mapping in the dictionary
-            if (editorSettings != null && editorSettings.TryGetValue(extension, out var editorPath))
+            if (editorSettings.Mappings != null)
             {
+                var editorPath = editorSettings.Mappings[extension];
                 if (!string.IsNullOrWhiteSpace(editorPath))
                 {
                     return editorPath;
