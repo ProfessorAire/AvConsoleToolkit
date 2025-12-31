@@ -15,7 +15,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace AvConsoleToolkit.Ssh
+namespace AvConsoleToolkit.Connections
 {
     /// <summary>
     /// Provides access to functionality for interacting with a communication stream,
@@ -39,9 +39,22 @@ namespace AvConsoleToolkit.Ssh
         bool DataAvailable { get; }
 
         /// <summary>
-        /// Gets a value indicating whether the connection is established.
+        /// Gets a value indicating whether the shell connection is established.
         /// </summary>
-        bool IsConnected { get; }
+        bool IsShellConnected { get; }
+
+        /// <summary>
+        /// Gets or sets the maximum number of reconnection attempts.
+        /// A value of 0 means no automatic reconnection.
+        /// A value of -1 means unlimited reconnection attempts.
+        /// </summary>
+        int MaxReconnectionAttempts { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether console output should be suppressed.
+        /// When true, the connection will not write status updates or progress information to the console.
+        /// </summary>
+        bool SuppressOutput { get; set; }
 
         /// <summary>
         /// Asynchronously establishes a shell connection to the remote host.

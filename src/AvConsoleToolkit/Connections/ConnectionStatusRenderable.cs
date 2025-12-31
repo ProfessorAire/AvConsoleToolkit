@@ -15,7 +15,7 @@ using System.Collections.Generic;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
-namespace AvConsoleToolkit.Ssh
+namespace AvConsoleToolkit.Connections
 {
     /// <summary>
     /// Renders the status of both SSH and SFTP connections in a compact, live-updating format.
@@ -60,37 +60,37 @@ namespace AvConsoleToolkit.Ssh
             yield return new Segment(this.GetStatusText("SFTP", this.model.HostAddress, this.model.SftpState, this.model.SftpAttempt, this.model.SftpMaxAttempts, this.showSpinner && IsActive(this.model.SftpState)), new Style(this.GetStatusColor(this.model.SftpState)));
         }
 
-        private static bool IsActive(ConnectionStatus status)
+        private static bool IsActive(Connections.ConnectionStatus status)
         {
-            return status == ConnectionStatus.Connecting || status == ConnectionStatus.Reconnecting;
+            return status == Connections.ConnectionStatus.Connecting || status == Connections.ConnectionStatus.Reconnecting;
         }
 
-        private Color GetStatusColor(ConnectionStatus status)
+        private Color GetStatusColor(Connections.ConnectionStatus status)
         {
             return status switch
             {
-                ConnectionStatus.NotConnected => Color.Grey,
-                ConnectionStatus.Connecting => Color.Yellow,
-                ConnectionStatus.Connected => Color.Green,
-                ConnectionStatus.LostConnection => Color.Red,
-                ConnectionStatus.Reconnecting => Color.Orange1,
-                ConnectionStatus.ConnectionFailed => Color.Red,
-                ConnectionStatus.Disconnecting => Color.Yellow,
+                Connections.ConnectionStatus.NotConnected => Color.Grey,
+                Connections.ConnectionStatus.Connecting => Color.Yellow,
+                Connections.ConnectionStatus.Connected => Color.Green,
+                Connections.ConnectionStatus.LostConnection => Color.Red,
+                Connections.ConnectionStatus.Reconnecting => Color.Orange1,
+                Connections.ConnectionStatus.ConnectionFailed => Color.Red,
+                Connections.ConnectionStatus.Disconnecting => Color.Yellow,
                 _ => Color.White
             };
         }
 
-        private string GetStatusText(string type, string host, ConnectionStatus status, int attempt, int maxAttempts, bool spinner)
+        private string GetStatusText(string type, string host, Connections.ConnectionStatus status, int attempt, int maxAttempts, bool spinner)
         {
             string statusText = status switch
             {
-                ConnectionStatus.NotConnected => "Not Connected",
-                ConnectionStatus.Connecting => $"Connecting...{(spinner ? $" {SpinnerFrames[this.spinnerIndex % SpinnerFrames.Length]}" : string.Empty)}",
-                ConnectionStatus.Connected => "Connected",
-                ConnectionStatus.LostConnection => "Lost Connection...Reconnecting",
-                ConnectionStatus.Reconnecting => $"Connection Failed...Reconnecting ({attempt}{(maxAttempts > 0 ? $" of {maxAttempts}" : string.Empty)}){(spinner ? $" {SpinnerFrames[this.spinnerIndex % SpinnerFrames.Length]}" : string.Empty)}",
-                ConnectionStatus.ConnectionFailed => $"Connection Failed{(maxAttempts > 0 ? $" ({attempt} of {maxAttempts})" : string.Empty)}",
-                ConnectionStatus.Disconnecting => "Disconnecting...",
+                Connections.ConnectionStatus.NotConnected => "Not Connected",
+                Connections.ConnectionStatus.Connecting => $"Connecting...{(spinner ? $" {SpinnerFrames[this.spinnerIndex % SpinnerFrames.Length]}" : string.Empty)}",
+                Connections.ConnectionStatus.Connected => "Connected",
+                Connections.ConnectionStatus.LostConnection => "Lost Connection...Reconnecting",
+                Connections.ConnectionStatus.Reconnecting => $"Connection Failed...Reconnecting ({attempt}{(maxAttempts > 0 ? $" of {maxAttempts}" : string.Empty)}){(spinner ? $" {SpinnerFrames[this.spinnerIndex % SpinnerFrames.Length]}" : string.Empty)}",
+                Connections.ConnectionStatus.ConnectionFailed => $"Connection Failed{(maxAttempts > 0 ? $" ({attempt} of {maxAttempts})" : string.Empty)}",
+                Connections.ConnectionStatus.Disconnecting => "Disconnecting...",
                 _ => "Unknown"
             };
             return $"{type,-5} ({host}): {statusText}";

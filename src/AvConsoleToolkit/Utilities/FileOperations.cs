@@ -14,6 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Renci.SshNet.Sftp;
 using Spectre.Console;
 
 namespace AvConsoleToolkit.Utilities
@@ -104,6 +105,133 @@ namespace AvConsoleToolkit.Utilities
         }
 
         /// <summary>
+        /// Prompts the user to select one or more files from a list.
+        /// </summary>
+        /// <param name="files">The list of files to choose from.</param>
+        /// <param name="allowMultiple">Whether to allow multiple selections.</param>
+        /// <param name="pattern">The original pattern (for display purposes).</param>
+        /// <returns>List of selected file paths.</returns>
+        public static List<string> PromptForFileSelection(List<string> files, bool allowMultiple, string pattern)
+        {
+            AnsiConsole.MarkupLine($"[yellow]Found {files.Count} file(s) matching pattern:[/] {pattern.EscapeMarkup()}");
+            AnsiConsole.WriteLine();
+
+            // Create table to display files
+            var table = new Table();
+            table.AddColumn("#");
+            table.AddColumn("Filename");
+            table.AddColumn("Directory");
+            table.AddColumn("Size");
+            table.AddColumn("Modified");
+
+            for (var i = 0; i < files.Count; i++)
+            {
+                var fileInfo = new FileInfo(files[i]);
+                var sizeStr = FormatFileSize(fileInfo.Length);
+
+                table.AddRow(
+                    (i + 1).ToString(),
+                    fileInfo.Name.EscapeMarkup(),
+                    fileInfo.DirectoryName?.EscapeMarkup() ?? string.Empty,
+                    sizeStr,
+                    fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"));
+            }
+
+            AnsiConsole.Write(table);
+            AnsiConsole.WriteLine();
+
+            if (allowMultiple)
+            {
+                var selections = AnsiConsole.Prompt(
+                    new MultiSelectionPrompt<string>()
+                        .Title("Select [green]one or more files[/] to process:")
+                        .PageSize(10)
+                        .MoreChoicesText("[grey](Move up and down to reveal more files)[/]")
+                        .InstructionsText("[grey](Press [blue]<space>[/] to toggle, [green]<enter>[/] to accept)[/]")
+                        .AddChoices(files.Select((f, i) => $"{i + 1}. {Path.GetFileName(f)}")));
+
+                // Map selections back to file paths
+                return selections
+                    .Select(s =>
+                    {
+                        var index = int.Parse(s.Split('.')[0]) - 1;
+                        return files[index];
+                    })
+                    .ToList();
+            }
+            else
+            {
+                var selection = AnsiConsole.Prompt(
+                    new SelectionPrompt<string>()
+                        .Title("Select a [green]file[/] to process:")
+                        .PageSize(10)
+                        .MoreChoicesText("[grey](Move up and down to reveal more files)[/]")
+                        .AddChoices(files.Select((f, i) => $"{i + 1}. {Path.GetFileName(f)}")));
+
+                // Map selection back to file path
+                var selectedIndex = int.Parse(selection.Split('.')[0]) - 1;
+                return[files[selectedIndex]];
+            }
+        }
+
+        /// <summary>
+        /// Prompts the user to select one or more files from a provided list of remote files using an interactive
+        /// console interface.
+        /// </summary>
+        /// <remarks>The method displays the available files in a formatted table and uses interactive
+        /// prompts to collect user selections. The order of files in the returned list corresponds to the order in
+        /// which they appear in the input list. This method is intended for use in console applications and requires
+        /// user interaction.</remarks>
+        /// <param name="files">The list of remote files available for selection. Cannot be null.</param>
+        /// <param name="allowMultiple">true to allow selection of multiple files; otherwise, false to restrict selection to a single file.</param>
+        /// <param name="pattern">The search pattern used to filter the displayed files. Displayed to the user for context.</param>
+        /// <returns>A list of selected files. The list contains one or more ISftpFile objects chosen by the user. If no files
+        /// are selected, the list will be empty.</returns>
+        public static List<ISftpFile> PromptForRemoteFileSelection(List<ISftpFile> files, bool allowMultiple, string pattern)
+        {
+            AnsiConsole.MarkupLine($"[yellow]Found {files.Count} file(s) matching pattern:[/] {pattern.EscapeMarkup()}");
+            AnsiConsole.WriteLine();
+
+            if (allowMultiple)
+            {
+                var selections = AnsiConsole.Prompt(
+                    new MultiSelectionPrompt<string>()
+                        .Title("Select [green]one or more files[/] to process:")
+                        .PageSize(10)
+                        .NotRequired()
+                        .MoreChoicesText("[grey](Move up and down to reveal more files)[/]")
+                        .InstructionsText("[grey](Press [blue]<space>[/] to toggle, [green]<enter>[/] to accept)[/]")
+                        .AddChoices(files.Select((f, i) => $"{i + 1}. {f.FullName} ({FormatFileSize(f.Length)})")));
+
+                return selections
+                    .Select(s =>
+                    {
+                        var index = int.Parse(s.Split('.')[0]) - 1;
+                        return files[index];
+                    })
+                    .ToList();
+            }
+            else
+            {
+                var selection = AnsiConsole.Prompt(
+                    new SelectionPrompt<string>()
+                        .Title("Select a [green]file[/] to process:")
+                        .PageSize(10)
+                        .MoreChoicesText("[grey](Move up and down to reveal more files)[/]")
+                        .AddChoices("Cancel")
+                        .AddChoices(files.Select((f, i) => $"{i + 1}. {f.FullName} ({FormatFileSize(f.Length)})")));
+
+                if (selection == "Cancel")
+                {
+                    return [];
+                }
+
+                var selectedIndex = int.Parse(selection.Split('.')[0]) - 1;
+                return [files[selectedIndex]];
+            }
+        }
+
+        /// <summary>
         /// Resolves a file path or glob pattern to one or more matching files.
         /// If a single file is matched, returns it directly.
         /// If multiple files are matched, displays them and prompts for selection.
@@ -190,76 +318,6 @@ namespace AvConsoleToolkit.Utilities
             }
 
             return pattern.Substring(0, lastSeparatorBeforeWildcard);
-        }
-
-        /// <summary>
-        /// Prompts the user to select one or more files from a list.
-        /// </summary>
-        /// <param name="files">The list of files to choose from.</param>
-        /// <param name="allowMultiple">Whether to allow multiple selections.</param>
-        /// <param name="pattern">The original pattern (for display purposes).</param>
-        /// <returns>List of selected file paths.</returns>
-        private static List<string> PromptForFileSelection(List<string> files, bool allowMultiple, string pattern)
-        {
-            AnsiConsole.MarkupLine($"[yellow]Found {files.Count} file(s) matching pattern:[/] {pattern.EscapeMarkup()}");
-            AnsiConsole.WriteLine();
-
-            // Create table to display files
-            var table = new Table();
-            table.AddColumn("#");
-            table.AddColumn("Filename");
-            table.AddColumn("Directory");
-            table.AddColumn("Size");
-            table.AddColumn("Modified");
-
-            for (var i = 0; i < files.Count; i++)
-            {
-                var fileInfo = new FileInfo(files[i]);
-                var sizeStr = FormatFileSize(fileInfo.Length);
-
-                table.AddRow(
-                    (i + 1).ToString(),
-                    fileInfo.Name.EscapeMarkup(),
-                    fileInfo.DirectoryName?.EscapeMarkup() ?? string.Empty,
-                    sizeStr,
-                    fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"));
-            }
-
-            AnsiConsole.Write(table);
-            AnsiConsole.WriteLine();
-
-            if (allowMultiple)
-            {
-                var selections = AnsiConsole.Prompt(
-                    new MultiSelectionPrompt<string>()
-                        .Title("Select [green]one or more files[/] to process:")
-                        .PageSize(10)
-                        .MoreChoicesText("[grey](Move up and down to reveal more files)[/]")
-                        .InstructionsText("[grey](Press [blue]<space>[/] to toggle, [green]<enter>[/] to accept)[/]")
-                        .AddChoices(files.Select((f, i) => $"{i + 1}. {Path.GetFileName(f)}")));
-
-                // Map selections back to file paths
-                return selections
-                    .Select(s =>
-                    {
-                        var index = int.Parse(s.Split('.')[0]) - 1;
-                        return files[index];
-                    })
-                    .ToList();
-            }
-            else
-            {
-                var selection = AnsiConsole.Prompt(
-                    new SelectionPrompt<string>()
-                        .Title("Select a [green]file[/] to process:")
-                        .PageSize(10)
-                        .MoreChoicesText("[grey](Move up and down to reveal more files)[/]")
-                        .AddChoices(files.Select((f, i) => $"{i + 1}. {Path.GetFileName(f)}")));
-
-                // Map selection back to file path
-                var selectedIndex = int.Parse(selection.Split('.')[0]) - 1;
-                return[files[selectedIndex]];
-            }
         }
     }
 }
