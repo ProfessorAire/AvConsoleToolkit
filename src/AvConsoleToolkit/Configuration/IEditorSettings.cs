@@ -11,7 +11,6 @@
 // </copyright>
 
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 
 namespace AvConsoleToolkit.Configuration
@@ -24,16 +23,10 @@ namespace AvConsoleToolkit.Configuration
     {
         /// <summary>
         /// Gets the editor mappings by file extension.
-        /// <para>In the pattern <c>txt=notepad.exe;json=code</c></para>
+        /// Keys are file extensions without the dot (e.g., "json", "xml", "txt").
+        /// Values are the external editor paths or commands to use.
+        /// If no mapping is found for a file type, the built-in editor will be used.
         /// </summary>
-        [DefaultValue("")]
-        string Mappings { get; set; }
-
-        /// <summary>
-        /// Gets or sets the name or path of the default editor application used to open files instead of the built-in editor.
-        /// </summary>
-        [Description("Name or path of the default editor application used to open files instead of the built-in editor.")]
-        [DefaultValue("")]
-        string DefaultEditor { get; set; }
+        IDictionary<string, string> Mappings { get; }
     }
 }

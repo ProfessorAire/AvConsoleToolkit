@@ -12,57 +12,98 @@
 
 using System;
 
-namespace AvConsoleToolkit.Editors
+namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 {
+    /// <summary>
+    /// Defines editor actions that can be bound to key combinations.
+    /// </summary>
+    public enum EditorAction
+    {
+        /// <summary>No action.</summary>
+        None,
+
+        /// <summary>Exit the editor.</summary>
+        Exit,
+
+        /// <summary>Save the file.</summary>
+        Save,
+
+        /// <summary>Copy selected text.</summary>
+        Copy,
+
+        /// <summary>Cut selected text.</summary>
+        Cut,
+
+        /// <summary>Paste from clipboard.</summary>
+        Paste,
+
+        /// <summary>Cut the current line.</summary>
+        CutLine,
+
+        /// <summary>Show help screen.</summary>
+        Help,
+
+        /// <summary>Toggle line numbers.</summary>
+        ToggleLineNumbers,
+
+        /// <summary>Toggle word wrap.</summary>
+        ToggleWordWrap,
+
+        /// <summary>Undo the last action.</summary>
+        Undo,
+
+        /// <summary>Toggle between Dark and Bright themes.</summary>
+        ToggleTheme,
+    }
 
     /// <summary>
     /// Provides default key bindings for the built-in editor.
     /// This class can be extended to support customizable key bindings in the future.
     /// </summary>
-    public class FileTextEditorKeyBindings
+    public class EditorKeyBindings
     {
         /// <summary>
         /// Gets the default key bindings instance.
         /// </summary>
-        public static FileTextEditorKeyBindings Default { get; } = new FileTextEditorKeyBindings();
+        public static EditorKeyBindings Default { get; } = new EditorKeyBindings();
 
         /// <summary>
         /// Gets the editor action for the given key combination.
         /// </summary>
         /// <param name="key">The console key info.</param>
         /// <returns>The editor action to perform.</returns>
-        public virtual FileTextEditorAction GetAction(ConsoleKeyInfo key)
+        public virtual EditorAction GetAction(ConsoleKeyInfo key)
         {
             // Ctrl+F2 for theme toggle
             if (key.Key == ConsoleKey.F2 && key.Modifiers.HasFlag(ConsoleModifiers.Control))
             {
-                return FileTextEditorAction.ToggleTheme;
+                return EditorAction.ToggleTheme;
             }
 
             if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
             {
                 return key.Key switch
                 {
-                    ConsoleKey.Q => FileTextEditorAction.Exit,
-                    ConsoleKey.O => FileTextEditorAction.Save, // Ctrl+O for save (Ctrl+S is intercepted by PowerShell)
-                    ConsoleKey.C => FileTextEditorAction.Copy,
-                    ConsoleKey.X => FileTextEditorAction.Cut,
-                    ConsoleKey.U => FileTextEditorAction.Paste, // Ctrl+V is intercepted by many terminals, so we use Ctrl+U
-                    ConsoleKey.K => FileTextEditorAction.CutLine,
-                    ConsoleKey.G => FileTextEditorAction.Help,
-                    ConsoleKey.W => FileTextEditorAction.ToggleWordWrap,
-                    ConsoleKey.Z => FileTextEditorAction.Undo,
-                    _ => FileTextEditorAction.None
+                    ConsoleKey.Q => EditorAction.Exit,
+                    ConsoleKey.O => EditorAction.Save, // Ctrl+O for save (Ctrl+S is intercepted by PowerShell)
+                    ConsoleKey.C => EditorAction.Copy,
+                    ConsoleKey.X => EditorAction.Cut,
+                    ConsoleKey.U => EditorAction.Paste, // Ctrl+V is intercepted by many terminals, so we use Ctrl+U
+                    ConsoleKey.K => EditorAction.CutLine,
+                    ConsoleKey.G => EditorAction.Help,
+                    ConsoleKey.W => EditorAction.ToggleWordWrap,
+                    ConsoleKey.Z => EditorAction.Undo,
+                    _ => EditorAction.None
                 };
             }
 
             // Ctrl+` (backtick) for toggling line numbers
             if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.KeyChar == '`')
             {
-                return FileTextEditorAction.ToggleLineNumbers;
+                return EditorAction.ToggleLineNumbers;
             }
 
-            return FileTextEditorAction.None;
+            return EditorAction.None;
         }
 
         /// <summary>

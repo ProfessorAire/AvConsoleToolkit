@@ -11,21 +11,18 @@
 // </copyright>
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AvConsoleToolkit.Configuration;
 using AvConsoleToolkit.Crestron;
-using AvConsoleToolkit.Editors;
 using AvConsoleToolkit.Ssh;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Sftp
+namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 {
     /// <summary>
     /// Command that allows in-line editing of files on remote Crestron devices.
@@ -95,7 +92,7 @@ namespace AvConsoleToolkit.Commands.Sftp
                 }
 
                 // Determine which editor to use
-                var editorPath = this.GetEditorForFile(settings.RemoteFilePath, settings);
+                var editorPath = this.GetEditorForFile(settings.RemoteFilePath, settings.UseBuiltinEditor);
 
                 if (string.IsNullOrEmpty(editorPath))
                 {
@@ -157,7 +154,7 @@ namespace AvConsoleToolkit.Commands.Sftp
                         Directory.CreateDirectory(localDir);
                     }
 
-                    // Download to temporary file.
+                    // Download to temporary file first, then move
                     using (var fileStream = new FileStream(localPath, FileMode.Create, FileAccess.Write))
                     {
                         await connection.DownloadFileAsync(settings.RemoteFilePath, fileStream, cancellationToken);
@@ -196,7 +193,7 @@ namespace AvConsoleToolkit.Commands.Sftp
         private async Task EditWithBuiltinEditorAsync(ISshConnection connection, FileEditSettings settings, string localPath, CancellationToken cancellationToken)
         {
             var displayName = Path.GetFileName(settings.RemoteFilePath);
-            FileTextEditor? editor = null;
+            BuiltinEditor? editor = null;
 
             async Task OnSaveAsync()
             {
@@ -237,7 +234,7 @@ namespace AvConsoleToolkit.Commands.Sftp
                 }
             }
 
-            editor = new FileTextEditor(localPath, displayName, OnSaveAsync);
+            editor = new BuiltinEditor(localPath, displayName, OnSaveAsync);
             await editor.RunAsync(cancellationToken);
         }
 
@@ -245,7 +242,7 @@ namespace AvConsoleToolkit.Commands.Sftp
         {
             var displayName = Path.GetFileName(settings.RemoteFilePath);
             AnsiConsole.MarkupLine($"[cyan]Opening '{displayName}' in external editor: {editorPath}[/]");
-            AnsiConsole.MarkupLine("[dim]File will be uploaded automatically when saved. Press Ctrl+K to kill watcher.[/]");
+            AnsiConsole.MarkupLine("[dim]File will be uploaded automatically when saved. Press Ctrl+C to stop watching.[/]");
 
             // Start file system watcher
             var fileDir = Path.GetDirectoryName(localPath) ?? ".";
@@ -325,19 +322,6 @@ namespace AvConsoleToolkit.Commands.Sftp
             }
 
             watcher.Changed += OnFileChanged;
-            var waitFlags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            { 
-                ["code"] = "--wait",
-                ["subl"] = "--wait",
-                ["atom"] = "--wait",
-                ["codium"] = "--wait",
-                ["kate"] = "--block",
-                ["gedit"] = "--wait",
-                ["geany"] = "--new-instance --wait",
-                ["notepad++"] = "-multiInst -notabbar -nosession -noPlugin"
-            };
-
-            var waitFlag = waitFlags.TryGetValue(editorPath, out var flag) ? $" {flag}" : string.Empty;
 
             // Start the external editor
             var process = new Process
@@ -345,28 +329,18 @@ namespace AvConsoleToolkit.Commands.Sftp
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = editorPath,
-                    Arguments = $"\"{localPath}\"{waitFlag}",
+                    Arguments = $"\"{localPath}\"",
                     UseShellExecute = true
                 }
             };
 
-            var startTime = DateTime.Now;
             process.Start();
+
             // Wait for user to cancel or editor to close
             try
             {
                 while (!cancellationToken.IsCancellationRequested && !process.HasExited)
                 {
-                    if (System.Console.KeyAvailable)
-                    {
-                        var key = System.Console.ReadKey();
-                        if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.Key == ConsoleKey.K)
-                        {
-                            watcher.Dispose();
-                            throw new OperationCanceledException();
-                        }
-                    }
-
                     await Task.Delay(500, cancellationToken);
                 }
             }
@@ -384,46 +358,27 @@ namespace AvConsoleToolkit.Commands.Sftp
             }
             else
             {
-                if (DateTime.Now - startTime < TimeSpan.FromSeconds(5))
-                {
-                    AnsiConsole.MarkupLine("[red]Editor closed within 5 seconds of opening. If this was not intended, your selected editor may not block properly and may require an additional flag set to function properly, such as 'code --wait'.[/]");
-                }
-                else
-                {
-                    AnsiConsole.MarkupLine("[dim]Editor closed.[/]");
-                }
+                AnsiConsole.MarkupLine("[dim]Editor closed.[/]");
             }
         }
 
-        private string? GetEditorForFile(string filePath, FileEditSettings settings)
+        private string? GetEditorForFile(string filePath, bool useBuiltinOnly)
         {
-            if (settings.UseBuiltinEditor)
+            if (useBuiltinOnly)
             {
                 return null;
-            }
-
-            if (!string.IsNullOrWhiteSpace(settings.ExternalEditor))
-            {
-                return settings.ExternalEditor;
             }
 
             var extension = Path.GetExtension(filePath)?.TrimStart('.').ToLowerInvariant() ?? string.Empty;
             var editorSettings = AppConfig.Settings.Editor;
 
             // Check for extension-specific mapping in the dictionary
-            if (!string.IsNullOrWhiteSpace(editorSettings?.Mappings))
+            if (editorSettings?.Mappings != null && editorSettings.Mappings.TryGetValue(extension, out var editorPath))
             {
-                var mappings = editorSettings.Mappings.Split(';', StringSplitOptions.RemoveEmptyEntries).ToDictionary(s => s.Split('=')[0], s => s.Split('=')[1]);
-                if(mappings.TryGetValue(extension, out var editorPath) && !string.IsNullOrWhiteSpace(editorPath))
+                if (!string.IsNullOrWhiteSpace(editorPath))
                 {
                     return editorPath;
                 }
-            }
-            
-            // Check if a default editor other than the built-in editor is configured.
-            if (!string.IsNullOrWhiteSpace(editorSettings?.DefaultEditor))
-            {
-                return editorSettings.DefaultEditor;
             }
 
             // No editor configured - use built-in

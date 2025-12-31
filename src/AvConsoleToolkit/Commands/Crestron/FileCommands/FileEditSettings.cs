@@ -13,27 +13,13 @@
 using System.ComponentModel;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Sftp
+namespace AvConsoleToolkit.Commands.Crestron.FileCommands
 {
     /// <summary>
     /// Settings used to configure the <see cref="FileEditCommand"/> behavior.
     /// </summary>
     public sealed class FileEditSettings : CommandSettings
     {
-        /// <summary>
-        /// Gets or sets the path to the external application used to open the file.
-        /// </summary>
-        [CommandOption("-e|--external")]
-        [Description("Specify an external application to open the file with.")]
-        public string ExternalEditor { get; set; } = string.Empty;
-
-        /// <summary>
-        /// Force download even if file exists locally in cache.
-        /// </summary>
-        [CommandOption("-f|--force")]
-        [Description("Force download even if file exists in local cache")]
-        public bool ForceDownload { get; set; }
-
         /// <summary>
         /// Target device address or hostname.
         /// </summary>
@@ -56,13 +42,6 @@ namespace AvConsoleToolkit.Commands.Sftp
         public string RemoteFilePath { get; set; } = string.Empty;
 
         /// <summary>
-        /// Use the built-in editor regardless of configured external editors.
-        /// </summary>
-        [CommandOption("-b|--builtin")]
-        [Description("Use the built-in editor instead of any configured external editor. Overrides the '-e|--external' option, if present.")]
-        public bool UseBuiltinEditor { get; set; }
-
-        /// <summary>
         /// Username to use for SSH/SFTP authentication.
         /// </summary>
         [CommandOption("-u|--username", false)]
@@ -75,5 +54,19 @@ namespace AvConsoleToolkit.Commands.Sftp
         [CommandOption("-v|--verbose")]
         [Description("Show detailed diagnostic output")]
         public bool Verbose { get; set; }
+
+        /// <summary>
+        /// Force download even if file exists locally in cache.
+        /// </summary>
+        [CommandOption("-f|--force")]
+        [Description("Force download even if file exists in local cache")]
+        public bool ForceDownload { get; set; }
+
+        /// <summary>
+        /// Use the built-in editor regardless of configured external editors.
+        /// </summary>
+        [CommandOption("-b|--builtin")]
+        [Description("Use the built-in editor instead of any configured external editor")]
+        public bool UseBuiltinEditor { get; set; }
     }
 }
