@@ -68,12 +68,6 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         /// <returns>The editor action to perform.</returns>
         public virtual EditorAction GetAction(ConsoleKeyInfo key)
         {
-            // F2 for save (works in all terminals, Ctrl+S is often intercepted by PowerShell)
-            if (key.Key == ConsoleKey.F2 && key.Modifiers == 0)
-            {
-                return EditorAction.Save;
-            }
-
             if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
             {
                 return key.Key switch
@@ -122,7 +116,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                 "  Ctrl+A             Select all",
                 "",
                 "Editing:",
-                "  F2        Save file (or Ctrl+S)",
+                "  Ctrl+S    Save file",
                 "  Ctrl+C    Copy selection",
                 "  Ctrl+X    Cut selection",
                 "  Ctrl+U    Paste",
@@ -146,7 +140,7 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
         /// <returns>The shortcut hint text.</returns>
         public virtual string GetShortcutHints()
         {
-            return " ^Q Exit  F2/^S Save  ^G Help  ^K Cut Line  ^C Copy  ^U Paste";
+            return " ^Q Exit  ^S Save  ^G Help  ^K Cut Line  ^C Copy  ^U Paste";
         }
     }
 }
