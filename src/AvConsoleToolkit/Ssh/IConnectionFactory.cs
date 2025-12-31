@@ -10,7 +10,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-namespace AvConsoleToolkit.Connections
+namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
     /// Factory for creating and caching SSH connections.
@@ -18,24 +18,24 @@ namespace AvConsoleToolkit.Connections
     public interface IConnectionFactory
     {
         /// <summary>
-        /// Gets a composite connection with SSH key authentication.
+        /// Gets an SSH connection with SSH key authentication.
         /// Attempts to authenticate using the user's local SSH key.
         /// </summary>
         /// <param name="hostAddress">The host address to connect to.</param>
         /// <param name="port">The port to connect on.</param>
         /// <param name="username">The username for authentication.</param>
         /// <returns>An SSH connection instance.</returns>
-        ICompositeConnection GetCompositeConnection(string hostAddress, int port, string username);
+        ISshConnection GetSshConnection(string hostAddress, int port, string username);
 
         /// <summary>
-        /// Gets a composite connection with password authentication.
+        /// Gets an SSH connection with password authentication.
         /// </summary>
         /// <param name="hostAddress">The host address to connect to.</param>
         /// <param name="port">The port to connect on.</param>
         /// <param name="username">The username for authentication.</param>
         /// <param name="password">The password for authentication.</param>
         /// <returns>An SSH connection instance.</returns>
-        ICompositeConnection GetCompositeConnection(string hostAddress, int port, string username, string password);
+        ISshConnection GetSshConnection(string hostAddress, int port, string username, string password);
 
         /// <summary>
         /// Releases all cached connections.

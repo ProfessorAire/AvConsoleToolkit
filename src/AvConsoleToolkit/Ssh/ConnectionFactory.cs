@@ -15,16 +15,16 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
-namespace AvConsoleToolkit.Connections
+namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
     /// Factory implementation for creating and caching SSH connections.
     /// </summary>
-    public class ConnectionFactory : Connections.IConnectionFactory
+    public class ConnectionFactory : IConnectionFactory
     {
-        private static readonly Lazy<Connections.ConnectionFactory> LazyInstance = new(() => new Connections.ConnectionFactory());
+        private static readonly Lazy<ConnectionFactory> LazyInstance = new(() => new ConnectionFactory());
 
-        private readonly Dictionary<string, Connections.ICompositeConnection> connectionCache = [];
+        private readonly Dictionary<string, ISshConnection> connectionCache = [];
 
         private readonly Lock lockObject = new();
 
@@ -38,10 +38,10 @@ namespace AvConsoleToolkit.Connections
         /// <summary>
         /// Gets the singleton instance of the connection factory.
         /// </summary>
-        public static Connections.ConnectionFactory Instance => LazyInstance.Value;
+        public static ConnectionFactory Instance => LazyInstance.Value;
 
         /// <inheritdoc/>
-        public Connections.ICompositeConnection GetCompositeConnection(string hostAddress, int port, string username)
+        public ISshConnection GetSshConnection(string hostAddress, int port, string username)
         {
             if (string.IsNullOrEmpty(hostAddress))
             {
@@ -78,14 +78,14 @@ namespace AvConsoleToolkit.Connections
                     return existingConnection;
                 }
 
-                var connection = new CompositeConnection(hostAddress, port, username, privateKeyPath, usePrivateKey: true);
+                var connection = new SshConnection(hostAddress, port, username, privateKeyPath, usePrivateKey: true);
                 this.connectionCache[key] = connection;
                 return connection;
             }
         }
 
         /// <inheritdoc/>
-        public Connections.ICompositeConnection GetCompositeConnection(string hostAddress, int port, string username, string password)
+        public ISshConnection GetSshConnection(string hostAddress, int port, string username, string password)
         {
             if (string.IsNullOrEmpty(hostAddress))
             {
@@ -111,7 +111,7 @@ namespace AvConsoleToolkit.Connections
                     return existingConnection;
                 }
 
-                var connection = new CompositeConnection(hostAddress, port, username, password);
+                var connection = new SshConnection(hostAddress, port, username, password);
                 this.connectionCache[key] = connection;
                 return connection;
             }

@@ -12,7 +12,7 @@
 
 using System;
 
-namespace AvConsoleToolkit.Connections
+namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
     /// Represents the connection status and attempt counts for SFTP and SSH operations to a specified host.    
@@ -29,7 +29,7 @@ namespace AvConsoleToolkit.Connections
         /// connecting, connected, or disconnected. Handlers receive the new connection status as a parameter. This
         /// event is typically used to monitor connection health or trigger actions in response to state
         /// changes.</remarks>
-        public event Action<Connections.ConnectionStatus>? SftpStateChanged;
+        public event Action<ConnectionStatus>? SftpStateChanged;
 
         /// <summary>
         /// Occurs when the SSH connection status changes.
@@ -37,7 +37,7 @@ namespace AvConsoleToolkit.Connections
         /// <remarks>Subscribe to this event to receive notifications whenever the SSH connection
         /// transitions between states, such as connecting, connected, or disconnected. The event provides the new
         /// connection status as a parameter.</remarks>
-        public event Action<Connections.ConnectionStatus>? SshStateChanged;
+        public event Action<ConnectionStatus>? SshStateChanged;
 
         /// <summary>
         /// Gets the network address of the host to which the connection will be established.
@@ -57,7 +57,7 @@ namespace AvConsoleToolkit.Connections
         /// <summary>
         /// Gets or sets the current status of the SFTP connection.
         /// </summary>
-        public Connections.ConnectionStatus SftpState
+        public ConnectionStatus SftpState
         {
             get => field;
             set
@@ -83,7 +83,7 @@ namespace AvConsoleToolkit.Connections
         /// <summary>
         /// Gets or sets the current SSH connection status.
         /// </summary>
-        public Connections.ConnectionStatus SshState
+        public ConnectionStatus SshState
         {
             get => field;
             set

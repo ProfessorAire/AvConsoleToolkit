@@ -18,7 +18,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using AvConsoleToolkit.Connections;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Spectre.Console.Rendering;
@@ -65,7 +64,7 @@ namespace AvConsoleToolkit.Commands
 
         private bool showingHistoryMenu;
 
-        private Connections.ICompositeConnection? deviceConnection;
+        private Ssh.ISshConnection? sshConnection;
 
         /// <summary>
         /// Gets the command branch prefix for nested commands (e.g., "crestron").
@@ -100,7 +99,7 @@ namespace AvConsoleToolkit.Commands
         /// Gets the current SSH connection.
         /// This allows derived classes to share the connection with nested commands.
         /// </summary>
-        protected ICompositeConnection? SshConnection => this.deviceConnection;
+        protected Ssh.ISshConnection? SshConnection => this.sshConnection;
 
         /// <summary>
         /// Executes the pass-through command, establishing an SSH connection and entering interactive mode.
@@ -403,24 +402,24 @@ namespace AvConsoleToolkit.Commands
         {
             try
             {
-                this.deviceConnection = Connections.ConnectionFactory.Instance.GetCompositeConnection(host, 22, username, password);
+                this.sshConnection = Ssh.ConnectionFactory.Instance.GetSshConnection(host, 22, username, password);
 
                 // Set the maximum reconnection attempts from settings
-                this.deviceConnection.MaxReconnectionAttempts = Configuration.AppConfig.Settings.PassThrough.NumberOfReconnectionAttempts;
+                this.sshConnection.MaxReconnectionAttempts = Configuration.AppConfig.Settings.PassThrough.NumberOfReconnectionAttempts;
 
                 // Subscribe to connection events for handling disconnection/reconnection
-                this.deviceConnection.ShellDisconnected += this.OnShellDisconnected;
-                this.deviceConnection.ShellReconnected += this.OnShellReconnected;
+                this.sshConnection.ShellDisconnected += this.OnShellDisconnected;
+                this.sshConnection.ShellReconnected += this.OnShellReconnected;
 
                 // Explicitly establish the shell connection
-                if (!await this.deviceConnection.ConnectShellAsync(cancellationToken))
+                if (!await this.sshConnection.ConnectShellAsync(cancellationToken))
                 {
                     return false;
                 }
 
                 await this.OnConnectedAsync(cancellationToken);
 
-                return this.deviceConnection?.IsShellConnected ?? false;
+                return this.sshConnection?.IsConnected ?? false;
             }
             catch (Exception ex)
             {
@@ -431,13 +430,13 @@ namespace AvConsoleToolkit.Commands
 
         private async Task ExitSessionAsync()
         {
-            if (this.deviceConnection != null && this.deviceConnection.IsShellConnected)
+            if (this.sshConnection != null && this.sshConnection.IsConnected)
             {
                 try
                 {
                     AnsiConsole.WriteLine($"> {this.ExitCommand}");
                     AnsiConsole.MarkupLine("[yellow]Disconnecting...[/]");
-                    await this.deviceConnection.WriteLineAsync(this.ExitCommand);
+                    await this.sshConnection.WriteLineAsync(this.ExitCommand);
                     await Task.Delay(500); // Give device time to process exit command
                 }
                 catch
@@ -784,7 +783,7 @@ namespace AvConsoleToolkit.Commands
             var components = new List<IRenderable>();
 
             // Don't render the prompt if disconnected
-            if (this.isDisconnected || (!this.deviceConnection?.IsShellConnected ?? true))
+            if (this.isDisconnected || (!this.sshConnection?.IsConnected ?? true))
             {
                 return new Markup(string.Empty);
             }
@@ -933,7 +932,7 @@ namespace AvConsoleToolkit.Commands
 
         private async Task RunInteractiveSessionAsync(CancellationToken cancellationToken)
         {
-            if (this.deviceConnection == null)
+            if (this.sshConnection == null)
             {
                 return;
             }
@@ -963,9 +962,9 @@ namespace AvConsoleToolkit.Commands
                             continue;
                         }
 
-                        if (this.deviceConnection?.IsShellConnected == true && this.deviceConnection.DataAvailable)
+                        if (this.sshConnection?.IsConnected == true && this.sshConnection.DataAvailable)
                         {
-                            var data = await this.deviceConnection.ReadAsync(sessionToken);
+                            var data = await this.sshConnection.ReadAsync(sessionToken);
                             lock (this.outputBuffer)
                             {
                                 if (this.Prompt is null)
@@ -1340,7 +1339,7 @@ namespace AvConsoleToolkit.Commands
                                             if (!await this.HandleSpecialKeyAsync(keyInfo, sessionToken))
                                             {
                                                 // Default: send to device
-                                                await this.deviceConnection.WriteLineAsync($"{this.currentLine}\t");
+                                                await this.sshConnection.WriteLineAsync($"{this.currentLine}\t");
                                             }
                                             needsUpdate = false;
                                             break;
@@ -1540,7 +1539,7 @@ namespace AvConsoleToolkit.Commands
 
         private async Task SubmitCommandAsync(string command, CancellationToken cancellationToken)
         {
-            if (this.deviceConnection == null || string.IsNullOrWhiteSpace(command))
+            if (this.sshConnection == null || string.IsNullOrWhiteSpace(command))
             {
                 // Just return, prompt will update naturally
                 return;
@@ -1584,7 +1583,7 @@ namespace AvConsoleToolkit.Commands
             AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
 
             // Send the mapped command to device
-            await this.deviceConnection.WriteLineAsync(mappedCommand);
+            await this.sshConnection.WriteLineAsync(mappedCommand);
             this.commandHistory?.AddCommand(command);
         }
     }

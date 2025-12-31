@@ -1,4 +1,4 @@
-// <copyright file="ConnectionStatus.cs">
+// <copyright file="ISshConnection.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,46 +10,23 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-namespace AvConsoleToolkit.Connections
+namespace AvConsoleToolkit.Ssh
 {
     /// <summary>
-    /// Status of a connection.
+    /// Provides access to both shell and file transfer functionality over SSH.
     /// </summary>
-    public enum ConnectionStatus
+    public interface ISshConnection : IShellConnection, IFileTransferConnection
     {
         /// <summary>
-        /// The connection is not established.
+        /// Gets a value indicating whether the connection is established.
         /// </summary>
-        NotConnected = 0,
+        new bool IsConnected { get; }
 
         /// <summary>
-        /// The connection is being established.
+        /// Gets or sets the maximum number of reconnection attempts.
+        /// A value of 0 means no automatic reconnection.
+        /// A value of -1 means unlimited reconnection attempts.
         /// </summary>
-        Connecting,
-
-        /// <summary>
-        /// The connection has been established.
-        /// </summary>
-        Connected,
-
-        /// <summary>
-        /// The connection was lost.
-        /// </summary>
-        LostConnection,
-
-        /// <summary>
-        /// The connection is being re-established.
-        /// </summary>
-        Reconnecting,
-
-        /// <summary>
-        /// A connection attempt failed.
-        /// </summary>
-        ConnectionFailed,
-
-        /// <summary>
-        /// The connection is being closed.
-        /// </summary>
-        Disconnecting,
+        int MaxReconnectionAttempts { get; set; }
     }
 }
