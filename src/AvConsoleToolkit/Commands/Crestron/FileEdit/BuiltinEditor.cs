@@ -138,11 +138,12 @@ namespace AvConsoleToolkit.Commands.Crestron.FileEdit
             using var writer = new StreamWriter(this.filePath, false, Encoding.UTF8);
             for (int i = 0; i < this.lines.Count; i++)
             {
-                writer.Write(this.lines[i].ToString());
-                if (i < this.lines.Count - 1)
+                if (i > 0)
                 {
                     writer.WriteLine();
                 }
+
+                writer.Write(this.lines[i].ToString());
             }
 
             this.modified = false;

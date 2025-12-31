@@ -89,13 +89,9 @@ namespace AvConsoleToolkit.Commands.Crestron.FileEdit
                 var remoteDir = Path.GetDirectoryName(remotePath);
                 if (!string.IsNullOrEmpty(remoteDir))
                 {
-                    // Sanitize each directory component separately, then combine
-                    var dirParts = remoteDir.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
-                    foreach (var part in dirParts)
-                    {
-                        hostDir = Path.Combine(hostDir, this.SanitizeFileName(part));
-                    }
-
+                    var sanitizedRemoteDir = remoteDir.Replace('/', Path.DirectorySeparatorChar)
+                                                       .Replace('\\', Path.DirectorySeparatorChar);
+                    hostDir = Path.Combine(hostDir, this.SanitizeFileName(sanitizedRemoteDir));
                     Directory.CreateDirectory(hostDir);
                 }
 
@@ -198,15 +194,14 @@ namespace AvConsoleToolkit.Commands.Crestron.FileEdit
 
         private string SanitizeFileName(string input)
         {
-            var invalidChars = new HashSet<char>(Path.GetInvalidFileNameChars());
-            var result = new System.Text.StringBuilder(input.Length);
-
-            foreach (var c in input)
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var result = input;
+            foreach (var c in invalidChars)
             {
-                result.Append(invalidChars.Contains(c) ? '_' : c);
+                result = result.Replace(c, '_');
             }
 
-            return result.ToString();
+            return result;
         }
     }
 }
