@@ -15,6 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -67,8 +68,6 @@ namespace AvConsoleToolkit.Editors
 
         private int detectedTabDepth = -1;
 
-        private bool handlingKeysInSecondaryProcess;
-
         private bool hasSelection;
 
         // Header colors (may be overridden by file extension)
@@ -118,8 +117,6 @@ namespace AvConsoleToolkit.Editors
         private int tabDepth;
 
         private int uploadProgress = -1;
-
-        private bool verbose;
 
         private bool wordWrapEnabled;
 
@@ -206,6 +203,8 @@ namespace AvConsoleToolkit.Editors
             }
         }
 
+        private bool handlingExit;
+
         /// <summary>
         /// Runs the editor session.
         /// </summary>
@@ -241,7 +240,7 @@ namespace AvConsoleToolkit.Editors
                             this.needsRender = true;
                         }
 
-                        if (Console.KeyAvailable && !this.handlingKeysInSecondaryProcess)
+                        if (Console.KeyAvailable && !this.handlingExit)
                         {
                             var key = Console.ReadKey(true);
                             _ = this.HandleKeyAsync(key, cancellationToken);
@@ -489,6 +488,24 @@ namespace AvConsoleToolkit.Editors
             return (this.selectionEndRow, this.selectionEndCol, this.selectionStartRow, this.selectionStartCol);
         }
 
+        private bool TryGetNormalizedSelection(out (int startRow, int startCol, int endRow, int endCol) selection)
+        {
+            if (!this.hasSelection)
+            {
+                selection = (-1, -1, -1, -1);
+                return false;
+            }
+
+            selection = this.GetNormalizedSelection();
+            if (selection.startRow == selection.endRow && selection.startCol == selection.endCol)
+            {
+                selection = (-1, -1, -1, -1);
+                return false;
+            }
+
+            return true;
+        }
+
         private string GetSelectedText()
         {
             if (!this.hasSelection)
@@ -636,7 +653,7 @@ namespace AvConsoleToolkit.Editors
             {
                 try
                 {
-                    this.handlingKeysInSecondaryProcess = true;
+                    this.handlingExit = true;
                     this.SetStatusMessage("Save changes before exit? (Y)es/(N)o/(C)ancel");
                     this.needsRender = true;
 
@@ -676,7 +693,7 @@ namespace AvConsoleToolkit.Editors
                 }
                 finally
                 {
-                    this.handlingKeysInSecondaryProcess = false;
+                    this.handlingExit = false;
                 }
             }
 
@@ -1031,6 +1048,8 @@ namespace AvConsoleToolkit.Editors
                 }
             }
         }
+
+        private bool verbose;
 
         private void HandlePaste()
         {
@@ -1670,7 +1689,7 @@ namespace AvConsoleToolkit.Editors
 
                             if (lineText.Length > contentWidth)
                             {
-                                lineText = lineText[..contentWidth - 1];
+                                lineText = lineText[..(contentWidth - 1)];
                                 needsContinuationGlyph = true;
                             }
                             else
@@ -1732,7 +1751,7 @@ namespace AvConsoleToolkit.Editors
                 var help = this.keyBindings.GetShortcutHints();
                 while (help.Length > windowWidth)
                 {
-                    help = $"{help[..help.LastIndexOf(' ', help.LastIndexOf(' ') - 1) - 1]}...";
+                    help = $"{help[..(help.LastIndexOf(' ', help.LastIndexOf(' ') - 1) - 1)]}...";
                 }
 
                 this.WriteText(help.PadRight(windowWidth), this.currentTheme.HintBar);
@@ -2310,103 +2329,95 @@ namespace AvConsoleToolkit.Editors
                 var helpLines = this.keyBindings.GetHelpText();
                 var scrollOffset = 0;
                 var needsRender = true;
-                this.handlingKeysInSecondaryProcess = true;
 
-                try
+                while (true)
                 {
-                    while (true)
+                    if (needsRender)
                     {
-                        if (needsRender)
+                        var windowHeight = Console.WindowHeight;
+                        var windowWidth = Console.WindowWidth;
+                        var contentHeight = windowHeight - 2; // Header + Footer
+
+                        Console.CursorVisible = false;
+
+                        // Header
+                        Console.SetCursorPosition(0, 0);
+                        var header = "Editor Help";
+                        if (header.Length >= windowWidth)
                         {
-                            var windowHeight = Console.WindowHeight;
-                            var windowWidth = Console.WindowWidth;
-                            var contentHeight = windowHeight - 2; // Header + Footer
-
-                            Console.CursorVisible = false;
-
-                            // Header
-                            Console.SetCursorPosition(0, 0);
-                            var header = "Editor Help";
-                            if (header.Length >= windowWidth)
-                            {
-                                header = header.Substring(0, windowWidth);
-                            }
-
-                            var paddingLeft = Math.Max(0, (windowWidth - header.Length) / 2);
-                            var paddingRight = Math.Max(0, windowWidth - paddingLeft - header.Length);
-                            var headerLine = $"{new string(' ', paddingLeft)}{header}{new string(' ', paddingRight)}";
-                            if (headerLine.Length > windowWidth)
-                            {
-                                headerLine = headerLine.Substring(0, windowWidth);
-                            }
-
-                            this.WriteText(headerLine, this.currentTheme.Header, true);
-
-                            // Content with scrolling
-                            for (var i = 0; i < contentHeight; i++)
-                            {
-                                Console.SetCursorPosition(0, i + 1);
-                                var lineIndex = scrollOffset + i;
-                                if (lineIndex < helpLines.Length)
-                                {
-                                    var line = helpLines[lineIndex];
-                                    if (line.Length > windowWidth)
-                                    {
-                                        line = line.Substring(0, windowWidth);
-                                    }
-
-                                    this.WriteText(line.PadRight(windowWidth), this.currentTheme.TextEditor);
-                                }
-                                else
-                                {
-                                    this.WriteText(new string(' ', windowWidth), this.currentTheme.TextEditor);
-                                }
-                            }
-
-                            // Footer - always at the last line
-                            Console.SetCursorPosition(0, windowHeight - 1);
-                            var footerText = helpLines.Length > contentHeight
-                                ? $" ^Q Return | Scroll ({scrollOffset + 1}-{Math.Min(scrollOffset + contentHeight, helpLines.Length)}/{helpLines.Length})"
-                                : " Press Ctrl+Q to return to editor";
-                            if (footerText.Length > windowWidth)
-                            {
-                                footerText = footerText.Substring(0, windowWidth);
-                            }
-
-                            this.WriteText(footerText.PadRight(windowWidth), this.currentTheme.HintBar);
-                            needsRender = false;
+                            header = header.Substring(0, windowWidth);
                         }
 
-                        if (Console.KeyAvailable)
+                        var paddingLeft = Math.Max(0, (windowWidth - header.Length) / 2);
+                        var paddingRight = Math.Max(0, windowWidth - paddingLeft - header.Length);
+                        var headerLine = $"{new string(' ', paddingLeft)}{header}{new string(' ', paddingRight)}";
+                        if (headerLine.Length > windowWidth)
                         {
-                            var key = Console.ReadKey(true);
-                            if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.Key == ConsoleKey.Q)
+                            headerLine = headerLine.Substring(0, windowWidth);
+                        }
+
+                        this.WriteText(headerLine, this.currentTheme.Header, true);
+
+                        // Content with scrolling
+                        for (var i = 0; i < contentHeight; i++)
+                        {
+                            Console.SetCursorPosition(0, i + 1);
+                            var lineIndex = scrollOffset + i;
+                            if (lineIndex < helpLines.Length)
                             {
-                                break;
+                                var line = helpLines[lineIndex];
+                                if (line.Length > windowWidth)
+                                {
+                                    line = line.Substring(0, windowWidth);
+                                }
+
+                                this.WriteText(line.PadRight(windowWidth), this.currentTheme.TextEditor);
                             }
-                            else if (key.Key == ConsoleKey.UpArrow || key.Key == ConsoleKey.PageUp)
+                            else
                             {
-                                var scrollAmount = key.Key == ConsoleKey.PageUp ? Console.WindowHeight - 3 : 1;
-                                scrollOffset = Math.Max(0, scrollOffset - scrollAmount);
-                                needsRender = true;
-                            }
-                            else if (key.Key == ConsoleKey.DownArrow || key.Key == ConsoleKey.PageDown)
-                            {
-                                var scrollAmount = key.Key == ConsoleKey.PageDown ? Console.WindowHeight - 3 : 1;
-                                var maxScroll = Math.Max(0, helpLines.Length - (Console.WindowHeight - 2));
-                                scrollOffset = Math.Min(maxScroll, scrollOffset + scrollAmount);
-                                needsRender = true;
+                                this.WriteText(new string(' ', windowWidth), this.currentTheme.TextEditor);
                             }
                         }
-                        else
+
+                        // Footer - always at the last line
+                        Console.SetCursorPosition(0, windowHeight - 1);
+                        var footerText = helpLines.Length > contentHeight
+                            ? $" ^Q Return | Scroll ({scrollOffset + 1}-{Math.Min(scrollOffset + contentHeight, helpLines.Length)}/{helpLines.Length})"
+                            : " Press Ctrl+Q to return to editor";
+                        if (footerText.Length > windowWidth)
                         {
-                            Thread.Sleep(50);
+                            footerText = footerText.Substring(0, windowWidth);
+                        }
+
+                        this.WriteText(footerText.PadRight(windowWidth), this.currentTheme.HintBar);
+                        needsRender = false;
+                    }
+
+                    if (Console.KeyAvailable)
+                    {
+                        var key = Console.ReadKey(true);
+                        if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.Key == ConsoleKey.Q)
+                        {
+                            break;
+                        }
+                        else if (key.Key == ConsoleKey.UpArrow || key.Key == ConsoleKey.PageUp)
+                        {
+                            var scrollAmount = key.Key == ConsoleKey.PageUp ? Console.WindowHeight - 3 : 1;
+                            scrollOffset = Math.Max(0, scrollOffset - scrollAmount);
+                            needsRender = true;
+                        }
+                        else if (key.Key == ConsoleKey.DownArrow || key.Key == ConsoleKey.PageDown)
+                        {
+                            var scrollAmount = key.Key == ConsoleKey.PageDown ? Console.WindowHeight - 3 : 1;
+                            var maxScroll = Math.Max(0, helpLines.Length - (Console.WindowHeight - 2));
+                            scrollOffset = Math.Min(maxScroll, scrollOffset + scrollAmount);
+                            needsRender = true;
                         }
                     }
-                }
-                finally
-                {
-                    this.handlingKeysInSecondaryProcess = false;
+                    else
+                    {
+                        Thread.Sleep(50);
+                    }
                 }
             });
         }
@@ -2445,24 +2456,6 @@ namespace AvConsoleToolkit.Editors
 
             this.settings.ThemeName = themeName;
             this.SelectTheme();
-        }
-
-        private bool TryGetNormalizedSelection(out (int startRow, int startCol, int endRow, int endCol) selection)
-        {
-            if (!this.hasSelection)
-            {
-                selection = (-1, -1, -1, -1);
-                return false;
-            }
-
-            selection = this.GetNormalizedSelection();
-            if (selection.startRow == selection.endRow && selection.startCol == selection.endCol)
-            {
-                selection = (-1, -1, -1, -1);
-                return false;
-            }
-
-            return true;
         }
 
         private void Undo()
