@@ -1557,13 +1557,10 @@ namespace AvConsoleToolkit.Commands
                 return;
             }
 
-            // Apply command mappings if available
-            var mappedCommand = this.ApplyCommandMapping(command);
-
             // Check for nested command
-            if (mappedCommand.StartsWith(':'))
+            if (command.StartsWith(':'))
             {
-                var nestedCommand = mappedCommand[1..].Trim();
+                var nestedCommand = command[1..].Trim();
                 this.commandHistory?.AddCommand(command);
 
                 // Don't echo the command - the nested command will handle its own output
@@ -1578,6 +1575,9 @@ namespace AvConsoleToolkit.Commands
                 // Return immediately - Live display will exit, then command will execute
                 return;
             }
+
+            // Apply command mappings if available
+            var mappedCommand = this.ApplyCommandMapping(command);
 
             // Echo the original command (not the mapped one) for user clarity
             AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");

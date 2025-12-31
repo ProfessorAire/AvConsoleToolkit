@@ -97,10 +97,7 @@ namespace AvConsoleToolkit.Editors
             this.tabDepth = this.settings.TabDepth;
 
             // Initialize theme
-
-            //TODO: Update the editor to use the user's selected theme by default, instead of always selecting the user theme.
             this.currentTheme = FileTextEditorTheme.User;
-            this.SelectTheme();
             this.LoadHeaderColors();
         }
 
@@ -1554,50 +1551,27 @@ namespace AvConsoleToolkit.Editors
             {
                 case "User":
                     themeName = "NordDark";
+                    this.currentTheme = FileTextEditorTheme.NordDark;
                     break;
                 case "NordDark":
                     themeName = "NordSemiDark";
+                    this.currentTheme = FileTextEditorTheme.NordSemiDark;
                     break;
                 case "NordSemiDark":
                     themeName = "NordSemiLight";
+                    this.currentTheme = FileTextEditorTheme.NordSemiLight;
                     break;
                 case "NordSemiLight":
                     themeName = "NordLight";
+                    this.currentTheme = FileTextEditorTheme.NordLight;
                     break;
                 default:
                     themeName = "User";
+                    this.currentTheme = FileTextEditorTheme.User;
                     break;
             }
 
             this.settings.Theme = themeName;
-            this.SelectTheme();
-        }
-
-        private void SelectTheme()
-        {
-            var themeName = this.settings.Theme;
-            switch (themeName)
-            {
-                case "User":
-                    this.currentTheme = FileTextEditorTheme.User;
-                    break;
-                case "NordDark":
-                    this.currentTheme = FileTextEditorTheme.NordDark;
-                    break;
-                case "NordLight":
-                    this.currentTheme = FileTextEditorTheme.NordLight;
-                    break;
-                case "NordSemiDark":
-                    this.currentTheme = FileTextEditorTheme.NordSemiDark;
-                    break;
-                case "NordSemiLight":
-                    this.currentTheme = FileTextEditorTheme.NordSemiLight;
-                    break;
-                default:
-                    this.currentTheme = FileTextEditorTheme.User;
-                    break;
-            }
-
             this.SetStatusMessage($"Theme: {themeName}");
         }
     }
