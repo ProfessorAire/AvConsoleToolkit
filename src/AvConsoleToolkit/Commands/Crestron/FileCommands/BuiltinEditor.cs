@@ -610,7 +610,6 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                 // Calculate the screen row by counting how many wrapped rows are above the cursor
                 var screenRowCount = 0;
                 var wrapIndentLen = wrapIndent.Length;
-                displayCol = gutterWidth; // Default value
 
                 for (int lineIdx = this.scrollOffsetY; lineIdx <= this.cursorRow && screenRowCount < editorHeight; lineIdx++)
                 {
@@ -624,27 +623,24 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                     if (lineIdx < this.cursorRow)
                     {
                         // Count all wrapped rows for lines before cursor
-                        // Empty lines still take one row
-                        if (lineText.Length == 0)
+                        var pos = 0;
+                        var firstSegment = true;
+                        while (pos < lineText.Length || firstSegment)
                         {
+                            var segmentWidth = contentWidth - (firstSegment ? 0 : wrapIndentLen) - 1;
                             screenRowCount++;
-                        }
-                        else
-                        {
-                            var pos = 0;
-                            var firstSegment = true;
-                            while (pos < lineText.Length)
+                            pos += segmentWidth;
+                            firstSegment = false;
+                            if (pos <= 0)
                             {
-                                var segmentWidth = contentWidth - (firstSegment ? 0 : wrapIndentLen) - 1;
-                                if (segmentWidth <= 0)
-                                {
-                                    segmentWidth = 1; // Safety: at least 1 character per segment
-                                }
-
-                                screenRowCount++;
-                                pos += segmentWidth;
-                                firstSegment = false;
+                                break; // Safety
                             }
+                        }
+
+                        // At minimum one row per line
+                        if (screenRowCount == 0 || (lineText.Length == 0))
+                        {
+                            screenRowCount = Math.Max(screenRowCount, 1);
                         }
                     }
                     else
@@ -655,11 +651,6 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                         while (pos <= this.cursorCol)
                         {
                             var segmentWidth = contentWidth - (firstSegment ? 0 : wrapIndentLen) - 1;
-                            if (segmentWidth <= 0)
-                            {
-                                segmentWidth = 1; // Safety: at least 1 character per segment
-                            }
-
                             if (this.cursorCol < pos + segmentWidth || pos + segmentWidth >= lineText.Length)
                             {
                                 // Cursor is in this segment
@@ -671,11 +662,16 @@ namespace AvConsoleToolkit.Commands.Crestron.FileCommands
                             screenRowCount++;
                             pos += segmentWidth;
                             firstSegment = false;
+                            if (segmentWidth <= 0)
+                            {
+                                break; // Safety
+                            }
                         }
                     }
                 }
 
                 displayRow = screenRowCount + 1; // +1 for header
+                displayCol = gutterWidth + Math.Min(this.cursorCol, contentWidth - 2);
             }
             else
             {
