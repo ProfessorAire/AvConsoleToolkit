@@ -24,6 +24,18 @@ string? GetLatestSemVerTag()
     return first;
 }
 
+string? GetLatestProductionTag()
+{
+    var outStr = RunGit("tag --list \"v*.*.*\" --sort=-v:refname");
+    if (string.IsNullOrWhiteSpace(outStr)) return null;
+    
+    // Filter out pre-release tags (containing '-') to get only production releases
+    var tags = outStr.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+    var productionTag = tags.FirstOrDefault(t => !t.Contains('-'));
+    
+    return productionTag;
+}
+
 int GetLatestBetaNumber(string baseVersionString)
 {
     // Get all tags matching the base version with beta suffix
@@ -123,6 +135,16 @@ Task("Default")
     var latestTag = GetLatestSemVerTag();
     Information($"Latest tag: {latestTag ?? "(none)"}");
     
+    // For changelog on main branch, use latest production tag
+    // For pre-releases, use the actual latest tag
+    var changelogBaseTag = latestTag;
+    if (isMainBranch)
+    {
+        changelogBaseTag = GetLatestProductionTag();
+    }
+    
+    Information($"Changelog base tag: {changelogBaseTag ?? "(none)"}");
+    
     // Check if latest tag is a pre-release
     bool latestIsPrerelease = latestTag != null && latestTag.Contains("-beta.");
     SemanticVersion baseVersion;
@@ -136,7 +158,7 @@ Task("Default")
         baseVersion = ParseSemVerTag(latestTag);
     }
 
-    var commits = GetCommitsSince(latestTag);
+    var commits = GetCommitsSince(changelogBaseTag);
     if (commits.Count == 0)
     {
         throw new Exception("No changes to release. If you need to republish a version, please delete the previous tag and rerun the workflow.");
