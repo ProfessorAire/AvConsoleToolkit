@@ -42,6 +42,7 @@ int GetLatestBetaNumber(string baseVersionString)
     }
     
     return 0;
+
 }
 
 IList<(string Sha, string Header, string Body)> GetCommitsSince(string? fromTag)
@@ -121,7 +122,19 @@ Task("Default")
 
     var latestTag = GetLatestSemVerTag();
     Information($"Latest tag: {latestTag ?? "(none)"}");
-    SemanticVersion baseVersion = latestTag is null ? new SemanticVersion(1, 0, 0) : ParseSemVerTag(latestTag);
+    
+    // Check if latest tag is a pre-release
+    bool latestIsPrerelease = latestTag != null && latestTag.Contains("-beta.");
+    SemanticVersion baseVersion;
+    
+    if (latestTag is null)
+    {
+        baseVersion = new SemanticVersion(1, 0, 0);
+    }
+    else
+    {
+        baseVersion = ParseSemVerTag(latestTag);
+    }
 
     var commits = GetCommitsSince(latestTag);
     if (commits.Count == 0)
@@ -161,17 +174,92 @@ Task("Default")
     }
 
     SemanticVersion newVersion;
+    string currentBumpLevel = anyBreaking ? "major" : anyFeat ? "minor" : "patch";
     
     if (latestTag is null)
     {
         Information("No existing version tag found. Assuming base version {0}.", baseVersion);
         newVersion = baseVersion;
     }
+    else if (isMainBranch || !latestIsPrerelease)
+    {
+        // On main branch or if previous was not a prerelease, always bump version
+        newVersion = Bump(baseVersion, currentBumpLevel);
+        Information($"New version: {newVersion} (level: {currentBumpLevel})");
+    }
     else
     {
-        string level = anyBreaking ? "major" : anyFeat ? "minor" : anyFix ? "patch" : "patch";
-        newVersion = Bump(baseVersion, level);
-        Information($"New version: {newVersion} (level: {level})");
+        // Latest tag is a pre-release, we need to check what level the previous tag was at
+        // Get the tag before the latest pre-release to compare bump levels
+        var previousProdTag = GetLatestSemVerTag();
+        var allTags = RunGit("tag --list \"v*.*.*\" --sort=-v:refname").Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        
+        // Find the production tag that the current pre-release is based on
+        string? baseProductionTag = null;
+        foreach (var tag in allTags)
+        {
+            if (!tag.Contains("-beta."))
+            {
+                var tagVersion = ParseSemVerTag(tag);
+                // Check if this production version is less than current base version
+                if (tagVersion.Major < baseVersion.Major ||
+                    (tagVersion.Major == baseVersion.Major && tagVersion.Minor < baseVersion.Minor) ||
+                    (tagVersion.Major == baseVersion.Major && tagVersion.Minor == baseVersion.Minor && tagVersion.Patch < baseVersion.Patch))
+                {
+                    baseProductionTag = tag;
+                    break;
+                }
+            }
+        }
+        
+        // Get all commits from the base production tag to the latest pre-release tag
+        // This tells us what bump level created the current pre-release
+        string? previousBumpLevel = null;
+        if (baseProductionTag != null)
+        {
+            var preReleaseCommits = GetCommitsSince(baseProductionTag);
+            bool hadBreaking = false;
+            bool hadFeat = false;
+            
+            foreach (var c in preReleaseCommits)
+            {
+                if (IsBreaking(c)) { hadBreaking = true; break; }
+                var type = GetType(c) ?? "other";
+                if (type == "feat") hadFeat = true;
+            }
+            
+            previousBumpLevel = hadBreaking ? "major" : hadFeat ? "minor" : "patch";
+            Information($"Previous pre-release was created with bump level: {previousBumpLevel}");
+        }
+        
+        // Compare current bump level with previous
+        // If current is same or lower, just increment beta; otherwise bump version
+        bool shouldBumpVersion = false;
+        
+        if (previousBumpLevel == null)
+        {
+            // Can't determine, assume we need new version
+            shouldBumpVersion = true;
+        }
+        else if (currentBumpLevel == "major" && previousBumpLevel != "major")
+        {
+            shouldBumpVersion = true;
+        }
+        else if (currentBumpLevel == "minor" && previousBumpLevel == "patch")
+        {
+            shouldBumpVersion = true;
+        }
+        
+        if (shouldBumpVersion)
+        {
+            newVersion = Bump(baseVersion, currentBumpLevel);
+            Information($"New version: {newVersion} (level: {currentBumpLevel}, requires version bump from previous {previousBumpLevel})");
+        }
+        else
+        {
+            newVersion = baseVersion;
+            Information($"Bump level '{currentBumpLevel}' does not exceed previous '{previousBumpLevel}', incrementing beta number only.");
+        }
     }
     
     // Add pre-release suffix if not on main branch
