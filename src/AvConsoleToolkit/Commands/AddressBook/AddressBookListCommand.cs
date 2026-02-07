@@ -48,38 +48,20 @@ namespace AvConsoleToolkit.Commands.AddressBook
                            return 1;
                        }
 
-                       // Split multiple locations
-                       var locations = addressBookLocations
-                    .Split([';', ','], StringSplitOptions.RemoveEmptyEntries)
-                    .Select(loc => loc.Trim())
-                    .Where(loc => !string.IsNullOrWhiteSpace(loc));
-
-                       var allEntries = new List<(ToolboxAddressBook.Entry Entry, string SourceFile)>();
-
-                       foreach (var location in locations)
-                       {
-                           // Check if location is a directory
-                           if (Directory.Exists(location))
-                           {
-                               // Search for .xadr files
-                               var xadrFiles = Directory.GetFiles(location, "*.xadr", SearchOption.AllDirectories);
-                               foreach (var file in xadrFiles)
-                               {
-                                   var entries = ReadAllEntriesFromFile(file);
-                                   allEntries.AddRange(entries.Select(e => (e, file)));
-                               }
-                           }
-                           else if (File.Exists(location) && location.EndsWith(".xadr", StringComparison.OrdinalIgnoreCase))
-                           {
-                               var entries = ReadAllEntriesFromFile(location);
-                               allEntries.AddRange(entries.Select(e => (e, location)));
-                           }
-                       }
+                       var allEntries = AvConsoleToolkit.Crestron.ToolboxAddressBook.ListAllEntries(addressBookLocations);
 
                        if (allEntries.Count == 0)
                        {
                            AnsiConsole.MarkupLine("[yellow]No address book entries found.[/]");
                            return 0;
+                       }
+
+                       if (settings.ShowPasswords)
+                       {
+                           if(!AnsiConsole.Confirm("[red]Warning: Displaying passwords may expose sensitive information. Are you sure you want to continue?[/]", false))
+                           {
+                               return 0;
+                           }
                        }
 
                        // Display entries
@@ -96,24 +78,24 @@ namespace AvConsoleToolkit.Commands.AddressBook
                            table.AddColumn("[dim]Source File[/]");
                        }
 
-                       foreach (var (entry, sourceFile) in allEntries.OrderBy(e => e.Entry.DeviceName))
-                {
-                    var deviceName = !string.IsNullOrWhiteSpace(entry.DeviceName) ? entry.DeviceName.EscapeMarkup() : "[dim]<unknown>[/]";
-                    var ipAddress = !string.IsNullOrWhiteSpace(entry.HostAddress) ? entry.HostAddress : "[dim]<none>[/]";
-                    var username = !string.IsNullOrEmpty(entry.Username) ? entry.Username.EscapeMarkup() : "[dim]<none>[/]";
-                    var password = !string.IsNullOrEmpty(entry.Password) ? "[dim]******[/]" : "[dim]<none>[/]";
+                       foreach (var entry in allEntries.OrderBy(e => e.DeviceName))
+                       {
+                           var deviceName = !string.IsNullOrWhiteSpace(entry.DeviceName) ? entry.DeviceName.EscapeMarkup() : "[dim]<unknown>[/]";
+                           var ipAddress = !string.IsNullOrWhiteSpace(entry.HostAddress) ? entry.HostAddress : "[dim]<none>[/]";
+                           var username = !string.IsNullOrEmpty(entry.Username) ? entry.Username.EscapeMarkup() : "[dim]<none>[/]";
+                           var password = !string.IsNullOrEmpty(entry.Password) ? settings.ShowPasswords ? entry.Password.EscapeMarkup() : "[dim]******[/]" : "[dim]<none>[/]";
 
-                    var comment = !string.IsNullOrEmpty(entry.Comment) ? entry.Comment.EscapeMarkup() : "[dim]<none>[/]";
+                           var comment = !string.IsNullOrEmpty(entry.Comment) ? entry.Comment.EscapeMarkup() : "[dim]<none>[/]";
 
-                    if (settings.Detailed)
-                    {
-                        table.AddRow(deviceName, ipAddress, username, password, comment, Path.GetFileName(sourceFile).EscapeMarkup());
-                    }
-                    else
-                    {
-                        table.AddRow(deviceName, ipAddress, username, password, comment);
-                    }
-                }
+                           if (settings.Detailed)
+                           {
+                               table.AddRow(deviceName, ipAddress, username, password, comment, Path.GetFileName(entry.SourceFile).EscapeMarkup());
+                           }
+                           else
+                           {
+                               table.AddRow(deviceName, ipAddress, username, password, comment);
+                           }
+                       }
 
                        AnsiConsole.Write(table);
                        AnsiConsole.MarkupLine($"\n[dim]Total entries: {allEntries.Count}[/]");

@@ -13,7 +13,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -148,6 +147,7 @@ namespace AvConsoleToolkit.Commands
 
                     settings.Username = entry.Username;
                     settings.Password = entry.Password;
+                    host = entry.HostAddress;
                 }
 
                 // Initialize command history
@@ -584,7 +584,7 @@ namespace AvConsoleToolkit.Commands
 
         private void HandleEscape()
         {
-            if (this.showingHistoryMenu || this.historyMenuItems != null && this.historyMenuItems.Count > 0)
+            if (this.showingHistoryMenu || (this.historyMenuItems != null && this.historyMenuItems.Count > 0))
             {
                 this.HideHistoryMenu();
                 this.historyMenuItems = null;
@@ -776,7 +776,7 @@ namespace AvConsoleToolkit.Commands
             }
         }
 
-        LiveDisplay? liveDisplay;
+        private LiveDisplay? liveDisplay;
 
         private IRenderable RenderPrompt()
         {

@@ -27,5 +27,10 @@ namespace AvConsoleToolkit.Commands.AddressBook
         [Description("Show detailed information including source file for each entry.")]
         [DefaultValue(false)]
         public bool Detailed { get; set; }
+
+        [CommandOption("--show-passwords")]
+        [Description("Shows passwords for entries that include them. Not recommended when in a shared environment, your console is being recorded, or screenshots are being taken.")]
+        [DefaultValue(false)]
+        public bool ShowPasswords { get; set; }
     }
 }
