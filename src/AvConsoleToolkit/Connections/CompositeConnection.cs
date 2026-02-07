@@ -1007,8 +1007,8 @@ namespace AvConsoleToolkit.Connections
             this.reconnectionTask = Task.Run(async () =>
             {
                 var attemptCount = 0;
-                int maxAttempts = this.MaxReconnectionAttempts;
-                bool isInfiniteAttempts = maxAttempts < 0;
+                var maxAttempts = this.MaxReconnectionAttempts;
+                var isInfiniteAttempts = maxAttempts < 0;
                 int[] backoffDelays = [1000, 1000, 2000, 3000, 5000, 5000, 10000];
 
                 // Start live status for reconnection
@@ -1034,7 +1034,7 @@ namespace AvConsoleToolkit.Connections
 
                         if (attemptCount > 1)
                         {
-                            int delayIndex = Math.Min(attemptCount - 2, backoffDelays.Length - 1);
+                            var delayIndex = Math.Min(attemptCount - 2, backoffDelays.Length - 1);
                             await Task.Delay(backoffDelays[delayIndex]);
                         }
 

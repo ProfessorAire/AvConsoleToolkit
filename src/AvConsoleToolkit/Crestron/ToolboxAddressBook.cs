@@ -11,6 +11,7 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -93,6 +94,94 @@ namespace AvConsoleToolkit.Crestron
 
                     return null;
                 });
+        }
+
+        /// <summary>
+        /// Retrieves all address book entries from the configured address book locations.
+        /// </summary>
+        /// <remarks>Address book locations are read from the application configuration and may include
+        /// multiple directories or files, separated by semicolons or commas. Only entries from files with the ".xadr"
+        /// extension are parsed. Encrypted address books are not supported and will be skipped.</remarks>
+        /// <returns>An immutable list of <see cref="Entry"/> objects representing all parsed address book entries. The list will
+        /// be empty if no entries are found or if no address book locations are configured.</returns>
+        public static IReadOnlyList<Entry> ListAllEntries(string addressBookLocations)
+        {
+            var entries = new List<Entry>();
+            if (string.IsNullOrWhiteSpace(addressBookLocations))
+            {
+                return entries;
+            }
+
+            // Split multiple locations if needed (semicolon or comma separated)
+            var locations = addressBookLocations.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var location in locations)
+            {
+                var entry = new Entry();
+                // Check if location is a directory
+                if (Directory.Exists(location))
+                {
+                    // Search for .xadr files (XML format)
+                    var xadrFiles = Directory.GetFiles(location, "*.xadr", SearchOption.AllDirectories);
+                    foreach (var file in xadrFiles)
+                    {
+                        try
+                        {
+                            var parser = new FileIniDataParser();
+                            var data = parser.ReadFile(file);
+                            if (!data.Sections.ContainsSection("ComSpecs"))
+                            {
+                                continue;
+                            }
+                            foreach (var iniEntry in data["ComSpecs"])
+                            {
+                                var parsed = ParseComSpecEntry(iniEntry.KeyName, iniEntry.Value);
+                                if (parsed != null)
+                                {
+                                    // Try to get the comment from the Notes section
+                                    if (data.Sections.ContainsSection("Notes") && parsed.DeviceName != null)
+                                    {
+                                        parsed.Comment = data["Notes"][parsed.DeviceName];
+                                    }
+                                    entries.Add(parsed);
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            AnsiConsole.MarkupLineInterpolated($"[red]Error: Failed to parse address book file: [/][fucshia]'{file}[/][red]'. The address book may be encrypted; encrypted address books are not supported.");
+                        }
+                    }
+                }
+                else if (File.Exists(location) && location.EndsWith(".xadr", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parser = new FileIniDataParser();
+                    var data = parser.ReadFile(location);
+
+                    if (!data.Sections.ContainsSection("ComSpecs"))
+                    {
+                        continue;
+                    }
+
+                    foreach (var cs in data["ComSpecs"])
+                    {
+                        var parsed = ParseComSpecEntry(cs.KeyName, cs.Value);
+                        if (parsed != null)
+                        {
+                            // Try to get the comment from the Notes section
+                            if (data.Sections.ContainsSection("Notes") && parsed.DeviceName != null)
+                            {
+                                parsed.Comment = data["Notes"][parsed.DeviceName];
+                            }
+
+                            parsed.SourceFile = location;
+
+                            entries.Add(parsed);
+                        }
+                    }
+                }
+            }
+
+            return entries;
         }
 
         /// <summary>
@@ -242,6 +331,11 @@ namespace AvConsoleToolkit.Crestron
             /// Gets or sets the username used to connect to the device.
             /// </summary>
             public string? Username { get; set; }
+
+            /// <summary>
+            /// Gets the file the entry was loaded from.
+            /// </summary>
+            public string? SourceFile { get; set; }
         }
     }
 }
