@@ -12,6 +12,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using Microsoft.Data.Sqlite;
 
@@ -279,8 +280,8 @@ namespace AvConsoleToolkit.CertManager
                 Organization = reader.GetString(3),
                 CertificatePem = (byte[])reader[4],
                 PrivateKeyPem = (byte[])reader[5],
-                CreatedUtc = DateTime.Parse(reader.GetString(6)),
-                ExpiresUtc = DateTime.Parse(reader.GetString(7)),
+                CreatedUtc = DateTime.ParseExact(reader.GetString(6), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+                ExpiresUtc = DateTime.ParseExact(reader.GetString(7), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
             };
         }
 
@@ -296,8 +297,8 @@ namespace AvConsoleToolkit.CertManager
                 PrivateKeyPem = (byte[])reader[5],
                 Pfx = (byte[])reader[6],
                 FullChainPem = (byte[])reader[7],
-                CreatedUtc = DateTime.Parse(reader.GetString(8)),
-                ExpiresUtc = DateTime.Parse(reader.GetString(9)),
+                CreatedUtc = DateTime.ParseExact(reader.GetString(8), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+                ExpiresUtc = DateTime.ParseExact(reader.GetString(9), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
             };
         }
 
