@@ -42,5 +42,11 @@ namespace AvConsoleToolkit.Configuration
         /// </summary>
         [DefaultValue(true)]
         bool UseHistoryForPassThrough { get; set; }
+
+        /// <summary>
+        /// Gets a value indicating whether to display the current local working directory above the prompt in pass-through sessions.
+        /// </summary>
+        [DefaultValue(false)]
+        bool ShowWorkingDirectoryOnPrompt { get; set; }
     }
 }
