@@ -12,6 +12,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -789,6 +790,12 @@ namespace AvConsoleToolkit.Commands
                 return new Markup(string.Empty);
             }
 
+            // Optionally show the current local working directory above the prompt
+            if (Configuration.AppConfig.Settings.PassThrough.ShowWorkingDirectoryOnPrompt)
+            {
+                components.Add(new Markup($"{Environment.NewLine}[dim]{Environment.CurrentDirectory.EscapeMarkup()}[/]"));
+            }
+
             // Build the prompt line with cursor position and selection highlighting
             var promptPrefix = $"{Environment.NewLine}{this.Prompt ?? "ACT>"} ";
             var markup = new StringBuilder(promptPrefix.EscapeMarkup());
@@ -1559,6 +1566,33 @@ namespace AvConsoleToolkit.Commands
                 return;
             }
 
+            // Handle local filesystem commands (prefixed with /)
+            if (command.StartsWith('/'))
+            {
+                var localArgs = command[1..].Trim();
+                var parts = localArgs.Split([' ', '\t'], 2, StringSplitOptions.RemoveEmptyEntries);
+                var localCmd = parts.Length > 0 ? parts[0] : string.Empty;
+                var localArg = parts.Length > 1 ? parts[1].Trim() : string.Empty;
+
+                AnsiConsole.WriteLine($"{this.Prompt ?? "ACT>"} {command}");
+                this.commandHistory?.AddCommand(command);
+
+                if (localCmd.Equals("cd", StringComparison.OrdinalIgnoreCase))
+                {
+                    HandleLocalCdCommand(localArg);
+                }
+                else if (localCmd.Equals("ls", StringComparison.OrdinalIgnoreCase))
+                {
+                    HandleLocalLsCommand(localArg);
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine($"[yellow]Unknown local command: '/{localCmd.EscapeMarkup()}'. Supported local commands: /cd, /ls[/]");
+                }
+
+                return;
+            }
+
             // Apply command mappings if available
             var mappedCommand = this.ApplyCommandMapping(command);
 
@@ -1587,6 +1621,84 @@ namespace AvConsoleToolkit.Commands
             // Send the mapped command to device
             await this.deviceConnection.WriteLineAsync(mappedCommand);
             this.commandHistory?.AddCommand(command);
+        }
+
+        /// <summary>
+        /// Handles the local <c>/cd</c> command to change the current working directory on the local machine.
+        /// </summary>
+        /// <param name="path">The target directory path. Relative paths are resolved against the current working directory.</param>
+        private static void HandleLocalCdCommand(string path)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    AnsiConsole.MarkupLine($"[dim]{Environment.CurrentDirectory.EscapeMarkup()}[/]");
+                    return;
+                }
+
+                var newPath = Path.IsPathRooted(path)
+                    ? path
+                    : Path.Combine(Environment.CurrentDirectory, path);
+
+                newPath = Path.GetFullPath(newPath);
+
+                if (!Directory.Exists(newPath))
+                {
+                    AnsiConsole.MarkupLine($"[red]Directory not found:[/] {newPath.EscapeMarkup()}");
+                    return;
+                }
+
+                Directory.SetCurrentDirectory(newPath);
+                AnsiConsole.MarkupLine($"[dim]{newPath.EscapeMarkup()}[/]");
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[red]Error changing directory:[/] {ex.Message.EscapeMarkup()}");
+            }
+        }
+
+        /// <summary>
+        /// Handles the local <c>/ls</c> command to list the contents of a directory on the local machine.
+        /// </summary>
+        /// <param name="path">
+        /// The directory path to list. Relative paths are resolved against the current working directory.
+        /// If empty, the current working directory is used.
+        /// </param>
+        private static void HandleLocalLsCommand(string path)
+        {
+            try
+            {
+                var targetPath = string.IsNullOrWhiteSpace(path)
+                    ? Environment.CurrentDirectory
+                    : Path.IsPathRooted(path) ? path : Path.Combine(Environment.CurrentDirectory, path);
+
+                targetPath = Path.GetFullPath(targetPath);
+
+                if (!Directory.Exists(targetPath))
+                {
+                    AnsiConsole.MarkupLine($"[red]Directory not found:[/] {targetPath.EscapeMarkup()}");
+                    return;
+                }
+
+                foreach (var dir in Directory.EnumerateDirectories(targetPath)
+                    .Select(Path.GetFileName)
+                    .OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                {
+                    AnsiConsole.MarkupLine($"[blue]{dir?.EscapeMarkup() ?? string.Empty}[/]");
+                }
+
+                foreach (var file in Directory.EnumerateFiles(targetPath)
+                    .Select(Path.GetFileName)
+                    .OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                {
+                    AnsiConsole.MarkupLine(file?.EscapeMarkup() ?? string.Empty);
+                }
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[red]Error listing directory:[/] {ex.Message.EscapeMarkup()}");
+            }
         }
     }
 }
