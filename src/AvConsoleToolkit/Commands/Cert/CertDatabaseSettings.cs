@@ -1,4 +1,4 @@
-﻿// <copyright file="ISettings.cs">
+// <copyright file="CertDatabaseSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,39 +10,22 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Diagnostics.CodeAnalysis;
+using System.ComponentModel;
+using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Configuration
+namespace AvConsoleToolkit.Commands.Cert
 {
     /// <summary>
-    /// Defines the application's settings.
+    /// Base settings shared by all cert commands, providing a database path option.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface ISettings
+    public class CertDatabaseSettings : CommandSettings
     {
         /// <summary>
-        /// Gets the current connection settings used to configure connection related functionality.
+        /// Gets or sets the path to the certificate database. If not specified, the working directory is checked
+        /// for a <c>certmanager.db</c> file, followed by the global database path from configuration.
         /// </summary>
-        IConnectionSettings Connection { get; }
-
-        /// <summary>
-        /// Gets the current editor settings used to configure file editing functionality.
-        /// </summary>
-        IEditorSettings Editor { get; }
-
-        /// <summary>
-        /// Gets the settings for the built-in text editor.
-        /// </summary>
-        IBuiltInEditorSettings BuiltInEditor { get; }
-
-        /// <summary>
-        /// Gets the current connection settings used to configure Pass Through specific functionality.
-        /// </summary>
-        IPassThroughSettings PassThrough { get; }
-
-        /// <summary>
-        /// Gets the certificate manager settings.
-        /// </summary>
-        ICertManagerSettings CertManager { get; }
+        [CommandOption("--db <PATH>")]
+        [Description("Path to the certificate database file. If not specified, searches the working directory and global config.")]
+        public string? DatabasePath { get; set; }
     }
 }

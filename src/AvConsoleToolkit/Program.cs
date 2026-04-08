@@ -135,6 +135,56 @@ namespace AvConsoleToolkit
                         .WithExample(["ab", "l", "10.10.120.12"]);
                 })
                 .WithAlias("ab");
+
+                config.AddBranch("cert", cert =>
+                {
+                    cert.SetDescription("Certificate management commands for creating CAs, device certificates, and more.");
+
+                    cert.AddBranch("ca", ca =>
+                    {
+                        ca.SetDescription("Manage Certificate Authorities.");
+
+                        ca.AddCommand<Commands.Cert.Ca.CaCreateCommand>("create")
+                            .WithDescription("Create a new Certificate Authority")
+                            .WithExample(["cert", "ca", "create", "my-ca", "-o", "MyOrg", "-c", "US"]);
+
+                        ca.AddCommand<Commands.Cert.Ca.CaListCommand>("list")
+                            .WithAlias("ls")
+                            .WithDescription("List all Certificate Authorities")
+                            .WithExample(["cert", "ca", "list"]);
+
+                        ca.AddCommand<Commands.Cert.Ca.CaDeleteCommand>("delete")
+                            .WithAlias("rm")
+                            .WithDescription("Delete a Certificate Authority and all its certificates")
+                            .WithExample(["cert", "ca", "delete", "my-ca"])
+                            .WithExample(["cert", "ca", "rm", "my-ca", "-y"]);
+                    });
+
+                    cert.AddCommand<Commands.Cert.CertCreateCommand>("create")
+                        .WithDescription("Create a new device certificate signed by a CA")
+                        .WithExample(["cert", "create", "server.example.com", "--ca", "my-ca", "-i", "192.168.1.100"]);
+
+                    cert.AddCommand<Commands.Cert.CertListCommand>("list")
+                        .WithAlias("ls")
+                        .WithDescription("List all device certificates with expiration status")
+                        .WithExample(["cert", "list"])
+                        .WithExample(["cert", "ls", "--ca", "my-ca"]);
+
+                    cert.AddCommand<Commands.Cert.CertExportCommand>("export")
+                        .WithDescription("Export a device certificate from the database to disk")
+                        .WithExample(["cert", "export", "1"])
+                        .WithExample(["cert", "export", "1", "-o", "/path/to/output"]);
+
+                    cert.AddCommand<Commands.Cert.CertDeleteCommand>("delete")
+                        .WithAlias("rm")
+                        .WithDescription("Delete a device certificate from the database")
+                        .WithExample(["cert", "delete", "1"])
+                        .WithExample(["cert", "rm", "1", "-y"]);
+
+                    cert.AddCommand<Commands.Cert.CertInstallRootCommand>("install-root")
+                        .WithDescription("Install a root CA certificate on the local machine (Windows/Linux)")
+                        .WithExample(["cert", "install-root", "my-ca"]);
+                });
             });
 
             var result = App.Run(args);

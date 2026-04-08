@@ -1,4 +1,4 @@
-﻿// <copyright file="ISettings.cs">
+// <copyright file="CertificateAuthorityRecord.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,39 +10,53 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Diagnostics.CodeAnalysis;
+using System;
 
-namespace AvConsoleToolkit.Configuration
+namespace AvConsoleToolkit.CertManager
 {
     /// <summary>
-    /// Defines the application's settings.
+    /// Represents a Certificate Authority stored in the database.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface ISettings
+    public sealed class CertificateAuthorityRecord
     {
         /// <summary>
-        /// Gets the current connection settings used to configure connection related functionality.
+        /// Gets or sets the unique identifier for the CA.
         /// </summary>
-        IConnectionSettings Connection { get; }
+        public int Id { get; set; }
 
         /// <summary>
-        /// Gets the current editor settings used to configure file editing functionality.
+        /// Gets or sets the name of the CA (e.g., "my-ca").
         /// </summary>
-        IEditorSettings Editor { get; }
+        public string Name { get; set; } = string.Empty;
 
         /// <summary>
-        /// Gets the settings for the built-in text editor.
+        /// Gets or sets the country code (e.g., "US").
         /// </summary>
-        IBuiltInEditorSettings BuiltInEditor { get; }
+        public string Country { get; set; } = string.Empty;
 
         /// <summary>
-        /// Gets the current connection settings used to configure Pass Through specific functionality.
+        /// Gets or sets the organization/unit name.
         /// </summary>
-        IPassThroughSettings PassThrough { get; }
+        public string Organization { get; set; } = string.Empty;
 
         /// <summary>
-        /// Gets the certificate manager settings.
+        /// Gets or sets the PEM-encoded CA certificate.
         /// </summary>
-        ICertManagerSettings CertManager { get; }
+        public byte[] CertificatePem { get; set; } = [];
+
+        /// <summary>
+        /// Gets or sets the PEM-encoded CA private key.
+        /// </summary>
+        public byte[] PrivateKeyPem { get; set; } = [];
+
+        /// <summary>
+        /// Gets or sets the date and time the CA was created (UTC).
+        /// </summary>
+        public DateTime CreatedUtc { get; set; }
+
+        /// <summary>
+        /// Gets or sets the date and time the CA certificate expires (UTC).
+        /// </summary>
+        public DateTime ExpiresUtc { get; set; }
     }
 }

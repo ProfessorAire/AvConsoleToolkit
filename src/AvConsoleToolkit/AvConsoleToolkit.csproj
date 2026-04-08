@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0-preview.3.25171.6" />
     <SupportedPlatform Include="Windows;Linux" />
     <PackageReference Include="Config.Net" Version="5.2.1" />
     <PackageReference Include="ini-parser" Version="2.5.2" NoWarn="NU1701" />

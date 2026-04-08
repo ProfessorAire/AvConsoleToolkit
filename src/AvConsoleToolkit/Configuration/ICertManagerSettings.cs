@@ -1,4 +1,4 @@
-﻿// <copyright file="ISettings.cs">
+// <copyright file="ICertManagerSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,39 +10,17 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace AvConsoleToolkit.Configuration
 {
     /// <summary>
-    /// Defines the application's settings.
+    /// Configuration settings for the certificate manager.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface ISettings
+    public interface ICertManagerSettings
     {
         /// <summary>
-        /// Gets the current connection settings used to configure connection related functionality.
+        /// Gets or sets the global database path for the certificate manager.
+        /// When set, this database is used if no database is found in the working directory.
         /// </summary>
-        IConnectionSettings Connection { get; }
-
-        /// <summary>
-        /// Gets the current editor settings used to configure file editing functionality.
-        /// </summary>
-        IEditorSettings Editor { get; }
-
-        /// <summary>
-        /// Gets the settings for the built-in text editor.
-        /// </summary>
-        IBuiltInEditorSettings BuiltInEditor { get; }
-
-        /// <summary>
-        /// Gets the current connection settings used to configure Pass Through specific functionality.
-        /// </summary>
-        IPassThroughSettings PassThrough { get; }
-
-        /// <summary>
-        /// Gets the certificate manager settings.
-        /// </summary>
-        ICertManagerSettings CertManager { get; }
+        string? DatabasePath { get; set; }
     }
 }

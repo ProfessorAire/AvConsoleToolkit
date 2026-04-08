@@ -1,4 +1,4 @@
-﻿// <copyright file="ISettings.cs">
+// <copyright file="CertInstallRootSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,39 +10,33 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Diagnostics.CodeAnalysis;
+using System.ComponentModel;
+using Spectre.Console;
+using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Configuration
+namespace AvConsoleToolkit.Commands.Cert
 {
     /// <summary>
-    /// Defines the application's settings.
+    /// Settings for the <c>cert install-root</c> command.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface ISettings
+    public class CertInstallRootSettings : CertDatabaseSettings
     {
         /// <summary>
-        /// Gets the current connection settings used to configure connection related functionality.
+        /// Gets or sets the name of the Certificate Authority to install.
         /// </summary>
-        IConnectionSettings Connection { get; }
+        [CommandArgument(0, "<CA_NAME>")]
+        [Description("Name of the Certificate Authority to install on the local machine.")]
+        public string CaName { get; set; } = string.Empty;
 
-        /// <summary>
-        /// Gets the current editor settings used to configure file editing functionality.
-        /// </summary>
-        IEditorSettings Editor { get; }
+        /// <inheritdoc/>
+        public override ValidationResult Validate()
+        {
+            if (string.IsNullOrWhiteSpace(CaName))
+            {
+                return ValidationResult.Error("CA name is required.");
+            }
 
-        /// <summary>
-        /// Gets the settings for the built-in text editor.
-        /// </summary>
-        IBuiltInEditorSettings BuiltInEditor { get; }
-
-        /// <summary>
-        /// Gets the current connection settings used to configure Pass Through specific functionality.
-        /// </summary>
-        IPassThroughSettings PassThrough { get; }
-
-        /// <summary>
-        /// Gets the certificate manager settings.
-        /// </summary>
-        ICertManagerSettings CertManager { get; }
+            return ValidationResult.Success();
+        }
     }
 }
