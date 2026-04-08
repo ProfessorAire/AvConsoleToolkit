@@ -46,7 +46,7 @@ namespace AvConsoleToolkit.Configuration
         /// <summary>
         /// Gets a value indicating whether to display the current local working directory above the prompt in pass-through sessions.
         /// </summary>
-        [DefaultValue(false)]
+        [DefaultValue(true)]
         bool ShowWorkingDirectoryOnPrompt { get; set; }
     }
 }
