@@ -791,13 +791,15 @@ namespace AvConsoleToolkit.Commands
             }
 
             // Optionally show the current local working directory above the prompt
+            var addNewLine = true;
             if (Configuration.AppConfig.Settings.PassThrough.ShowWorkingDirectoryOnPrompt)
             {
                 components.Add(new Markup($"{Environment.NewLine}[dim]{Environment.CurrentDirectory.EscapeMarkup()}[/]"));
+                addNewLine = false;
             }
 
             // Build the prompt line with cursor position and selection highlighting
-            var promptPrefix = $"{Environment.NewLine}{this.Prompt ?? "ACT>"} ";
+            var promptPrefix = $"{(addNewLine ? Environment.NewLine : string.Empty)}{this.Prompt ?? "ACT>"} ";
             var markup = new StringBuilder(promptPrefix.EscapeMarkup());
 
             // Build the command line with cursor and selection highlighting
@@ -1680,6 +1682,8 @@ namespace AvConsoleToolkit.Commands
                     AnsiConsole.MarkupLine($"[red]Directory not found:[/] {targetPath.EscapeMarkup()}");
                     return;
                 }
+
+                AnsiConsole.MarkupLine($"[gray]{targetPath}[/]");
 
                 foreach (var dir in Directory.EnumerateDirectories(targetPath)
                     .Select(Path.GetFileName)
