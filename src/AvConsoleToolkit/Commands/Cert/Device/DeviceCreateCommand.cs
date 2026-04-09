@@ -1,4 +1,4 @@
-// <copyright file="CertCreateCommand.cs">
+// <copyright file="DeviceCreateCommand.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -19,16 +19,16 @@ using AvConsoleToolkit.CertManager;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Cert
+namespace AvConsoleToolkit.Commands.Cert.Device
 {
     /// <summary>
     /// Command that creates a new device certificate signed by an existing Certificate Authority.
     /// The certificate is stored in the database and not written to disk unless explicitly exported.
     /// </summary>
-    public sealed class CertCreateCommand : AsyncCommand<CertCreateSettings>
+    public sealed class DeviceCreateCommand : AsyncCommand<DeviceCreateSettings>
     {
         /// <inheritdoc/>
-        public override async Task<int> ExecuteAsync(CommandContext context, CertCreateSettings settings, CancellationToken cancellationToken)
+        public override async Task<int> ExecuteAsync(CommandContext context, DeviceCreateSettings settings, CancellationToken cancellationToken)
         {
             await Task.CompletedTask;
 

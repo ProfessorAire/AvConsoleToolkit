@@ -1,4 +1,4 @@
-// <copyright file="CertExportSettings.cs">
+// <copyright file="CaExportSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -14,41 +14,61 @@ using System.ComponentModel;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Cert
+namespace AvConsoleToolkit.Commands.Cert.Ca
 {
     /// <summary>
-    /// Settings for the <c>cert export</c> command.
+    /// Settings for the <c>cert ca export</c> command.
     /// </summary>
-    public class CertExportSettings : CertDatabaseSettings
+    public class CaExportSettings : CertDatabaseSettings
     {
         /// <summary>
-        /// Gets or sets the ID of the certificate to export.
+        /// Gets or sets the name of the Certificate Authority to export.
         /// </summary>
-        [CommandArgument(0, "<CERT_ID>")]
-        [Description("ID of the device certificate to export.")]
-        public int CertId { get; set; }
+        [CommandArgument(0, "<NAME>")]
+        [Description("Name of the Certificate Authority to export.")]
+        public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the output directory for the exported files.
         /// </summary>
         [CommandOption("-o|--output <DIRECTORY>")]
-        [Description("Output directory for exported certificate files (defaults to working directory).")]
+        [Description("Output directory for exported certificate files (defaults to a folder named after the CA in the working directory).")]
         public string? OutputDirectory { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to export only the PFX file.
+        /// Gets or sets a value indicating whether to export only the PFX bundle.
         /// </summary>
         [CommandOption("--pfx-only")]
         [Description("Export only the PFX bundle.")]
         [DefaultValue(false)]
         public bool PfxOnly { get; set; }
 
+        /// <summary>
+        /// Gets or sets a value indicating whether to export only the certificate PEM (no private key).
+        /// </summary>
+        [CommandOption("--cert-only")]
+        [Description("Export only the certificate PEM (no private key). Useful for distributing to clients.")]
+        [DefaultValue(false)]
+        public bool CertOnly { get; set; }
+
+        /// <summary>
+        /// Gets or sets the password for the PFX export.
+        /// </summary>
+        [CommandOption("--password <PASSWORD>")]
+        [Description("Password for the exported PFX bundle.")]
+        public string? PfxPassword { get; set; }
+
         /// <inheritdoc/>
         public override ValidationResult Validate()
         {
-            if (CertId <= 0)
+            if (string.IsNullOrWhiteSpace(Name))
             {
-                return ValidationResult.Error("Certificate ID must be a positive number.");
+                return ValidationResult.Error("CA name is required.");
+            }
+
+            if (PfxOnly && CertOnly)
+            {
+                return ValidationResult.Error("Cannot specify both --pfx-only and --cert-only.");
             }
 
             return ValidationResult.Success();

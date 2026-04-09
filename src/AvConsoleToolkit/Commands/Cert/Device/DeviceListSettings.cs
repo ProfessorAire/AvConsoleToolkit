@@ -1,4 +1,4 @@
-// <copyright file="CertListSettings.cs">
+// <copyright file="DeviceListSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -13,12 +13,12 @@
 using System.ComponentModel;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Cert
+namespace AvConsoleToolkit.Commands.Cert.Device
 {
     /// <summary>
-    /// Settings for the <c>cert list</c> command.
+    /// Settings for the <c>cert device list</c> command.
     /// </summary>
-    public class CertListSettings : CertDatabaseSettings
+    public class DeviceListSettings : CertDatabaseSettings
     {
         /// <summary>
         /// Gets or sets the CA name to filter certificates by.

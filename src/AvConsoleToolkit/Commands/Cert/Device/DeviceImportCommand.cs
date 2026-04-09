@@ -1,4 +1,4 @@
-// <copyright file="CertImportCommand.cs">
+// <copyright file="DeviceImportCommand.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -20,16 +20,16 @@ using AvConsoleToolkit.CertManager;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Cert
+namespace AvConsoleToolkit.Commands.Cert.Device
 {
     /// <summary>
     /// Command that imports an existing device certificate into the database.
     /// Supports importing from PEM certificate + key files, or from a PFX/PKCS#12 bundle.
     /// </summary>
-    public sealed class CertImportCommand : AsyncCommand<CertImportSettings>
+    public sealed class DeviceImportCommand : AsyncCommand<DeviceImportSettings>
     {
         /// <inheritdoc/>
-        public override async Task<int> ExecuteAsync(CommandContext context, CertImportSettings settings, CancellationToken cancellationToken)
+        public override async Task<int> ExecuteAsync(CommandContext context, DeviceImportSettings settings, CancellationToken cancellationToken)
         {
             var dbPath = CertDatabase.ResolveDatabasePath(settings.DatabasePath)
                 ?? Path.Combine(Environment.CurrentDirectory, CertDatabase.DefaultFileName);

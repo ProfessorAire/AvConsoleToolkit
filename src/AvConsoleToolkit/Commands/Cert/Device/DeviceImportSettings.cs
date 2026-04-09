@@ -1,4 +1,4 @@
-// <copyright file="CertImportSettings.cs">
+// <copyright file="DeviceImportSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -15,12 +15,12 @@ using System.IO;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Cert
+namespace AvConsoleToolkit.Commands.Cert.Device
 {
     /// <summary>
-    /// Settings for the <c>cert import</c> command.
+    /// Settings for the <c>cert device import</c> command.
     /// </summary>
-    public class CertImportSettings : CertDatabaseSettings
+    public class DeviceImportSettings : CertDatabaseSettings
     {
         /// <summary>
         /// Gets or sets the name of the Certificate Authority that signed this certificate.

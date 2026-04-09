@@ -1,4 +1,4 @@
-// <copyright file="CertDeleteSettings.cs">
+// <copyright file="DeviceDeleteSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -14,12 +14,12 @@ using System.ComponentModel;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Cert
+namespace AvConsoleToolkit.Commands.Cert.Device
 {
     /// <summary>
-    /// Settings for the <c>cert delete</c> command.
+    /// Settings for the <c>cert device delete</c> command.
     /// </summary>
-    public class CertDeleteSettings : CertDatabaseSettings
+    public class DeviceDeleteSettings : CertDatabaseSettings
     {
         /// <summary>
         /// Gets or sets the ID of the certificate to delete.

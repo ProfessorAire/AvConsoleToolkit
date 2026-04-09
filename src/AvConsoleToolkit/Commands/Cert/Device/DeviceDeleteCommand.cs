@@ -1,4 +1,4 @@
-// <copyright file="CertDeleteCommand.cs">
+// <copyright file="DeviceDeleteCommand.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -16,15 +16,15 @@ using AvConsoleToolkit.CertManager;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Cert
+namespace AvConsoleToolkit.Commands.Cert.Device
 {
     /// <summary>
     /// Command that deletes a device certificate from the database.
     /// </summary>
-    public sealed class CertDeleteCommand : AsyncCommand<CertDeleteSettings>
+    public sealed class DeviceDeleteCommand : AsyncCommand<DeviceDeleteSettings>
     {
         /// <inheritdoc/>
-        public override async Task<int> ExecuteAsync(CommandContext context, CertDeleteSettings settings, CancellationToken cancellationToken)
+        public override async Task<int> ExecuteAsync(CommandContext context, DeviceDeleteSettings settings, CancellationToken cancellationToken)
         {
             await Task.CompletedTask;
 

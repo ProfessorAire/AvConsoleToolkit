@@ -1,4 +1,4 @@
-// <copyright file="CertListCommand.cs">
+// <copyright file="DeviceListCommand.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -19,15 +19,15 @@ using AvConsoleToolkit.CertManager;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Cert
+namespace AvConsoleToolkit.Commands.Cert.Device
 {
     /// <summary>
     /// Command that lists all device certificates stored in the database, including expiration status.
     /// </summary>
-    public sealed class CertListCommand : AsyncCommand<CertListSettings>
+    public sealed class DeviceListCommand : AsyncCommand<DeviceListSettings>
     {
         /// <inheritdoc/>
-        public override async Task<int> ExecuteAsync(CommandContext context, CertListSettings settings, CancellationToken cancellationToken)
+        public override async Task<int> ExecuteAsync(CommandContext context, DeviceListSettings settings, CancellationToken cancellationToken)
         {
             await Task.CompletedTask;
 

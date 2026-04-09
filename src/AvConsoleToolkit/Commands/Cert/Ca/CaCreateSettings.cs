@@ -36,11 +36,32 @@ namespace AvConsoleToolkit.Commands.Cert.Ca
         public string Country { get; set; } = "US";
 
         /// <summary>
-        /// Gets or sets the organization/unit name.
+        /// Gets or sets the organization name.
         /// </summary>
         [CommandOption("-o|--org <ORGANIZATION>")]
-        [Description("Organization or unit name for the CA certificate.")]
+        [Description("Organization name for the CA certificate.")]
         public string Organization { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Gets or sets the organizational unit name (optional).
+        /// </summary>
+        [CommandOption("--ou <ORG_UNIT>")]
+        [Description("Organizational unit name (optional).")]
+        public string? OrgUnit { get; set; }
+
+        /// <summary>
+        /// Gets or sets the state or province name (optional).
+        /// </summary>
+        [CommandOption("-s|--state <STATE>")]
+        [Description("State or province name (optional).")]
+        public string? State { get; set; }
+
+        /// <summary>
+        /// Gets or sets the locality/city name (optional).
+        /// </summary>
+        [CommandOption("-l|--locality <LOCALITY>")]
+        [Description("Locality or city name (optional).")]
+        public string? Locality { get; set; }
 
         /// <summary>
         /// Gets or sets the number of days the CA certificate is valid.

@@ -1,4 +1,4 @@
-// <copyright file="CertExportCommand.cs">
+// <copyright file="DeviceExportCommand.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -18,16 +18,16 @@ using AvConsoleToolkit.CertManager;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Cert
+namespace AvConsoleToolkit.Commands.Cert.Device
 {
     /// <summary>
     /// Command that exports a device certificate from the database to files on disk.
     /// Certificates are stored in the database and only written to disk when explicitly exported.
     /// </summary>
-    public sealed class CertExportCommand : AsyncCommand<CertExportSettings>
+    public sealed class DeviceExportCommand : AsyncCommand<DeviceExportSettings>
     {
         /// <inheritdoc/>
-        public override async Task<int> ExecuteAsync(CommandContext context, CertExportSettings settings, CancellationToken cancellationToken)
+        public override async Task<int> ExecuteAsync(CommandContext context, DeviceExportSettings settings, CancellationToken cancellationToken)
         {
             var dbPath = CertDatabase.ResolveDatabasePath(settings.DatabasePath);
             if (dbPath == null)

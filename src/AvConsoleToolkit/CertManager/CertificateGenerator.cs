@@ -28,14 +28,35 @@ namespace AvConsoleToolkit.CertManager
         /// Creates a self-signed Root CA certificate.
         /// </summary>
         /// <param name="country">Country code (e.g., "US").</param>
-        /// <param name="organization">Organization/unit name.</param>
+        /// <param name="organization">Organization name.</param>
         /// <param name="caName">The CA name used as part of the CN.</param>
         /// <param name="validityDays">Number of days the CA certificate is valid (default 3650).</param>
+        /// <param name="orgUnit">Organizational unit name (optional).</param>
+        /// <param name="state">State or province name (optional).</param>
+        /// <param name="locality">Locality or city name (optional).</param>
         /// <returns>The generated CA certificate with its private key.</returns>
-        public static X509Certificate2 CreateCaCertificate(string country, string organization, string caName, int validityDays = 3650)
+        public static X509Certificate2 CreateCaCertificate(string country, string organization, string caName, int validityDays = 3650, string? orgUnit = null, string? state = null, string? locality = null)
         {
             using var rsa = RSA.Create(4096);
-            var subject = new X500DistinguishedName($"C={country}, O={organization}, CN={organization} Private Root CA");
+            var dnParts = $"C={country}, O={organization}";
+            if (!string.IsNullOrWhiteSpace(orgUnit))
+            {
+                dnParts += $", OU={orgUnit}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(state))
+            {
+                dnParts += $", ST={state}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(locality))
+            {
+                dnParts += $", L={locality}";
+            }
+
+            dnParts += $", CN={organization} Private Root CA";
+
+            var subject = new X500DistinguishedName(dnParts);
 
             var request = new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 

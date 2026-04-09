@@ -49,7 +49,10 @@ namespace AvConsoleToolkit.Commands.Cert.Ca
                 settings.Country,
                 settings.Organization,
                 settings.Name,
-                settings.ValidityDays);
+                settings.ValidityDays,
+                settings.OrgUnit,
+                settings.State,
+                settings.Locality);
 
             var record = new CertificateAuthorityRecord
             {

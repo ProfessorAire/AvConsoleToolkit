@@ -146,7 +146,8 @@ namespace AvConsoleToolkit
 
                         ca.AddCommand<Commands.Cert.Ca.CaCreateCommand>("create")
                             .WithDescription("Create a new Certificate Authority")
-                            .WithExample(["cert", "ca", "create", "my-ca", "-o", "MyOrg", "-c", "US"]);
+                            .WithExample(["cert", "ca", "create", "my-ca", "-o", "MyOrg", "-c", "US"])
+                            .WithExample(["cert", "ca", "create", "my-ca", "-o", "MyOrg", "-c", "US", "--ou", "IT", "--state", "California"]);
 
                         ca.AddCommand<Commands.Cert.Ca.CaListCommand>("list")
                             .WithAlias("ls")
@@ -163,33 +164,45 @@ namespace AvConsoleToolkit
                             .WithDescription("Import an existing root CA certificate from PEM or PFX files")
                             .WithExample(["cert", "ca", "import", "my-ca", "--cert", "ca.crt", "--key", "ca.key"])
                             .WithExample(["cert", "ca", "import", "my-ca", "--pfx", "ca.pfx", "--password", "secret"]);
+
+                        ca.AddCommand<Commands.Cert.Ca.CaExportCommand>("export")
+                            .WithDescription("Export a root CA certificate to disk")
+                            .WithExample(["cert", "ca", "export", "my-ca"])
+                            .WithExample(["cert", "ca", "export", "my-ca", "-o", "/path/to/output"])
+                            .WithExample(["cert", "ca", "export", "my-ca", "--cert-only"])
+                            .WithExample(["cert", "ca", "export", "my-ca", "--pfx-only", "--password", "secret"]);
                     });
 
-                    cert.AddCommand<Commands.Cert.CertCreateCommand>("create")
-                        .WithDescription("Create a new device certificate signed by a CA")
-                        .WithExample(["cert", "create", "server.example.com", "--ca", "my-ca", "-i", "192.168.1.100"]);
+                    cert.AddBranch("device", device =>
+                    {
+                        device.SetDescription("Manage device certificates.");
 
-                    cert.AddCommand<Commands.Cert.CertListCommand>("list")
-                        .WithAlias("ls")
-                        .WithDescription("List all device certificates with expiration status")
-                        .WithExample(["cert", "list"])
-                        .WithExample(["cert", "ls", "--ca", "my-ca"]);
+                        device.AddCommand<Commands.Cert.Device.DeviceCreateCommand>("create")
+                            .WithDescription("Create a new device certificate signed by a CA")
+                            .WithExample(["cert", "device", "create", "server.example.com", "--ca", "my-ca", "-i", "192.168.1.100"]);
 
-                    cert.AddCommand<Commands.Cert.CertExportCommand>("export")
-                        .WithDescription("Export a device certificate from the database to disk")
-                        .WithExample(["cert", "export", "1"])
-                        .WithExample(["cert", "export", "1", "-o", "/path/to/output"]);
+                        device.AddCommand<Commands.Cert.Device.DeviceListCommand>("list")
+                            .WithAlias("ls")
+                            .WithDescription("List all device certificates with expiration status")
+                            .WithExample(["cert", "device", "list"])
+                            .WithExample(["cert", "device", "ls", "--ca", "my-ca"]);
 
-                    cert.AddCommand<Commands.Cert.CertDeleteCommand>("delete")
-                        .WithAlias("rm")
-                        .WithDescription("Delete a device certificate from the database")
-                        .WithExample(["cert", "delete", "1"])
-                        .WithExample(["cert", "rm", "1", "-y"]);
+                        device.AddCommand<Commands.Cert.Device.DeviceExportCommand>("export")
+                            .WithDescription("Export a device certificate from the database to disk")
+                            .WithExample(["cert", "device", "export", "1"])
+                            .WithExample(["cert", "device", "export", "1", "-o", "/path/to/output"]);
 
-                    cert.AddCommand<Commands.Cert.CertImportCommand>("import")
-                        .WithDescription("Import an existing device certificate from PEM or PFX files")
-                        .WithExample(["cert", "import", "--ca", "my-ca", "--cert", "server.crt", "--key", "server.key"])
-                        .WithExample(["cert", "import", "--ca", "my-ca", "--pfx", "server.pfx", "--password", "secret"]);
+                        device.AddCommand<Commands.Cert.Device.DeviceDeleteCommand>("delete")
+                            .WithAlias("rm")
+                            .WithDescription("Delete a device certificate from the database")
+                            .WithExample(["cert", "device", "delete", "1"])
+                            .WithExample(["cert", "device", "rm", "1", "-y"]);
+
+                        device.AddCommand<Commands.Cert.Device.DeviceImportCommand>("import")
+                            .WithDescription("Import an existing device certificate from PEM or PFX files")
+                            .WithExample(["cert", "device", "import", "--ca", "my-ca", "--cert", "server.crt", "--key", "server.key"])
+                            .WithExample(["cert", "device", "import", "--ca", "my-ca", "--pfx", "server.pfx", "--password", "secret"]);
+                    });
 
                     cert.AddCommand<Commands.Cert.CertInstallRootCommand>("install-root")
                         .WithDescription("Install a root CA certificate on the local machine (Windows/Linux)")
