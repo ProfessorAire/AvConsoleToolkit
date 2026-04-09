@@ -265,20 +265,27 @@ namespace AvConsoleToolkit.Tests.CertManager
                 return true;
             }
 
-            if (ex is TypeInitializationException tie && tie.InnerException?.InnerException is DllNotFoundException)
+            if (ex is TypeInitializationException tie && IsNativeLibUnavailable(tie.InnerException!))
             {
                 return true;
             }
 
             // DecentDB wraps DLL load errors in InvalidOperationException
-            if (ex.Message.Contains("Unable to load shared library", StringComparison.OrdinalIgnoreCase))
+            if (ex is InvalidOperationException && ex.InnerException is DllNotFoundException)
             {
                 return true;
             }
 
-            if (ex.InnerException != null)
+            // Fallback: walk the inner exception chain for DllNotFoundException
+            var inner = ex.InnerException;
+            while (inner != null)
             {
-                return IsNativeLibUnavailable(ex.InnerException);
+                if (inner is DllNotFoundException)
+                {
+                    return true;
+                }
+
+                inner = inner.InnerException;
             }
 
             return false;

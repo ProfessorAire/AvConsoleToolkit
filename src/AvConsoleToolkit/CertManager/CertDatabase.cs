@@ -318,8 +318,7 @@ namespace AvConsoleToolkit.CertManager
                 );";
             cmd.ExecuteNonQuery();
 
-            using var cmd2 = _connection.CreateCommand();
-            cmd2.CommandText = @"
+            cmd.CommandText = @"
                 CREATE TABLE IF NOT EXISTS DeviceCertificates (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     CaId INTEGER NOT NULL,
@@ -333,7 +332,7 @@ namespace AvConsoleToolkit.CertManager
                     ExpiresUtc TEXT NOT NULL,
                     FOREIGN KEY (CaId) REFERENCES CertificateAuthorities(Id)
                 );";
-            cmd2.ExecuteNonQuery();
+            cmd.ExecuteNonQuery();
         }
     }
 }
