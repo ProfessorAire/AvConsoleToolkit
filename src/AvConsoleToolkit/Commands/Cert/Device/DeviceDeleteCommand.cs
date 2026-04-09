@@ -39,6 +39,8 @@ namespace AvConsoleToolkit.Commands.Cert.Device
             }
 
             using var db = new CertDatabase(dbPath);
+
+            // Resolver displays appropriate error messages when no match is found
             var cert = DeviceCertResolver.Resolve(db, settings.NameOrId);
 
             if (cert == null)
