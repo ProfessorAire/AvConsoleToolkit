@@ -179,7 +179,8 @@ namespace AvConsoleToolkit
 
                         device.AddCommand<Commands.Cert.Device.DeviceCreateCommand>("create")
                             .WithDescription("Create a new device certificate signed by a CA")
-                            .WithExample(["cert", "device", "create", "server.example.com", "--ca", "my-ca", "-i", "192.168.1.100"]);
+                            .WithExample(["cert", "device", "create", "web-server", "--ca", "my-ca", "--dns", "server.example.com"])
+                            .WithExample(["cert", "device", "create", "lobby-panel", "--ca", "my-ca", "--dns", "panel.local,panel.example.com", "-i", "192.168.1.100"]);
 
                         device.AddCommand<Commands.Cert.Device.DeviceListCommand>("list")
                             .WithAlias("ls")
@@ -189,19 +190,19 @@ namespace AvConsoleToolkit
 
                         device.AddCommand<Commands.Cert.Device.DeviceExportCommand>("export")
                             .WithDescription("Export a device certificate from the database to disk")
-                            .WithExample(["cert", "device", "export", "1"])
+                            .WithExample(["cert", "device", "export", "web-server"])
                             .WithExample(["cert", "device", "export", "1", "-o", "/path/to/output"]);
 
                         device.AddCommand<Commands.Cert.Device.DeviceDeleteCommand>("delete")
                             .WithAlias("rm")
                             .WithDescription("Delete a device certificate from the database")
-                            .WithExample(["cert", "device", "delete", "1"])
+                            .WithExample(["cert", "device", "delete", "web-server"])
                             .WithExample(["cert", "device", "rm", "1", "-y"]);
 
                         device.AddCommand<Commands.Cert.Device.DeviceImportCommand>("import")
                             .WithDescription("Import an existing device certificate from PEM or PFX files")
                             .WithExample(["cert", "device", "import", "--ca", "my-ca", "--cert", "server.crt", "--key", "server.key"])
-                            .WithExample(["cert", "device", "import", "--ca", "my-ca", "--pfx", "server.pfx", "--password", "secret"]);
+                            .WithExample(["cert", "device", "import", "--ca", "my-ca", "--pfx", "server.pfx", "--name", "web-server"]);
                     });
 
                     cert.AddCommand<Commands.Cert.CertInstallRootCommand>("install-root")

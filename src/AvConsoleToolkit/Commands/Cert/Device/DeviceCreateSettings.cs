@@ -22,11 +22,11 @@ namespace AvConsoleToolkit.Commands.Cert.Device
     public class DeviceCreateSettings : CertDatabaseSettings
     {
         /// <summary>
-        /// Gets or sets the FQDN for the device certificate.
+        /// Gets or sets the friendly name for the device certificate.
         /// </summary>
-        [CommandArgument(0, "<FQDN>")]
-        [Description("Fully qualified domain name or hostname for the certificate (e.g., 'server.example.com').")]
-        public string Fqdn { get; set; } = string.Empty;
+        [CommandArgument(0, "<NAME>")]
+        [Description("Friendly name for the device certificate (e.g., 'web-server' or 'lobby-panel').")]
+        public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the name of the Certificate Authority to sign with.
@@ -34,6 +34,14 @@ namespace AvConsoleToolkit.Commands.Cert.Device
         [CommandOption("--ca <CA_NAME>")]
         [Description("Name of the Certificate Authority to use for signing.")]
         public string CaName { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Gets or sets the comma-separated DNS hostnames/FQDNs to include in the certificate SAN.
+        /// At least one is required.
+        /// </summary>
+        [CommandOption("-d|--dns <DNS_NAMES>")]
+        [Description("Comma-separated DNS hostnames or FQDNs to include in the certificate SAN (at least one required, e.g., 'server.example.com,server.local').")]
+        public string DnsNames { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the comma-separated IP addresses to include in the SAN.
@@ -60,14 +68,19 @@ namespace AvConsoleToolkit.Commands.Cert.Device
         /// <inheritdoc/>
         public override ValidationResult Validate()
         {
-            if (string.IsNullOrWhiteSpace(Fqdn))
+            if (string.IsNullOrWhiteSpace(Name))
             {
-                return ValidationResult.Error("FQDN is required.");
+                return ValidationResult.Error("Name is required.");
             }
 
             if (string.IsNullOrWhiteSpace(CaName))
             {
                 return ValidationResult.Error("CA name is required. Use --ca to specify.");
+            }
+
+            if (string.IsNullOrWhiteSpace(DnsNames))
+            {
+                return ValidationResult.Error("At least one DNS hostname is required. Use --dns to specify.");
             }
 
             if (ValidityDays <= 0)

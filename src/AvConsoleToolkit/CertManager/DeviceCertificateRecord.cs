@@ -30,9 +30,14 @@ namespace AvConsoleToolkit.CertManager
         public int CaId { get; set; }
 
         /// <summary>
-        /// Gets or sets the fully qualified domain name for the certificate.
+        /// Gets or sets the friendly name for the certificate.
         /// </summary>
-        public string Fqdn { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Gets or sets the comma-separated list of DNS hostnames/FQDNs included in the SAN.
+        /// </summary>
+        public string DnsNames { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the comma-separated list of IP addresses included in the SAN.

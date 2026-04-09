@@ -194,11 +194,12 @@ namespace AvConsoleToolkit.CertManager
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = @"
-                INSERT INTO DeviceCertificates (CaId, Fqdn, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc)
-                VALUES (@caId, @fqdn, @ips, @cert, @key, @pfx, @chain, @created, @expires);
+                INSERT INTO DeviceCertificates (CaId, Name, DnsNames, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc)
+                VALUES (@caId, @name, @dns, @ips, @cert, @key, @pfx, @chain, @created, @expires);
                 SELECT last_insert_rowid();";
             cmd.Parameters.Add(new DecentDBParameter("@caId", record.CaId));
-            cmd.Parameters.Add(new DecentDBParameter("@fqdn", record.Fqdn));
+            cmd.Parameters.Add(new DecentDBParameter("@name", record.Name));
+            cmd.Parameters.Add(new DecentDBParameter("@dns", record.DnsNames));
             cmd.Parameters.Add(new DecentDBParameter("@ips", record.IpAddresses));
             cmd.Parameters.Add(new DecentDBParameter("@cert", record.CertificatePem));
             cmd.Parameters.Add(new DecentDBParameter("@key", record.PrivateKeyPem));
@@ -220,12 +221,12 @@ namespace AvConsoleToolkit.CertManager
             using var cmd = _connection.CreateCommand();
             if (caId.HasValue)
             {
-                cmd.CommandText = "SELECT Id, CaId, Fqdn, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc FROM DeviceCertificates WHERE CaId = @caId ORDER BY Fqdn;";
+                cmd.CommandText = "SELECT Id, CaId, Name, DnsNames, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc FROM DeviceCertificates WHERE CaId = @caId ORDER BY Name;";
                 cmd.Parameters.Add(new DecentDBParameter("@caId", caId.Value));
             }
             else
             {
-                cmd.CommandText = "SELECT Id, CaId, Fqdn, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc FROM DeviceCertificates ORDER BY Fqdn;";
+                cmd.CommandText = "SELECT Id, CaId, Name, DnsNames, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc FROM DeviceCertificates ORDER BY Name;";
             }
 
             using var reader = cmd.ExecuteReader();
@@ -245,10 +246,30 @@ namespace AvConsoleToolkit.CertManager
         public DeviceCertificateRecord? GetCert(int id)
         {
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT Id, CaId, Fqdn, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc FROM DeviceCertificates WHERE Id = @id;";
+            cmd.CommandText = "SELECT Id, CaId, Name, DnsNames, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc FROM DeviceCertificates WHERE Id = @id;";
             cmd.Parameters.Add(new DecentDBParameter("@id", id));
             using var reader = cmd.ExecuteReader();
             return reader.Read() ? ReadCert(reader) : null;
+        }
+
+        /// <summary>
+        /// Gets all device certificates matching the given name (case-insensitive).
+        /// </summary>
+        /// <param name="name">The certificate name.</param>
+        /// <returns>A list of matching records.</returns>
+        public List<DeviceCertificateRecord> GetCertsByName(string name)
+        {
+            var results = new List<DeviceCertificateRecord>();
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT Id, CaId, Name, DnsNames, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc FROM DeviceCertificates WHERE Name = @name COLLATE NOCASE;";
+            cmd.Parameters.Add(new DecentDBParameter("@name", name));
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                results.Add(ReadCert(reader));
+            }
+
+            return results;
         }
 
         /// <summary>
@@ -291,14 +312,15 @@ namespace AvConsoleToolkit.CertManager
             {
                 Id = reader.GetInt32(0),
                 CaId = reader.GetInt32(1),
-                Fqdn = reader.GetString(2),
-                IpAddresses = reader.GetString(3),
-                CertificatePem = (byte[])reader[4],
-                PrivateKeyPem = (byte[])reader[5],
-                Pfx = (byte[])reader[6],
-                FullChainPem = (byte[])reader[7],
-                CreatedUtc = DateTime.ParseExact(reader.GetString(8), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-                ExpiresUtc = DateTime.ParseExact(reader.GetString(9), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+                Name = reader.GetString(2),
+                DnsNames = reader.GetString(3),
+                IpAddresses = reader.GetString(4),
+                CertificatePem = (byte[])reader[5],
+                PrivateKeyPem = (byte[])reader[6],
+                Pfx = (byte[])reader[7],
+                FullChainPem = (byte[])reader[8],
+                CreatedUtc = DateTime.ParseExact(reader.GetString(9), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+                ExpiresUtc = DateTime.ParseExact(reader.GetString(10), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
             };
         }
 
@@ -322,7 +344,8 @@ namespace AvConsoleToolkit.CertManager
                 CREATE TABLE IF NOT EXISTS DeviceCertificates (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     CaId INTEGER NOT NULL,
-                    Fqdn TEXT NOT NULL,
+                    Name TEXT NOT NULL,
+                    DnsNames TEXT NOT NULL,
                     IpAddresses TEXT NOT NULL,
                     CertificatePem BLOB NOT NULL,
                     PrivateKeyPem BLOB NOT NULL,

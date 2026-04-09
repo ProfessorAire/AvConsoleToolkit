@@ -87,7 +87,7 @@ namespace AvConsoleToolkit.CertManager
         /// Creates a device/server certificate signed by a Certificate Authority.
         /// </summary>
         /// <param name="caCert">The CA certificate used to sign the device cert (must contain private key).</param>
-        /// <param name="fqdn">The fully qualified domain name for the certificate.</param>
+        /// <param name="dnsNames">Array of DNS hostnames/FQDNs to include in the SAN. The first entry is used as the CN.</param>
         /// <param name="ipAddresses">Array of IP addresses to include in the SAN.</param>
         /// <param name="country">Country code.</param>
         /// <param name="organization">Organization/unit name.</param>
@@ -95,14 +95,15 @@ namespace AvConsoleToolkit.CertManager
         /// <returns>The generated device certificate with its private key.</returns>
         public static X509Certificate2 CreateDeviceCertificate(
             X509Certificate2 caCert,
-            string fqdn,
+            string[] dnsNames,
             string[] ipAddresses,
             string country,
             string organization,
             int validityDays = 397)
         {
             using var rsa = RSA.Create(2048);
-            var subject = new X500DistinguishedName($"C={country}, O={organization}, CN={fqdn}");
+            var cn = dnsNames.Length > 0 ? dnsNames[0] : "device";
+            var subject = new X500DistinguishedName($"C={country}, O={organization}, CN={cn}");
 
             var request = new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 
@@ -123,7 +124,10 @@ namespace AvConsoleToolkit.CertManager
 
             // Build Subject Alternative Names
             var sanBuilder = new SubjectAlternativeNameBuilder();
-            sanBuilder.AddDnsName(fqdn);
+            foreach (var dns in dnsNames)
+            {
+                sanBuilder.AddDnsName(dns);
+            }
 
             foreach (var ip in ipAddresses)
             {

@@ -37,29 +37,28 @@ namespace AvConsoleToolkit.Commands.Cert.Device
             }
 
             using var db = new CertDatabase(dbPath);
-            var cert = db.GetCert(settings.CertId);
+            var cert = DeviceCertResolver.Resolve(db, settings.NameOrId);
 
             if (cert == null)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Certificate with ID {settings.CertId} not found.");
                 return 1;
             }
 
-            var outputDir = settings.OutputDirectory ?? Path.Combine(Environment.CurrentDirectory, cert.Fqdn);
+            var outputDir = settings.OutputDirectory ?? Path.Combine(Environment.CurrentDirectory, cert.Name);
             Directory.CreateDirectory(outputDir);
 
             if (settings.PfxOnly)
             {
-                var pfxPath = Path.Combine(outputDir, $"{cert.Fqdn}.pfx");
+                var pfxPath = Path.Combine(outputDir, $"{cert.Name}.pfx");
                 await File.WriteAllBytesAsync(pfxPath, cert.Pfx, cancellationToken);
                 AnsiConsole.MarkupLine($"[green]Exported PFX:[/] {pfxPath.EscapeMarkup()}");
             }
             else
             {
-                var certPath = Path.Combine(outputDir, $"{cert.Fqdn}.crt");
-                var keyPath = Path.Combine(outputDir, $"{cert.Fqdn}.key");
-                var pfxPath = Path.Combine(outputDir, $"{cert.Fqdn}.pfx");
-                var chainPath = Path.Combine(outputDir, $"{cert.Fqdn}-fullchain.crt");
+                var certPath = Path.Combine(outputDir, $"{cert.Name}.crt");
+                var keyPath = Path.Combine(outputDir, $"{cert.Name}.key");
+                var pfxPath = Path.Combine(outputDir, $"{cert.Name}.pfx");
+                var chainPath = Path.Combine(outputDir, $"{cert.Name}-fullchain.crt");
 
                 await File.WriteAllBytesAsync(certPath, cert.CertificatePem, cancellationToken);
                 await File.WriteAllBytesAsync(keyPath, cert.PrivateKeyPem, cancellationToken);

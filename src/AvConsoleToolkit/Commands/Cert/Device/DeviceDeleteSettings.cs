@@ -22,11 +22,11 @@ namespace AvConsoleToolkit.Commands.Cert.Device
     public class DeviceDeleteSettings : CertDatabaseSettings
     {
         /// <summary>
-        /// Gets or sets the ID of the certificate to delete.
+        /// Gets or sets the name or ID of the certificate to delete.
         /// </summary>
-        [CommandArgument(0, "<CERT_ID>")]
-        [Description("ID of the device certificate to delete.")]
-        public int CertId { get; set; }
+        [CommandArgument(0, "<NAME_OR_ID>")]
+        [Description("Name or ID of the device certificate to delete.")]
+        public string NameOrId { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets a value indicating whether to skip the confirmation prompt.
@@ -38,9 +38,9 @@ namespace AvConsoleToolkit.Commands.Cert.Device
         /// <inheritdoc/>
         public override ValidationResult Validate()
         {
-            if (CertId <= 0)
+            if (string.IsNullOrWhiteSpace(NameOrId))
             {
-                return ValidationResult.Error("Certificate ID must be a positive number.");
+                return ValidationResult.Error("Certificate name or ID is required.");
             }
 
             return ValidationResult.Success();

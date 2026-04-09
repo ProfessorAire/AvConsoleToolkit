@@ -10,6 +10,8 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AvConsoleToolkit.CertManager;
@@ -20,6 +22,7 @@ namespace AvConsoleToolkit.Commands.Cert.Device
 {
     /// <summary>
     /// Command that deletes a device certificate from the database.
+    /// Supports lookup by name or ID; prompts if multiple matches are found.
     /// </summary>
     public sealed class DeviceDeleteCommand : AsyncCommand<DeviceDeleteSettings>
     {
@@ -36,17 +39,16 @@ namespace AvConsoleToolkit.Commands.Cert.Device
             }
 
             using var db = new CertDatabase(dbPath);
-            var cert = db.GetCert(settings.CertId);
+            var cert = DeviceCertResolver.Resolve(db, settings.NameOrId);
 
             if (cert == null)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Certificate with ID {settings.CertId} not found.");
                 return 1;
             }
 
             if (!settings.Yes)
             {
-                AnsiConsole.MarkupLine($"[yellow]Warning:[/] This will delete the certificate for '{cert.Fqdn.EscapeMarkup()}' (ID {cert.Id}).");
+                AnsiConsole.MarkupLine($"[yellow]Warning:[/] This will delete the certificate '{cert.Name.EscapeMarkup()}' (ID {cert.Id}).");
                 if (!AnsiConsole.Confirm("Are you sure you want to proceed?", false))
                 {
                     AnsiConsole.MarkupLine("[dim]Cancelled.[/]");
@@ -55,7 +57,7 @@ namespace AvConsoleToolkit.Commands.Cert.Device
             }
 
             db.DeleteCert(cert.Id);
-            AnsiConsole.MarkupLine($"[green]Certificate for '{cert.Fqdn.EscapeMarkup()}' (ID {cert.Id}) deleted.[/]");
+            AnsiConsole.MarkupLine($"[green]Certificate '{cert.Name.EscapeMarkup()}' (ID {cert.Id}) deleted.[/]");
             return 0;
         }
     }

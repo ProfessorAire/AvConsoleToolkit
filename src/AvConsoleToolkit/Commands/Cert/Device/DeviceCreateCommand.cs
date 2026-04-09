@@ -44,9 +44,11 @@ namespace AvConsoleToolkit.Commands.Cert.Device
                 return 1;
             }
 
+            var dnsNames = settings.DnsNames.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             var ips = settings.IpAddresses?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
 
-            AnsiConsole.MarkupLine($"[cyan]Creating device certificate for: {settings.Fqdn.EscapeMarkup()}[/]");
+            AnsiConsole.MarkupLine($"[cyan]Creating device certificate '{settings.Name.EscapeMarkup()}'[/]");
+            AnsiConsole.MarkupLine($"  DNS: {string.Join(", ", dnsNames).EscapeMarkup()}");
             if (ips.Length > 0)
             {
                 AnsiConsole.MarkupLine($"  IPs: {string.Join(", ", ips).EscapeMarkup()}");
@@ -57,7 +59,7 @@ namespace AvConsoleToolkit.Commands.Cert.Device
 
             var deviceCert = CertificateGenerator.CreateDeviceCertificate(
                 caCert,
-                settings.Fqdn,
+                dnsNames,
                 ips,
                 ca.Country,
                 ca.Organization,
@@ -71,7 +73,8 @@ namespace AvConsoleToolkit.Commands.Cert.Device
             var record = new DeviceCertificateRecord
             {
                 CaId = ca.Id,
-                Fqdn = settings.Fqdn,
+                Name = settings.Name,
+                DnsNames = string.Join(",", dnsNames),
                 IpAddresses = string.Join(",", ips),
                 CertificatePem = certPem,
                 PrivateKeyPem = keyPem,
@@ -83,7 +86,7 @@ namespace AvConsoleToolkit.Commands.Cert.Device
 
             var id = db.InsertCert(record);
 
-            AnsiConsole.MarkupLine($"[green]Device certificate for '{settings.Fqdn.EscapeMarkup()}' created successfully (ID {id}).[/]");
+            AnsiConsole.MarkupLine($"[green]Device certificate '{settings.Name.EscapeMarkup()}' created successfully (ID {id}).[/]");
             AnsiConsole.MarkupLine($"  Signed by: {ca.Name.EscapeMarkup()}");
             AnsiConsole.MarkupLine($"  Expires: {record.ExpiresUtc:yyyy-MM-dd}");
             AnsiConsole.MarkupLine($"  Database: {dbPath.EscapeMarkup()}");

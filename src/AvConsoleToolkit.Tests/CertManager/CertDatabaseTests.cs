@@ -109,7 +109,7 @@ namespace AvConsoleToolkit.Tests.CertManager
         {
             var caId = _db!.InsertCa(CreateSampleCa());
             _db.InsertCert(CreateSampleCert(caId));
-            _db.InsertCert(CreateSampleCert(caId, "other.example.com"));
+            _db.InsertCert(CreateSampleCert(caId, "other-server", "other.example.com"));
 
             Assert.That(_db.ListCerts(caId), Has.Count.EqualTo(2));
 
@@ -145,7 +145,8 @@ namespace AvConsoleToolkit.Tests.CertManager
             Assert.Multiple(() =>
             {
                 Assert.That(retrieved!.CaId, Is.EqualTo(caId));
-                Assert.That(retrieved.Fqdn, Is.EqualTo("server.example.com"));
+                Assert.That(retrieved.Name, Is.EqualTo("web-server"));
+                Assert.That(retrieved.DnsNames, Is.EqualTo("server.example.com"));
                 Assert.That(retrieved.IpAddresses, Is.EqualTo("192.168.1.1"));
             });
         }
@@ -162,9 +163,9 @@ namespace AvConsoleToolkit.Tests.CertManager
         {
             var ca1 = _db!.InsertCa(CreateSampleCa("ca-1"));
             var ca2 = _db.InsertCa(CreateSampleCa("ca-2"));
-            _db.InsertCert(CreateSampleCert(ca1, "a.example.com"));
-            _db.InsertCert(CreateSampleCert(ca1, "b.example.com"));
-            _db.InsertCert(CreateSampleCert(ca2, "c.example.com"));
+            _db.InsertCert(CreateSampleCert(ca1, "server-a", "a.example.com"));
+            _db.InsertCert(CreateSampleCert(ca1, "server-b", "b.example.com"));
+            _db.InsertCert(CreateSampleCert(ca2, "server-c", "c.example.com"));
 
             var ca1Certs = _db.ListCerts(ca1);
             var ca2Certs = _db.ListCerts(ca2);
@@ -194,6 +195,40 @@ namespace AvConsoleToolkit.Tests.CertManager
         {
             var deleted = _db!.DeleteCert(999);
             Assert.That(deleted, Is.False);
+        }
+
+        [Test]
+        public void GetCertsByName_ReturnsCaseInsensitiveMatches()
+        {
+            var caId = _db!.InsertCa(CreateSampleCa());
+            _db.InsertCert(CreateSampleCert(caId, "Web-Server", "server.example.com"));
+            _db.InsertCert(CreateSampleCert(caId, "other-server", "other.example.com"));
+
+            var matches = _db.GetCertsByName("web-server");
+            Assert.That(matches, Has.Count.EqualTo(1));
+            Assert.That(matches[0].Name, Is.EqualTo("Web-Server"));
+        }
+
+        [Test]
+        public void GetCertsByName_ReturnsMultipleMatches()
+        {
+            var ca1 = _db!.InsertCa(CreateSampleCa("ca-1"));
+            var ca2 = _db.InsertCa(CreateSampleCa("ca-2"));
+            _db.InsertCert(CreateSampleCert(ca1, "web-server", "a.example.com"));
+            _db.InsertCert(CreateSampleCert(ca2, "web-server", "b.example.com"));
+
+            var matches = _db.GetCertsByName("web-server");
+            Assert.That(matches, Has.Count.EqualTo(2));
+        }
+
+        [Test]
+        public void GetCertsByName_ReturnsEmpty_WhenNoMatch()
+        {
+            var caId = _db!.InsertCa(CreateSampleCa());
+            _db.InsertCert(CreateSampleCert(caId));
+
+            var matches = _db.GetCertsByName("nonexistent");
+            Assert.That(matches, Is.Empty);
         }
 
         [Test]
@@ -242,12 +277,13 @@ namespace AvConsoleToolkit.Tests.CertManager
             };
         }
 
-        private static DeviceCertificateRecord CreateSampleCert(int caId, string fqdn = "server.example.com")
+        private static DeviceCertificateRecord CreateSampleCert(int caId, string name = "web-server", string dnsNames = "server.example.com")
         {
             return new DeviceCertificateRecord
             {
                 CaId = caId,
-                Fqdn = fqdn,
+                Name = name,
+                DnsNames = dnsNames,
                 IpAddresses = "192.168.1.1",
                 CertificatePem = [10, 11, 12],
                 PrivateKeyPem = [13, 14, 15],

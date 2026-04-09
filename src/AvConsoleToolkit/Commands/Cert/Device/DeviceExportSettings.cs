@@ -22,11 +22,11 @@ namespace AvConsoleToolkit.Commands.Cert.Device
     public class DeviceExportSettings : CertDatabaseSettings
     {
         /// <summary>
-        /// Gets or sets the ID of the certificate to export.
+        /// Gets or sets the name or ID of the certificate to export.
         /// </summary>
-        [CommandArgument(0, "<CERT_ID>")]
-        [Description("ID of the device certificate to export.")]
-        public int CertId { get; set; }
+        [CommandArgument(0, "<NAME_OR_ID>")]
+        [Description("Name or ID of the device certificate to export.")]
+        public string NameOrId { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the output directory for the exported files.
@@ -46,9 +46,9 @@ namespace AvConsoleToolkit.Commands.Cert.Device
         /// <inheritdoc/>
         public override ValidationResult Validate()
         {
-            if (CertId <= 0)
+            if (string.IsNullOrWhiteSpace(NameOrId))
             {
-                return ValidationResult.Error("Certificate ID must be a positive number.");
+                return ValidationResult.Error("Certificate name or ID is required.");
             }
 
             return ValidationResult.Success();

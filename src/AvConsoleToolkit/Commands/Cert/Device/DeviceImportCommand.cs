@@ -67,21 +67,36 @@ namespace AvConsoleToolkit.Commands.Cert.Device
 
             using (cert)
             {
-                // Extract FQDN from the CN
-                var fqdn = ExtractDnField(cert.Subject, "CN") ?? "unknown";
+                // Extract CN from subject for default name and primary DNS
+                var cn = ExtractDnField(cert.Subject, "CN") ?? "unknown";
+                var certName = settings.Name ?? cn;
 
-                // Extract IPs from SAN if available
+                // Extract DNS names and IPs from SAN if available
+                var dnsNames = string.Empty;
                 var ipAddresses = string.Empty;
                 var sanExt = cert.Extensions["2.5.29.17"];
                 if (sanExt != null)
                 {
                     var sanFormatted = sanExt.Format(true);
-                    var ips = sanFormatted
-                        .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                    var lines = sanFormatted.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+                    var dns = lines
+                        .Where(l => l.Contains("DNS Name", StringComparison.OrdinalIgnoreCase))
+                        .Select(l => l.Split('=', ':').LastOrDefault()?.Trim())
+                        .Where(d => !string.IsNullOrEmpty(d));
+                    dnsNames = string.Join(",", dns);
+
+                    var ips = lines
                         .Where(l => l.Contains("IP Address", StringComparison.OrdinalIgnoreCase))
                         .Select(l => l.Split('=', ':').LastOrDefault()?.Trim())
                         .Where(ip => !string.IsNullOrEmpty(ip));
                     ipAddresses = string.Join(",", ips);
+                }
+
+                // If no DNS names from SAN, use CN
+                if (string.IsNullOrEmpty(dnsNames))
+                {
+                    dnsNames = cn;
                 }
 
                 var certPem = CertificateGenerator.ExportCertificatePem(cert);
@@ -92,7 +107,8 @@ namespace AvConsoleToolkit.Commands.Cert.Device
                 var record = new DeviceCertificateRecord
                 {
                     CaId = ca.Id,
-                    Fqdn = fqdn,
+                    Name = certName,
+                    DnsNames = dnsNames,
                     IpAddresses = ipAddresses,
                     CertificatePem = certPem,
                     PrivateKeyPem = keyPem,
@@ -104,8 +120,9 @@ namespace AvConsoleToolkit.Commands.Cert.Device
 
                 var id = db.InsertCert(record);
 
-                AnsiConsole.MarkupLine($"[green]Device certificate for '{fqdn.EscapeMarkup()}' imported successfully (ID {id}).[/]");
+                AnsiConsole.MarkupLine($"[green]Device certificate '{certName.EscapeMarkup()}' imported successfully (ID {id}).[/]");
                 AnsiConsole.MarkupLine($"  CA: {ca.Name.EscapeMarkup()}");
+                AnsiConsole.MarkupLine($"  DNS: {dnsNames.EscapeMarkup()}");
                 AnsiConsole.MarkupLine($"  Expires: {record.ExpiresUtc:yyyy-MM-dd}");
                 if (cert.HasPrivateKey)
                 {

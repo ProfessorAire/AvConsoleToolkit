@@ -67,7 +67,8 @@ namespace AvConsoleToolkit.Commands.Cert.Device
             var table = new Table()
                 .Border(TableBorder.Rounded)
                 .AddColumn("[cyan]ID[/]")
-                .AddColumn("[cyan]FQDN[/]")
+                .AddColumn("[cyan]Name[/]")
+                .AddColumn("[cyan]DNS Names[/]")
                 .AddColumn("[cyan]IP Addresses[/]")
                 .AddColumn("[cyan]CA[/]")
                 .AddColumn("[cyan]Created[/]")
@@ -87,7 +88,8 @@ namespace AvConsoleToolkit.Commands.Cert.Device
 
                 table.AddRow(
                     cert.Id.ToString(),
-                    cert.Fqdn.EscapeMarkup(),
+                    cert.Name.EscapeMarkup(),
+                    cert.DnsNames.EscapeMarkup(),
                     cert.IpAddresses.EscapeMarkup(),
                     caName.EscapeMarkup(),
                     cert.CreatedUtc.ToString("yyyy-MM-dd"),

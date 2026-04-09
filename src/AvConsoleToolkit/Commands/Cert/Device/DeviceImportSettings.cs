@@ -23,6 +23,14 @@ namespace AvConsoleToolkit.Commands.Cert.Device
     public class DeviceImportSettings : CertDatabaseSettings
     {
         /// <summary>
+        /// Gets or sets the friendly name for the imported certificate.
+        /// If not specified, the CN from the certificate subject is used.
+        /// </summary>
+        [CommandOption("--name <NAME>")]
+        [Description("Friendly name for the certificate. Defaults to the CN from the certificate subject.")]
+        public string? Name { get; set; }
+
+        /// <summary>
         /// Gets or sets the name of the Certificate Authority that signed this certificate.
         /// </summary>
         [CommandOption("--ca <CA_NAME>")]

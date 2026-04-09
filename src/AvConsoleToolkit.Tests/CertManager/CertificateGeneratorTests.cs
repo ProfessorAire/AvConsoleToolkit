@@ -44,7 +44,7 @@ namespace AvConsoleToolkit.Tests.CertManager
         {
             using var caCert = CertificateGenerator.CreateCaCertificate("US", "TestOrg", "test-ca");
             using var deviceCert = CertificateGenerator.CreateDeviceCertificate(
-                caCert, "server.example.com", ["192.168.1.100"], "US", "TestOrg", 365);
+                caCert, ["server.example.com"], ["192.168.1.100"], "US", "TestOrg", 365);
 
             Assert.That(deviceCert, Is.Not.Null);
             Assert.Multiple(() =>
@@ -60,7 +60,7 @@ namespace AvConsoleToolkit.Tests.CertManager
         {
             using var caCert = CertificateGenerator.CreateCaCertificate("US", "TestOrg", "test-ca");
             using var deviceCert = CertificateGenerator.CreateDeviceCertificate(
-                caCert, "server.example.com", ["192.168.1.100"], "US", "TestOrg");
+                caCert, ["server.example.com"], ["192.168.1.100"], "US", "TestOrg");
 
             var basicConstraints = deviceCert.Extensions["2.5.29.19"] as X509BasicConstraintsExtension;
             Assert.That(basicConstraints, Is.Not.Null);
@@ -72,7 +72,7 @@ namespace AvConsoleToolkit.Tests.CertManager
         {
             using var caCert = CertificateGenerator.CreateCaCertificate("US", "TestOrg", "test-ca");
             using var deviceCert = CertificateGenerator.CreateDeviceCertificate(
-                caCert, "myhost.local", ["10.0.0.1"], "US", "TestOrg");
+                caCert, ["myhost.local"], ["10.0.0.1"], "US", "TestOrg");
 
             // Check SAN extension exists (OID 2.5.29.17)
             var sanExt = deviceCert.Extensions["2.5.29.17"];
@@ -84,11 +84,30 @@ namespace AvConsoleToolkit.Tests.CertManager
         }
 
         [Test]
+        public void CreateDeviceCertificate_ContainsMultipleDnsNames()
+        {
+            using var caCert = CertificateGenerator.CreateCaCertificate("US", "TestOrg", "test-ca");
+            using var deviceCert = CertificateGenerator.CreateDeviceCertificate(
+                caCert, ["server.example.com", "server.local", "server"], [], "US", "TestOrg");
+
+            var sanExt = deviceCert.Extensions["2.5.29.17"];
+            Assert.That(sanExt, Is.Not.Null);
+
+            var sanFormatted = sanExt!.Format(true);
+            Assert.Multiple(() =>
+            {
+                Assert.That(sanFormatted, Does.Contain("server.example.com"));
+                Assert.That(sanFormatted, Does.Contain("server.local"));
+                Assert.That(sanFormatted, Does.Contain("server"));
+            });
+        }
+
+        [Test]
         public void CreateDeviceCertificate_ContainsSanIp()
         {
             using var caCert = CertificateGenerator.CreateCaCertificate("US", "TestOrg", "test-ca");
             using var deviceCert = CertificateGenerator.CreateDeviceCertificate(
-                caCert, "myhost.local", ["10.0.0.1", "192.168.1.50"], "US", "TestOrg");
+                caCert, ["myhost.local"], ["10.0.0.1", "192.168.1.50"], "US", "TestOrg");
 
             var sanExt = deviceCert.Extensions["2.5.29.17"];
             Assert.That(sanExt, Is.Not.Null);
@@ -170,7 +189,7 @@ namespace AvConsoleToolkit.Tests.CertManager
         {
             using var caCert = CertificateGenerator.CreateCaCertificate("US", "TestOrg", "test-ca");
             using var deviceCert = CertificateGenerator.CreateDeviceCertificate(
-                caCert, "multi.local", ["192.168.1.1", "10.0.0.1", "172.16.0.1"], "US", "TestOrg");
+                caCert, ["multi.local"], ["192.168.1.1", "10.0.0.1", "172.16.0.1"], "US", "TestOrg");
 
             Assert.That(deviceCert.HasPrivateKey, Is.True);
             Assert.That(deviceCert.Subject, Does.Contain("CN=multi.local"));
@@ -181,7 +200,7 @@ namespace AvConsoleToolkit.Tests.CertManager
         {
             using var caCert = CertificateGenerator.CreateCaCertificate("US", "TestOrg", "test-ca");
             using var deviceCert = CertificateGenerator.CreateDeviceCertificate(
-                caCert, "no-ip.local", [], "US", "TestOrg");
+                caCert, ["no-ip.local"], [], "US", "TestOrg");
 
             Assert.That(deviceCert.HasPrivateKey, Is.True);
             Assert.That(deviceCert.Subject, Does.Contain("CN=no-ip.local"));
@@ -200,7 +219,7 @@ namespace AvConsoleToolkit.Tests.CertManager
 
             // Create device cert
             using var deviceCert = CertificateGenerator.CreateDeviceCertificate(
-                loadedCa, "device.local", ["192.168.1.50"], "US", "TestOrg");
+                loadedCa, ["device.local"], ["192.168.1.50"], "US", "TestOrg");
 
             var devicePem = CertificateGenerator.ExportCertificatePem(deviceCert);
             var deviceKeyPem = CertificateGenerator.ExportPrivateKeyPem(deviceCert);
