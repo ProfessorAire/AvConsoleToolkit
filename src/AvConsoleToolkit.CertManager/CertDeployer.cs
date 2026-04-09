@@ -193,13 +193,13 @@ namespace AvConsoleToolkit.CertManager
                 using var http = new HttpClient(handler);
                 http.DefaultRequestHeaders.Add("Authorization", $"Bearer {target.ApiKey}");
 
-                var certName = $"cert-{cert.Name}-{DateTime.UtcNow:yyyyMMdd}";
+                var certLabel = $"cert-{cert.Name}-{DateTime.UtcNow:yyyyMMdd}";
                 var certPem = Encoding.UTF8.GetString(cert.CertificatePem);
                 var keyPem = Encoding.UTF8.GetString(cert.PrivateKeyPem);
 
                 var payload = new
                 {
-                    name = certName,
+                    name = certLabel,
                     certificate = certPem,
                     privatekey = keyPem,
                     type = 2, // CERTIFICATE_CREATE_IMPORTED
@@ -225,7 +225,7 @@ namespace AvConsoleToolkit.CertManager
                     var uiPayload = JsonSerializer.Serialize(new { ui_certificate = certId });
                     var uiContent = new StringContent(uiPayload, Encoding.UTF8, "application/json");
                     await http.PutAsync($"{baseUrl}/system/general", uiContent, cancellationToken);
-                    AnsiConsole.MarkupLine($"  [dim]TrueNAS UI certificate updated to '{certName.EscapeMarkup()}'[/]");
+                    AnsiConsole.MarkupLine($"  [dim]TrueNAS UI certificate updated to '{certLabel.EscapeMarkup()}'[/]");
                 }
 
                 return true;
