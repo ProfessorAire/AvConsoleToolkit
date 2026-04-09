@@ -203,11 +203,44 @@ namespace AvConsoleToolkit
                             .WithDescription("Import an existing device certificate from PEM or PFX files")
                             .WithExample(["cert", "device", "import", "--ca", "my-ca", "--cert", "server.crt", "--key", "server.key"])
                             .WithExample(["cert", "device", "import", "--ca", "my-ca", "--pfx", "server.pfx", "--name", "web-server"]);
+
+                        device.AddCommand<Commands.Cert.Device.DeviceDeployCommand>("deploy")
+                            .WithDescription("Deploy certificates to configured targets (single device or all)")
+                            .WithExample(["cert", "device", "deploy", "web-server"])
+                            .WithExample(["cert", "device", "deploy", "--all"])
+                            .WithExample(["cert", "device", "deploy", "web-server", "--regenerate"]);
+
+                        device.AddBranch("target", target =>
+                        {
+                            target.SetDescription("Manage deployment targets for device certificates.");
+
+                            target.AddCommand<Commands.Cert.Device.Target.TargetAddCommand>("add")
+                                .WithDescription("Add a deployment target for a device certificate")
+                                .WithExample(["cert", "device", "target", "add", "web-server", "--host", "192.168.1.100", "-u", "admin", "-p", "pass", "-t", "Crestron4"])
+                                .WithExample(["cert", "device", "target", "add", "nas-cert", "--host", "truenas.local", "--port", "443", "--api-key", "key123", "-t", "TrueNas"]);
+
+                            target.AddCommand<Commands.Cert.Device.Target.TargetListCommand>("list")
+                                .WithAlias("ls")
+                                .WithDescription("List all configured deployment targets")
+                                .WithExample(["cert", "device", "target", "list"]);
+
+                            target.AddCommand<Commands.Cert.Device.Target.TargetRemoveCommand>("remove")
+                                .WithAlias("rm")
+                                .WithDescription("Remove a deployment target")
+                                .WithExample(["cert", "device", "target", "remove", "1"])
+                                .WithExample(["cert", "device", "target", "rm", "1", "-y"]);
+                        });
                     });
 
                     cert.AddCommand<Commands.Cert.CertInstallRootCommand>("install-root")
                         .WithDescription("Install a root CA certificate on the local machine (Windows/Linux)")
                         .WithExample(["cert", "install-root", "my-ca"]);
+
+                    cert.AddCommand<Commands.Cert.CertServeCommand>("serve")
+                        .WithDescription("Start a web server with a Blazor GUI for managing certificates")
+                        .WithExample(["cert", "serve"])
+                        .WithExample(["cert", "serve", "--port", "8080", "--open"])
+                        .WithExample(["cert", "serve", "--db", "/path/to/certmanager.ddb"]);
                 });
             });
 

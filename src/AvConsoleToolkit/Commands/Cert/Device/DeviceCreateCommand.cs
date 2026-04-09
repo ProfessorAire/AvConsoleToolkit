@@ -32,7 +32,7 @@ namespace AvConsoleToolkit.Commands.Cert.Device
         {
             await Task.CompletedTask;
 
-            var dbPath = CertDatabase.ResolveDatabasePath(settings.DatabasePath)
+            var dbPath = settings.ResolveDbPath()
                 ?? Path.Combine(Environment.CurrentDirectory, CertDatabase.DefaultFileName);
 
             using var db = new CertDatabase(dbPath);

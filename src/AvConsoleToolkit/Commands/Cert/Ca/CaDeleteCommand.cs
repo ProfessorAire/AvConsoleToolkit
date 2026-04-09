@@ -28,7 +28,7 @@ namespace AvConsoleToolkit.Commands.Cert.Ca
         {
             await Task.CompletedTask;
 
-            var dbPath = CertDatabase.ResolveDatabasePath(settings.DatabasePath);
+            var dbPath = settings.ResolveDbPath();
             if (dbPath == null)
             {
                 AnsiConsole.MarkupLine("[yellow]No certificate database found. Use --db to specify a path.[/]");

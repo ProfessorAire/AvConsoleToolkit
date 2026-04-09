@@ -1,0 +1,77 @@
+@page "/"
+@using AvConsoleToolkit.CertManager
+@inject CertDatabase Db
+
+<h1 class="page-title">Dashboard</h1>
+
+<div class="form-row">
+    <div class="card" style="flex:1">
+        <h3>Certificate Authorities</h3>
+        <p style="font-size:2rem;font-weight:700">@_caCount</p>
+    </div>
+    <div class="card" style="flex:1">
+        <h3>Device Certificates</h3>
+        <p style="font-size:2rem;font-weight:700">@_certCount</p>
+    </div>
+    <div class="card" style="flex:1">
+        <h3>Deployment Targets</h3>
+        <p style="font-size:2rem;font-weight:700">@_targetCount</p>
+    </div>
+</div>
+
+@if (_expiringSoon.Count > 0)
+{
+    <div class="card">
+        <h3>⚠ Certificates Expiring Within 30 Days</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>DNS Names</th>
+                    <th>Expires</th>
+                    <th>Days Left</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var cert in _expiringSoon)
+                {
+                    var days = (int)(cert.ExpiresUtc - DateTime.UtcNow).TotalDays;
+                    <tr>
+                        <td>@cert.Name</td>
+                        <td>@cert.DnsNames</td>
+                        <td>@cert.ExpiresUtc.ToString("yyyy-MM-dd")</td>
+                        <td>
+                            @if (days <= 0)
+                            {
+                                <span class="badge badge-danger">Expired</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-warning">@days days</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private int _caCount;
+    private int _certCount;
+    private int _targetCount;
+    private System.Collections.Generic.List<DeviceCertificateRecord> _expiringSoon = new();
+
+    protected override void OnInitialized()
+    {
+        _caCount = Db.ListCas().Count;
+        var allCerts = Db.ListCerts();
+        _certCount = allCerts.Count;
+        _targetCount = Db.ListTargets().Count;
+        _expiringSoon = allCerts
+            .Where(c => (c.ExpiresUtc - DateTime.UtcNow).TotalDays <= 30)
+            .OrderBy(c => c.ExpiresUtc)
+            .ToList();
+    }
+}

@@ -22,7 +22,7 @@ namespace AvConsoleToolkit.CertManager
     /// Generates X.509 certificates using the .NET cryptography APIs.
     /// Follows the same paradigm as the CertManager PowerShell scripts.
     /// </summary>
-    internal static class CertificateGenerator
+    public static class CertificateGenerator
     {
         /// <summary>
         /// Creates a self-signed Root CA certificate.

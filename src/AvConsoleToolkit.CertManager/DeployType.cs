@@ -1,4 +1,4 @@
-// <copyright file="CertDatabaseSettings.cs">
+// <copyright file="DeployType.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,33 +10,46 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.ComponentModel;
-using AvConsoleToolkit.CertManager;
-using Spectre.Console.Cli;
-
-namespace AvConsoleToolkit.Commands.Cert
+namespace AvConsoleToolkit.CertManager
 {
     /// <summary>
-    /// Base settings shared by all cert commands, providing a database path option.
+    /// Specifies the deployment method used to upload certificates to a remote device.
     /// </summary>
-    public class CertDatabaseSettings : CommandSettings
+    public enum DeployType
     {
         /// <summary>
-        /// Gets or sets the path to the certificate database. If not specified, the working directory is checked
-        /// for a <c>certmanager.ddb</c> file, followed by the global database path from configuration.
+        /// Crestron Series 3 processor deployment via SSH.
         /// </summary>
-        [CommandOption("--db <PATH>")]
-        [Description("Path to the certificate database file. If not specified, searches the working directory and global config.")]
-        public string? DatabasePath { get; set; }
+        Crestron3,
 
         /// <summary>
-        /// Resolves the database path using the explicit path, working directory, and global config.
+        /// Crestron Series 4 processor deployment via SSH.
         /// </summary>
-        /// <returns>The resolved database path, or <see langword="null"/>.</returns>
-        public string? ResolveDbPath()
-        {
-            var globalPath = Configuration.AppConfig.Settings.CertManager?.DatabasePath;
-            return CertDatabase.ResolveDatabasePath(DatabasePath, globalPath);
-        }
+        Crestron4,
+
+        /// <summary>
+        /// Crestron 60 Series touchpanel deployment via SSH.
+        /// </summary>
+        CrestronTP60Series,
+
+        /// <summary>
+        /// Crestron 70 Series touchpanel deployment via SSH.
+        /// </summary>
+        CrestronTP70Series,
+
+        /// <summary>
+        /// TrueNAS Scale server deployment via REST API.
+        /// </summary>
+        TrueNas,
+
+        /// <summary>
+        /// UniFi device deployment via SSH (e.g., Dream Machine Pro).
+        /// </summary>
+        UniFi,
+
+        /// <summary>
+        /// Generic SCP deployment to a specified directory on the target device.
+        /// </summary>
+        Scp,
     }
 }

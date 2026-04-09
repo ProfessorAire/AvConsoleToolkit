@@ -29,7 +29,7 @@ namespace AvConsoleToolkit.Commands.Cert.Device
         /// <inheritdoc/>
         public override async Task<int> ExecuteAsync(CommandContext context, DeviceExportSettings settings, CancellationToken cancellationToken)
         {
-            var dbPath = CertDatabase.ResolveDatabasePath(settings.DatabasePath);
+            var dbPath = settings.ResolveDbPath();
             if (dbPath == null)
             {
                 AnsiConsole.MarkupLine("[yellow]No certificate database found. Use --db to specify a path.[/]");

@@ -1,4 +1,4 @@
-// <copyright file="CertDatabaseSettings.cs">
+// <copyright file="CertServeSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -11,32 +11,28 @@
 // </copyright>
 
 using System.ComponentModel;
-using AvConsoleToolkit.CertManager;
 using Spectre.Console.Cli;
 
 namespace AvConsoleToolkit.Commands.Cert
 {
     /// <summary>
-    /// Base settings shared by all cert commands, providing a database path option.
+    /// Settings for the <c>cert serve</c> command.
     /// </summary>
-    public class CertDatabaseSettings : CommandSettings
+    public class CertServeSettings : CertDatabaseSettings
     {
         /// <summary>
-        /// Gets or sets the path to the certificate database. If not specified, the working directory is checked
-        /// for a <c>certmanager.ddb</c> file, followed by the global database path from configuration.
+        /// Gets or sets the port for the web server.
         /// </summary>
-        [CommandOption("--db <PATH>")]
-        [Description("Path to the certificate database file. If not specified, searches the working directory and global config.")]
-        public string? DatabasePath { get; set; }
+        [CommandOption("--port <PORT>")]
+        [Description("Port for the web server (default 5120).")]
+        [DefaultValue(5120)]
+        public int Port { get; set; } = 5120;
 
         /// <summary>
-        /// Resolves the database path using the explicit path, working directory, and global config.
+        /// Gets or sets a value indicating whether to open the browser automatically.
         /// </summary>
-        /// <returns>The resolved database path, or <see langword="null"/>.</returns>
-        public string? ResolveDbPath()
-        {
-            var globalPath = Configuration.AppConfig.Settings.CertManager?.DatabasePath;
-            return CertDatabase.ResolveDatabasePath(DatabasePath, globalPath);
-        }
+        [CommandOption("--open")]
+        [Description("Open the browser automatically when the server starts.")]
+        public bool OpenBrowser { get; set; }
     }
 }

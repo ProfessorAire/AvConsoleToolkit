@@ -1,4 +1,4 @@
-// <copyright file="CertDatabaseSettings.cs">
+// <copyright file="TargetRemoveSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -11,32 +11,39 @@
 // </copyright>
 
 using System.ComponentModel;
-using AvConsoleToolkit.CertManager;
+using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Commands.Cert
+namespace AvConsoleToolkit.Commands.Cert.Device.Target
 {
     /// <summary>
-    /// Base settings shared by all cert commands, providing a database path option.
+    /// Settings for the <c>cert device target remove</c> command.
     /// </summary>
-    public class CertDatabaseSettings : CommandSettings
+    public class TargetRemoveSettings : CertDatabaseSettings
     {
         /// <summary>
-        /// Gets or sets the path to the certificate database. If not specified, the working directory is checked
-        /// for a <c>certmanager.ddb</c> file, followed by the global database path from configuration.
+        /// Gets or sets the ID of the deployment target to remove.
         /// </summary>
-        [CommandOption("--db <PATH>")]
-        [Description("Path to the certificate database file. If not specified, searches the working directory and global config.")]
-        public string? DatabasePath { get; set; }
+        [CommandArgument(0, "<TARGET_ID>")]
+        [Description("ID of the deployment target to remove.")]
+        public int TargetId { get; set; }
 
         /// <summary>
-        /// Resolves the database path using the explicit path, working directory, and global config.
+        /// Gets or sets a value indicating whether to skip the confirmation prompt.
         /// </summary>
-        /// <returns>The resolved database path, or <see langword="null"/>.</returns>
-        public string? ResolveDbPath()
+        [CommandOption("-y|--yes")]
+        [Description("Skip confirmation prompt.")]
+        public bool Yes { get; set; }
+
+        /// <inheritdoc/>
+        public override ValidationResult Validate()
         {
-            var globalPath = Configuration.AppConfig.Settings.CertManager?.DatabasePath;
-            return CertDatabase.ResolveDatabasePath(DatabasePath, globalPath);
+            if (TargetId <= 0)
+            {
+                return ValidationResult.Error("Target ID must be a positive number.");
+            }
+
+            return ValidationResult.Success();
         }
     }
 }

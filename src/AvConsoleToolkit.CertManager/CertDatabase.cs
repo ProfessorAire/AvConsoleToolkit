@@ -33,12 +33,19 @@ namespace AvConsoleToolkit.CertManager
         private readonly DecentDBConnection _connection;
 
         /// <summary>
+        /// Gets the path to the database file.
+        /// </summary>
+        public string DatabasePath { get; }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="CertDatabase"/> class, opening or creating the database at the specified path.
         /// </summary>
         /// <param name="databasePath">Full path to the DecentDB database file.</param>
         public CertDatabase(string databasePath)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+
+            DatabasePath = databasePath;
 
             var dir = Path.GetDirectoryName(databasePath);
             if (!string.IsNullOrEmpty(dir))
@@ -62,8 +69,9 @@ namespace AvConsoleToolkit.CertManager
         /// Returns <see langword="null"/> if no database can be resolved.
         /// </summary>
         /// <param name="explicitPath">An explicit path provided by the user, or <see langword="null"/>.</param>
+        /// <param name="globalConfigPath">An optional global config path to check, or <see langword="null"/>.</param>
         /// <returns>The resolved database path, or <see langword="null"/> if none found.</returns>
-        public static string? ResolveDatabasePath(string? explicitPath)
+        public static string? ResolveDatabasePath(string? explicitPath, string? globalConfigPath = null)
         {
             if (!string.IsNullOrWhiteSpace(explicitPath))
             {
@@ -78,10 +86,9 @@ namespace AvConsoleToolkit.CertManager
             }
 
             // Check global config
-            var globalPath = Configuration.AppConfig.Settings.CertManager?.DatabasePath;
-            if (!string.IsNullOrWhiteSpace(globalPath) && File.Exists(globalPath))
+            if (!string.IsNullOrWhiteSpace(globalConfigPath) && File.Exists(globalConfigPath))
             {
-                return globalPath;
+                return globalConfigPath;
             }
 
             return null;
@@ -285,6 +292,100 @@ namespace AvConsoleToolkit.CertManager
             return cmd.ExecuteNonQuery() > 0;
         }
 
+        /// <summary>
+        /// Inserts a new deployment target record.
+        /// </summary>
+        /// <param name="record">The deployment target record to insert.</param>
+        /// <returns>The inserted record ID.</returns>
+        public int InsertTarget(DeploymentTargetRecord record)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = @"
+                INSERT INTO DeploymentTargets (CertId, ConnectionAddress, Port, Username, Password, DeployType, SshKeyPath, ApiKey, FileMappings, LastDeployedUtc)
+                VALUES (@certId, @addr, @port, @user, @pass, @type, @sshKey, @apiKey, @fileMappings, @lastDeployed);
+                SELECT last_insert_rowid();";
+            cmd.Parameters.Add(new DecentDBParameter("@certId", record.CertId));
+            cmd.Parameters.Add(new DecentDBParameter("@addr", record.ConnectionAddress));
+            cmd.Parameters.Add(new DecentDBParameter("@port", record.Port));
+            cmd.Parameters.Add(new DecentDBParameter("@user", record.Username));
+            cmd.Parameters.Add(new DecentDBParameter("@pass", record.Password));
+            cmd.Parameters.Add(new DecentDBParameter("@type", record.DeployType.ToString()));
+            cmd.Parameters.Add(new DecentDBParameter("@sshKey", record.SshKeyPath));
+            cmd.Parameters.Add(new DecentDBParameter("@apiKey", record.ApiKey));
+            cmd.Parameters.Add(new DecentDBParameter("@fileMappings", record.FileMappings));
+            cmd.Parameters.Add(new DecentDBParameter("@lastDeployed", record.LastDeployedUtc?.ToString("O") ?? string.Empty));
+            return Convert.ToInt32(cmd.ExecuteScalar());
+        }
+
+        /// <summary>
+        /// Gets a deployment target by its ID.
+        /// </summary>
+        /// <param name="id">The target ID.</param>
+        /// <returns>The deployment target record, or <see langword="null"/> if not found.</returns>
+        public DeploymentTargetRecord? GetTarget(int id)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT Id, CertId, ConnectionAddress, Port, Username, Password, DeployType, SshKeyPath, ApiKey, FileMappings, LastDeployedUtc FROM DeploymentTargets WHERE Id = @id;";
+            cmd.Parameters.Add(new DecentDBParameter("@id", id));
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() ? ReadTarget(reader) : null;
+        }
+
+        /// <summary>
+        /// Returns all deployment targets, optionally filtered by certificate ID.
+        /// </summary>
+        /// <param name="certId">Optional certificate ID to filter by.</param>
+        /// <returns>A list of deployment target records.</returns>
+        public List<DeploymentTargetRecord> ListTargets(int? certId = null)
+        {
+            var results = new List<DeploymentTargetRecord>();
+            using var cmd = _connection.CreateCommand();
+            if (certId.HasValue)
+            {
+                cmd.CommandText = "SELECT Id, CertId, ConnectionAddress, Port, Username, Password, DeployType, SshKeyPath, ApiKey, FileMappings, LastDeployedUtc FROM DeploymentTargets WHERE CertId = @certId ORDER BY ConnectionAddress;";
+                cmd.Parameters.Add(new DecentDBParameter("@certId", certId.Value));
+            }
+            else
+            {
+                cmd.CommandText = "SELECT Id, CertId, ConnectionAddress, Port, Username, Password, DeployType, SshKeyPath, ApiKey, FileMappings, LastDeployedUtc FROM DeploymentTargets ORDER BY ConnectionAddress;";
+            }
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                results.Add(ReadTarget(reader));
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// Deletes a deployment target.
+        /// </summary>
+        /// <param name="id">The target ID to delete.</param>
+        /// <returns><see langword="true"/> if the target was deleted.</returns>
+        public bool DeleteTarget(int id)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "DELETE FROM DeploymentTargets WHERE Id = @id;";
+            cmd.Parameters.Add(new DecentDBParameter("@id", id));
+            return cmd.ExecuteNonQuery() > 0;
+        }
+
+        /// <summary>
+        /// Updates the last deployed timestamp for a deployment target.
+        /// </summary>
+        /// <param name="id">The target ID.</param>
+        /// <param name="deployedUtc">The deployment timestamp.</param>
+        public void UpdateTargetLastDeployed(int id, DateTime deployedUtc)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "UPDATE DeploymentTargets SET LastDeployedUtc = @deployed WHERE Id = @id;";
+            cmd.Parameters.Add(new DecentDBParameter("@deployed", deployedUtc.ToString("O")));
+            cmd.Parameters.Add(new DecentDBParameter("@id", id));
+            cmd.ExecuteNonQuery();
+        }
+
         /// <inheritdoc/>
         public void Dispose()
         {
@@ -324,6 +425,31 @@ namespace AvConsoleToolkit.CertManager
             };
         }
 
+        private static DeploymentTargetRecord ReadTarget(DbDataReader reader)
+        {
+            var lastDeployedStr = reader.IsDBNull(10) ? null : reader.GetString(10);
+            DateTime? lastDeployed = null;
+            if (!string.IsNullOrEmpty(lastDeployedStr))
+            {
+                lastDeployed = DateTime.ParseExact(lastDeployedStr, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+            }
+
+            return new DeploymentTargetRecord
+            {
+                Id = reader.GetInt32(0),
+                CertId = reader.GetInt32(1),
+                ConnectionAddress = reader.GetString(2),
+                Port = reader.GetInt32(3),
+                Username = reader.GetString(4),
+                Password = reader.GetString(5),
+                DeployType = Enum.TryParse<DeployType>(reader.GetString(6), true, out var dt) ? dt : DeployType.Scp,
+                SshKeyPath = reader.GetString(7),
+                ApiKey = reader.GetString(8),
+                FileMappings = reader.GetString(9),
+                LastDeployedUtc = lastDeployed,
+            };
+        }
+
         private void EnsureSchema()
         {
             using var cmd = _connection.CreateCommand();
@@ -354,6 +480,23 @@ namespace AvConsoleToolkit.CertManager
                     CreatedUtc TEXT NOT NULL,
                     ExpiresUtc TEXT NOT NULL,
                     FOREIGN KEY (CaId) REFERENCES CertificateAuthorities(Id)
+                );";
+            cmd.ExecuteNonQuery();
+
+            cmd.CommandText = @"
+                CREATE TABLE IF NOT EXISTS DeploymentTargets (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    CertId INTEGER NOT NULL,
+                    ConnectionAddress TEXT NOT NULL,
+                    Port INTEGER NOT NULL DEFAULT 22,
+                    Username TEXT NOT NULL DEFAULT '',
+                    Password TEXT NOT NULL DEFAULT '',
+                    DeployType TEXT NOT NULL DEFAULT 'Scp',
+                    SshKeyPath TEXT NOT NULL DEFAULT '',
+                    ApiKey TEXT NOT NULL DEFAULT '',
+                    FileMappings TEXT NOT NULL DEFAULT '',
+                    LastDeployedUtc TEXT NOT NULL DEFAULT '',
+                    FOREIGN KEY (CertId) REFERENCES DeviceCertificates(Id)
                 );";
             cmd.ExecuteNonQuery();
         }

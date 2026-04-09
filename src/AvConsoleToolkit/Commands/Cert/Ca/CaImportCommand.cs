@@ -32,7 +32,7 @@ namespace AvConsoleToolkit.Commands.Cert.Ca
         /// <inheritdoc/>
         public override async Task<int> ExecuteAsync(CommandContext context, CaImportSettings settings, CancellationToken cancellationToken)
         {
-            var dbPath = CertDatabase.ResolveDatabasePath(settings.DatabasePath)
+            var dbPath = settings.ResolveDbPath()
                 ?? Path.Combine(Environment.CurrentDirectory, CertDatabase.DefaultFileName);
 
             using var db = new CertDatabase(dbPath);
