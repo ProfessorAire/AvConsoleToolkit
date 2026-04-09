@@ -158,6 +158,11 @@ namespace AvConsoleToolkit
                             .WithDescription("Delete a Certificate Authority and all its certificates")
                             .WithExample(["cert", "ca", "delete", "my-ca"])
                             .WithExample(["cert", "ca", "rm", "my-ca", "-y"]);
+
+                        ca.AddCommand<Commands.Cert.Ca.CaImportCommand>("import")
+                            .WithDescription("Import an existing root CA certificate from PEM or PFX files")
+                            .WithExample(["cert", "ca", "import", "my-ca", "--cert", "ca.crt", "--key", "ca.key"])
+                            .WithExample(["cert", "ca", "import", "my-ca", "--pfx", "ca.pfx", "--password", "secret"]);
                     });
 
                     cert.AddCommand<Commands.Cert.CertCreateCommand>("create")
@@ -180,6 +185,11 @@ namespace AvConsoleToolkit
                         .WithDescription("Delete a device certificate from the database")
                         .WithExample(["cert", "delete", "1"])
                         .WithExample(["cert", "rm", "1", "-y"]);
+
+                    cert.AddCommand<Commands.Cert.CertImportCommand>("import")
+                        .WithDescription("Import an existing device certificate from PEM or PFX files")
+                        .WithExample(["cert", "import", "--ca", "my-ca", "--cert", "server.crt", "--key", "server.key"])
+                        .WithExample(["cert", "import", "--ca", "my-ca", "--pfx", "server.pfx", "--password", "secret"]);
 
                     cert.AddCommand<Commands.Cert.CertInstallRootCommand>("install-root")
                         .WithDescription("Install a root CA certificate on the local machine (Windows/Linux)")

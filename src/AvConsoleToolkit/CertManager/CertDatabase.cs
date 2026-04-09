@@ -12,14 +12,15 @@
 
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Globalization;
 using System.IO;
-using Microsoft.Data.Sqlite;
+using DecentDB.AdoNet;
 
 namespace AvConsoleToolkit.CertManager
 {
     /// <summary>
-    /// Provides CRUD operations for certificate storage using a local SQLite database.
+    /// Provides CRUD operations for certificate storage using a local DecentDB database.
     /// Certificates are stored in the database rather than as loose files on disk.
     /// </summary>
     public sealed class CertDatabase : IDisposable
@@ -27,14 +28,14 @@ namespace AvConsoleToolkit.CertManager
         /// <summary>
         /// The default database file name used when searching in the working directory.
         /// </summary>
-        public const string DefaultFileName = "certmanager.db";
+        public const string DefaultFileName = "certmanager.ddb";
 
-        private readonly SqliteConnection _connection;
+        private readonly DecentDBConnection _connection;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CertDatabase"/> class, opening or creating the database at the specified path.
         /// </summary>
-        /// <param name="databasePath">Full path to the SQLite database file.</param>
+        /// <param name="databasePath">Full path to the DecentDB database file.</param>
         public CertDatabase(string databasePath)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
@@ -45,13 +46,12 @@ namespace AvConsoleToolkit.CertManager
                 Directory.CreateDirectory(dir);
             }
 
-            var builder = new SqliteConnectionStringBuilder
+            var builder = new DecentDBConnectionStringBuilder
             {
                 DataSource = databasePath,
-                Mode = SqliteOpenMode.ReadWriteCreate,
             };
 
-            _connection = new SqliteConnection(builder.ConnectionString);
+            _connection = new DecentDBConnection(builder.ConnectionString);
             _connection.Open();
             EnsureSchema();
         }
@@ -99,13 +99,13 @@ namespace AvConsoleToolkit.CertManager
                 INSERT INTO CertificateAuthorities (Name, Country, Organization, CertificatePem, PrivateKeyPem, CreatedUtc, ExpiresUtc)
                 VALUES (@name, @country, @org, @cert, @key, @created, @expires);
                 SELECT last_insert_rowid();";
-            cmd.Parameters.AddWithValue("@name", record.Name);
-            cmd.Parameters.AddWithValue("@country", record.Country);
-            cmd.Parameters.AddWithValue("@org", record.Organization);
-            cmd.Parameters.AddWithValue("@cert", record.CertificatePem);
-            cmd.Parameters.AddWithValue("@key", record.PrivateKeyPem);
-            cmd.Parameters.AddWithValue("@created", record.CreatedUtc.ToString("O"));
-            cmd.Parameters.AddWithValue("@expires", record.ExpiresUtc.ToString("O"));
+            cmd.Parameters.Add(new DecentDBParameter("@name", record.Name));
+            cmd.Parameters.Add(new DecentDBParameter("@country", record.Country));
+            cmd.Parameters.Add(new DecentDBParameter("@org", record.Organization));
+            cmd.Parameters.Add(new DecentDBParameter("@cert", record.CertificatePem));
+            cmd.Parameters.Add(new DecentDBParameter("@key", record.PrivateKeyPem));
+            cmd.Parameters.Add(new DecentDBParameter("@created", record.CreatedUtc.ToString("O")));
+            cmd.Parameters.Add(new DecentDBParameter("@expires", record.ExpiresUtc.ToString("O")));
             return Convert.ToInt32(cmd.ExecuteScalar());
         }
 
@@ -136,7 +136,7 @@ namespace AvConsoleToolkit.CertManager
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = "SELECT Id, Name, Country, Organization, CertificatePem, PrivateKeyPem, CreatedUtc, ExpiresUtc FROM CertificateAuthorities WHERE Id = @id;";
-            cmd.Parameters.AddWithValue("@id", id);
+            cmd.Parameters.Add(new DecentDBParameter("@id", id));
             using var reader = cmd.ExecuteReader();
             return reader.Read() ? ReadCa(reader) : null;
         }
@@ -150,7 +150,7 @@ namespace AvConsoleToolkit.CertManager
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = "SELECT Id, Name, Country, Organization, CertificatePem, PrivateKeyPem, CreatedUtc, ExpiresUtc FROM CertificateAuthorities WHERE Name = @name COLLATE NOCASE;";
-            cmd.Parameters.AddWithValue("@name", name);
+            cmd.Parameters.Add(new DecentDBParameter("@name", name));
             using var reader = cmd.ExecuteReader();
             return reader.Read() ? ReadCa(reader) : null;
         }
@@ -168,7 +168,7 @@ namespace AvConsoleToolkit.CertManager
             {
                 cmd.Transaction = transaction;
                 cmd.CommandText = "DELETE FROM DeviceCertificates WHERE CaId = @id;";
-                cmd.Parameters.AddWithValue("@id", id);
+                cmd.Parameters.Add(new DecentDBParameter("@id", id));
                 cmd.ExecuteNonQuery();
             }
 
@@ -177,7 +177,7 @@ namespace AvConsoleToolkit.CertManager
             {
                 cmd.Transaction = transaction;
                 cmd.CommandText = "DELETE FROM CertificateAuthorities WHERE Id = @id;";
-                cmd.Parameters.AddWithValue("@id", id);
+                cmd.Parameters.Add(new DecentDBParameter("@id", id));
                 rows = cmd.ExecuteNonQuery();
             }
 
@@ -197,15 +197,15 @@ namespace AvConsoleToolkit.CertManager
                 INSERT INTO DeviceCertificates (CaId, Fqdn, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc)
                 VALUES (@caId, @fqdn, @ips, @cert, @key, @pfx, @chain, @created, @expires);
                 SELECT last_insert_rowid();";
-            cmd.Parameters.AddWithValue("@caId", record.CaId);
-            cmd.Parameters.AddWithValue("@fqdn", record.Fqdn);
-            cmd.Parameters.AddWithValue("@ips", record.IpAddresses);
-            cmd.Parameters.AddWithValue("@cert", record.CertificatePem);
-            cmd.Parameters.AddWithValue("@key", record.PrivateKeyPem);
-            cmd.Parameters.AddWithValue("@pfx", record.Pfx);
-            cmd.Parameters.AddWithValue("@chain", record.FullChainPem);
-            cmd.Parameters.AddWithValue("@created", record.CreatedUtc.ToString("O"));
-            cmd.Parameters.AddWithValue("@expires", record.ExpiresUtc.ToString("O"));
+            cmd.Parameters.Add(new DecentDBParameter("@caId", record.CaId));
+            cmd.Parameters.Add(new DecentDBParameter("@fqdn", record.Fqdn));
+            cmd.Parameters.Add(new DecentDBParameter("@ips", record.IpAddresses));
+            cmd.Parameters.Add(new DecentDBParameter("@cert", record.CertificatePem));
+            cmd.Parameters.Add(new DecentDBParameter("@key", record.PrivateKeyPem));
+            cmd.Parameters.Add(new DecentDBParameter("@pfx", record.Pfx));
+            cmd.Parameters.Add(new DecentDBParameter("@chain", record.FullChainPem));
+            cmd.Parameters.Add(new DecentDBParameter("@created", record.CreatedUtc.ToString("O")));
+            cmd.Parameters.Add(new DecentDBParameter("@expires", record.ExpiresUtc.ToString("O")));
             return Convert.ToInt32(cmd.ExecuteScalar());
         }
 
@@ -221,7 +221,7 @@ namespace AvConsoleToolkit.CertManager
             if (caId.HasValue)
             {
                 cmd.CommandText = "SELECT Id, CaId, Fqdn, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc FROM DeviceCertificates WHERE CaId = @caId ORDER BY Fqdn;";
-                cmd.Parameters.AddWithValue("@caId", caId.Value);
+                cmd.Parameters.Add(new DecentDBParameter("@caId", caId.Value));
             }
             else
             {
@@ -246,7 +246,7 @@ namespace AvConsoleToolkit.CertManager
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = "SELECT Id, CaId, Fqdn, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc FROM DeviceCertificates WHERE Id = @id;";
-            cmd.Parameters.AddWithValue("@id", id);
+            cmd.Parameters.Add(new DecentDBParameter("@id", id));
             using var reader = cmd.ExecuteReader();
             return reader.Read() ? ReadCert(reader) : null;
         }
@@ -260,7 +260,7 @@ namespace AvConsoleToolkit.CertManager
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = "DELETE FROM DeviceCertificates WHERE Id = @id;";
-            cmd.Parameters.AddWithValue("@id", id);
+            cmd.Parameters.Add(new DecentDBParameter("@id", id));
             return cmd.ExecuteNonQuery() > 0;
         }
 
@@ -270,7 +270,7 @@ namespace AvConsoleToolkit.CertManager
             _connection.Dispose();
         }
 
-        private static CertificateAuthorityRecord ReadCa(SqliteDataReader reader)
+        private static CertificateAuthorityRecord ReadCa(DbDataReader reader)
         {
             return new CertificateAuthorityRecord
             {
@@ -285,7 +285,7 @@ namespace AvConsoleToolkit.CertManager
             };
         }
 
-        private static DeviceCertificateRecord ReadCert(SqliteDataReader reader)
+        private static DeviceCertificateRecord ReadCert(DbDataReader reader)
         {
             return new DeviceCertificateRecord
             {
@@ -315,8 +315,11 @@ namespace AvConsoleToolkit.CertManager
                     PrivateKeyPem BLOB NOT NULL,
                     CreatedUtc TEXT NOT NULL,
                     ExpiresUtc TEXT NOT NULL
-                );
+                );";
+            cmd.ExecuteNonQuery();
 
+            using var cmd2 = _connection.CreateCommand();
+            cmd2.CommandText = @"
                 CREATE TABLE IF NOT EXISTS DeviceCertificates (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     CaId INTEGER NOT NULL,
@@ -330,7 +333,7 @@ namespace AvConsoleToolkit.CertManager
                     ExpiresUtc TEXT NOT NULL,
                     FOREIGN KEY (CaId) REFERENCES CertificateAuthorities(Id)
                 );";
-            cmd.ExecuteNonQuery();
+            cmd2.ExecuteNonQuery();
         }
     }
 }

@@ -17,12 +17,12 @@ namespace AvConsoleToolkit.Tests.CertManager
         {
             try
             {
-                _dbPath = Path.Combine(Path.GetTempPath(), $"certdb_test_{Guid.NewGuid():N}.db");
+                _dbPath = Path.Combine(Path.GetTempPath(), $"certdb_test_{Guid.NewGuid():N}.ddb");
                 _db = new CertDatabase(_dbPath);
             }
-            catch (TypeInitializationException ex) when (ex.InnerException?.InnerException is DllNotFoundException)
+            catch (Exception ex) when (IsNativeLibUnavailable(ex))
             {
-                Assert.Ignore("SQLite native library not available on this platform.");
+                Assert.Ignore("DecentDB native library not available on this platform.");
             }
         }
 
@@ -209,9 +209,9 @@ namespace AvConsoleToolkit.Tests.CertManager
             {
                 Assert.Throws<ArgumentException>(() => new CertDatabase(null!));
             }
-            catch (TypeInitializationException ex) when (ex.InnerException?.InnerException is DllNotFoundException)
+            catch (Exception ex) when (IsNativeLibUnavailable(ex))
             {
-                Assert.Ignore("SQLite native library not available on this platform.");
+                Assert.Ignore("DecentDB native library not available on this platform.");
             }
         }
 
@@ -222,9 +222,9 @@ namespace AvConsoleToolkit.Tests.CertManager
             {
                 Assert.Throws<ArgumentException>(() => new CertDatabase(string.Empty));
             }
-            catch (TypeInitializationException ex) when (ex.InnerException?.InnerException is DllNotFoundException)
+            catch (Exception ex) when (IsNativeLibUnavailable(ex))
             {
-                Assert.Ignore("SQLite native library not available on this platform.");
+                Assert.Ignore("DecentDB native library not available on this platform.");
             }
         }
 
@@ -256,6 +256,32 @@ namespace AvConsoleToolkit.Tests.CertManager
                 CreatedUtc = DateTime.UtcNow,
                 ExpiresUtc = DateTime.UtcNow.AddDays(397),
             };
+        }
+
+        private static bool IsNativeLibUnavailable(Exception ex)
+        {
+            if (ex is DllNotFoundException)
+            {
+                return true;
+            }
+
+            if (ex is TypeInitializationException tie && tie.InnerException?.InnerException is DllNotFoundException)
+            {
+                return true;
+            }
+
+            // DecentDB wraps DLL load errors in InvalidOperationException
+            if (ex.Message.Contains("Unable to load shared library", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (ex.InnerException != null)
+            {
+                return IsNativeLibUnavailable(ex.InnerException);
+            }
+
+            return false;
         }
     }
 }
