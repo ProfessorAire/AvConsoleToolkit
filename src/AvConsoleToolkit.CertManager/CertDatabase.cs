@@ -104,8 +104,7 @@ namespace AvConsoleToolkit.CertManager
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = @"
                 INSERT INTO CertificateAuthorities (Name, Country, Organization, CertificatePem, PrivateKeyPem, CreatedUtc, ExpiresUtc)
-                VALUES (@name, @country, @org, @cert, @key, @created, @expires);
-                SELECT last_insert_rowid();";
+                VALUES (@name, @country, @org, @cert, @key, @created, @expires) RETURNING Id;";
             cmd.Parameters.Add(new DecentDBParameter("@name", record.Name));
             cmd.Parameters.Add(new DecentDBParameter("@country", record.Country));
             cmd.Parameters.Add(new DecentDBParameter("@org", record.Organization));
@@ -156,7 +155,7 @@ namespace AvConsoleToolkit.CertManager
         public CertificateAuthorityRecord? GetCaByName(string name)
         {
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT Id, Name, Country, Organization, CertificatePem, PrivateKeyPem, CreatedUtc, ExpiresUtc FROM CertificateAuthorities WHERE Name = @name COLLATE NOCASE;";
+            cmd.CommandText = "SELECT Id, Name, Country, Organization, CertificatePem, PrivateKeyPem, CreatedUtc, ExpiresUtc FROM CertificateAuthorities WHERE LOWER(Name) = LOWER(@name);";
             cmd.Parameters.Add(new DecentDBParameter("@name", name));
             using var reader = cmd.ExecuteReader();
             return reader.Read() ? ReadCa(reader) : null;
@@ -202,8 +201,7 @@ namespace AvConsoleToolkit.CertManager
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = @"
                 INSERT INTO DeviceCertificates (CaId, Name, DnsNames, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc)
-                VALUES (@caId, @name, @dns, @ips, @cert, @key, @pfx, @chain, @created, @expires);
-                SELECT last_insert_rowid();";
+                VALUES (@caId, @name, @dns, @ips, @cert, @key, @pfx, @chain, @created, @expires) RETURNING Id;";
             cmd.Parameters.Add(new DecentDBParameter("@caId", record.CaId));
             cmd.Parameters.Add(new DecentDBParameter("@name", record.Name));
             cmd.Parameters.Add(new DecentDBParameter("@dns", record.DnsNames));
@@ -268,7 +266,7 @@ namespace AvConsoleToolkit.CertManager
         {
             var results = new List<DeviceCertificateRecord>();
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT Id, CaId, Name, DnsNames, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc FROM DeviceCertificates WHERE Name = @name COLLATE NOCASE;";
+            cmd.CommandText = "SELECT Id, CaId, Name, DnsNames, IpAddresses, CertificatePem, PrivateKeyPem, Pfx, FullChainPem, CreatedUtc, ExpiresUtc FROM DeviceCertificates WHERE LOWER(Name) = LOWER(@name);";
             cmd.Parameters.Add(new DecentDBParameter("@name", name));
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -302,8 +300,7 @@ namespace AvConsoleToolkit.CertManager
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = @"
                 INSERT INTO DeploymentTargets (CertId, ConnectionAddress, Port, Username, Password, DeployType, SshKeyPath, ApiKey, FileMappings, LastDeployedUtc)
-                VALUES (@certId, @addr, @port, @user, @pass, @type, @sshKey, @apiKey, @fileMappings, @lastDeployed);
-                SELECT last_insert_rowid();";
+                VALUES (@certId, @addr, @port, @user, @pass, @type, @sshKey, @apiKey, @fileMappings, @lastDeployed) RETURNING Id;";
             cmd.Parameters.Add(new DecentDBParameter("@certId", record.CertId));
             cmd.Parameters.Add(new DecentDBParameter("@addr", record.ConnectionAddress));
             cmd.Parameters.Add(new DecentDBParameter("@port", record.Port));
@@ -455,7 +452,7 @@ namespace AvConsoleToolkit.CertManager
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = @"
                 CREATE TABLE IF NOT EXISTS CertificateAuthorities (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Id INTEGER PRIMARY KEY,
                     Name TEXT NOT NULL UNIQUE COLLATE NOCASE,
                     Country TEXT NOT NULL,
                     Organization TEXT NOT NULL,
@@ -468,7 +465,7 @@ namespace AvConsoleToolkit.CertManager
 
             cmd.CommandText = @"
                 CREATE TABLE IF NOT EXISTS DeviceCertificates (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Id INTEGER PRIMARY KEY,
                     CaId INTEGER NOT NULL,
                     Name TEXT NOT NULL,
                     DnsNames TEXT NOT NULL,
@@ -485,7 +482,7 @@ namespace AvConsoleToolkit.CertManager
 
             cmd.CommandText = @"
                 CREATE TABLE IF NOT EXISTS DeploymentTargets (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Id INTEGER PRIMARY KEY,
                     CertId INTEGER NOT NULL,
                     ConnectionAddress TEXT NOT NULL,
                     Port INTEGER NOT NULL DEFAULT 22,

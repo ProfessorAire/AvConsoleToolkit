@@ -42,7 +42,18 @@ namespace AvConsoleToolkit.Commands.Cert
             AnsiConsole.MarkupLine($"  URL: [link]{url}[/]");
             AnsiConsole.MarkupLine("[dim]Press Ctrl+C to stop the server.[/]");
 
-            var builder = WebApplication.CreateBuilder();
+            // Ensure a wwwroot directory exists for static file serving.
+            // Blazor Server requires this for framework scripts (_framework/blazor.web.js).
+            var appDir = AppContext.BaseDirectory;
+            var webRoot = Path.Combine(appDir, "wwwroot");
+            Directory.CreateDirectory(webRoot);
+
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+            {
+                ContentRootPath = appDir,
+                WebRootPath = webRoot,
+            });
+
             builder.Services.AddRazorComponents()
                 .AddInteractiveServerComponents();
 
