@@ -1,4 +1,4 @@
-﻿// <copyright file="ISettings.cs">
+// <copyright file="DeployType.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,39 +10,46 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Diagnostics.CodeAnalysis;
-
-namespace AvConsoleToolkit.Configuration
+namespace AvConsoleToolkit.CertManager
 {
     /// <summary>
-    /// Defines the application's settings.
+    /// Specifies the deployment method used to upload certificates to a remote device.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface ISettings
+    public enum DeployType
     {
         /// <summary>
-        /// Gets the current connection settings used to configure connection related functionality.
+        /// Crestron Series 3 processor deployment via SSH.
         /// </summary>
-        IConnectionSettings Connection { get; }
+        Crestron3,
 
         /// <summary>
-        /// Gets the current editor settings used to configure file editing functionality.
+        /// Crestron Series 4 processor deployment via SSH.
         /// </summary>
-        IEditorSettings Editor { get; }
+        Crestron4,
 
         /// <summary>
-        /// Gets the settings for the built-in text editor.
+        /// Crestron 60 Series touchpanel deployment via SSH.
         /// </summary>
-        IBuiltInEditorSettings BuiltInEditor { get; }
+        CrestronTP60Series,
 
         /// <summary>
-        /// Gets the current connection settings used to configure Pass Through specific functionality.
+        /// Crestron 70 Series touchpanel deployment via SSH.
         /// </summary>
-        IPassThroughSettings PassThrough { get; }
+        CrestronTP70Series,
 
         /// <summary>
-        /// Gets the certificate manager settings.
+        /// TrueNAS Scale server deployment via REST API.
         /// </summary>
-        ICertManagerSettings CertManager { get; }
+        TrueNas,
+
+        /// <summary>
+        /// UniFi device deployment via SSH (e.g., Dream Machine Pro).
+        /// </summary>
+        UniFi,
+
+        /// <summary>
+        /// Generic SCP deployment to a specified directory on the target device.
+        /// </summary>
+        Scp,
     }
 }

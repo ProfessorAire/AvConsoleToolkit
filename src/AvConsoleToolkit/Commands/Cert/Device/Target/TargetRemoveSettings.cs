@@ -1,4 +1,4 @@
-﻿// <copyright file="ISettings.cs">
+// <copyright file="TargetRemoveSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,39 +10,40 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Diagnostics.CodeAnalysis;
+using System.ComponentModel;
+using Spectre.Console;
+using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Configuration
+namespace AvConsoleToolkit.Commands.Cert.Device.Target
 {
     /// <summary>
-    /// Defines the application's settings.
+    /// Settings for the <c>cert device target remove</c> command.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface ISettings
+    public class TargetRemoveSettings : CertDatabaseSettings
     {
         /// <summary>
-        /// Gets the current connection settings used to configure connection related functionality.
+        /// Gets or sets the ID of the deployment target to remove.
         /// </summary>
-        IConnectionSettings Connection { get; }
+        [CommandArgument(0, "<TARGET_ID>")]
+        [Description("ID of the deployment target to remove.")]
+        public int TargetId { get; set; }
 
         /// <summary>
-        /// Gets the current editor settings used to configure file editing functionality.
+        /// Gets or sets a value indicating whether to skip the confirmation prompt.
         /// </summary>
-        IEditorSettings Editor { get; }
+        [CommandOption("-y|--yes")]
+        [Description("Skip confirmation prompt.")]
+        public bool Yes { get; set; }
 
-        /// <summary>
-        /// Gets the settings for the built-in text editor.
-        /// </summary>
-        IBuiltInEditorSettings BuiltInEditor { get; }
+        /// <inheritdoc/>
+        public override ValidationResult Validate()
+        {
+            if (TargetId <= 0)
+            {
+                return ValidationResult.Error("Target ID must be a positive number.");
+            }
 
-        /// <summary>
-        /// Gets the current connection settings used to configure Pass Through specific functionality.
-        /// </summary>
-        IPassThroughSettings PassThrough { get; }
-
-        /// <summary>
-        /// Gets the certificate manager settings.
-        /// </summary>
-        ICertManagerSettings CertManager { get; }
+            return ValidationResult.Success();
+        }
     }
 }

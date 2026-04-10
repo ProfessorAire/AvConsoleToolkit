@@ -1,4 +1,4 @@
-﻿// <copyright file="ISettings.cs">
+// <copyright file="DeviceDeleteSettings.cs">
 // The MIT License
 // Copyright © Christopher McNeely
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -10,39 +10,40 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
-using System.Diagnostics.CodeAnalysis;
+using System.ComponentModel;
+using Spectre.Console;
+using Spectre.Console.Cli;
 
-namespace AvConsoleToolkit.Configuration
+namespace AvConsoleToolkit.Commands.Cert.Device
 {
     /// <summary>
-    /// Defines the application's settings.
+    /// Settings for the <c>cert device delete</c> command.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-    public interface ISettings
+    public class DeviceDeleteSettings : CertDatabaseSettings
     {
         /// <summary>
-        /// Gets the current connection settings used to configure connection related functionality.
+        /// Gets or sets the name or ID of the certificate to delete.
         /// </summary>
-        IConnectionSettings Connection { get; }
+        [CommandArgument(0, "<NAME_OR_ID>")]
+        [Description("Name or ID of the device certificate to delete.")]
+        public string NameOrId { get; set; } = string.Empty;
 
         /// <summary>
-        /// Gets the current editor settings used to configure file editing functionality.
+        /// Gets or sets a value indicating whether to skip the confirmation prompt.
         /// </summary>
-        IEditorSettings Editor { get; }
+        [CommandOption("-y|--yes")]
+        [Description("Skip confirmation prompt.")]
+        public bool Yes { get; set; }
 
-        /// <summary>
-        /// Gets the settings for the built-in text editor.
-        /// </summary>
-        IBuiltInEditorSettings BuiltInEditor { get; }
+        /// <inheritdoc/>
+        public override ValidationResult Validate()
+        {
+            if (string.IsNullOrWhiteSpace(NameOrId))
+            {
+                return ValidationResult.Error("Certificate name or ID is required.");
+            }
 
-        /// <summary>
-        /// Gets the current connection settings used to configure Pass Through specific functionality.
-        /// </summary>
-        IPassThroughSettings PassThrough { get; }
-
-        /// <summary>
-        /// Gets the certificate manager settings.
-        /// </summary>
-        ICertManagerSettings CertManager { get; }
+            return ValidationResult.Success();
+        }
     }
 }

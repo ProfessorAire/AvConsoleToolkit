@@ -22,8 +22,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <SupportedPlatform Include="Windows;Linux" />
     <PackageReference Include="Config.Net" Version="5.2.1" />
+    <SupportedPlatform Include="Windows;Linux" />
     <PackageReference Include="ini-parser" Version="2.5.2" NoWarn="NU1701" />
     <PackageReference Include="Onova" Version="2.6.13" />
     <PackageReference Include="Spectre.Console.Analyzer" Version="1.0.0">
@@ -34,6 +34,15 @@
     <PackageReference Include="Spectre.Console.Testing" Version="0.54.0" />
     <PackageReference Include="SSH.NET" Version="2025.1.0" />
     <PackageReference Include="TextCopy" Version="6.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AvConsoleToolkit.CertManager\AvConsoleToolkit.CertManager.csproj" />
+    <ProjectReference Include="..\AvConsoleToolkit.Web\AvConsoleToolkit.Web.csproj" />
   </ItemGroup>
 
 </Project>

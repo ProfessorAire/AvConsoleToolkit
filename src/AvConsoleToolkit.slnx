@@ -4,6 +4,8 @@
   </Folder>
   <Project Path="AvConsoleToolkit/AvConsoleToolkit.csproj" />
   <Project Path="AvConsoleToolkit.Tests/AvConsoleToolkit.Tests.csproj" />
+  <Project Path="AvConsoleToolkit.CertManager/AvConsoleToolkit.CertManager.csproj" />
+  <Project Path="AvConsoleToolkit.Web/AvConsoleToolkit.Web.csproj" />
   <Properties Name="ExtensibilityGlobals" Scope="PostLoad">
     <Property Name="FileExplorer" Value="..\" />
   </Properties>

@@ -1,0 +1,161 @@
+@page "/deploy"
+@using AvConsoleToolkit.CertManager
+@using AvConsoleToolkit.Web.ViewModels
+@implements IDisposable
+
+<h1 class="page-title">Deploy Certificates</h1>
+
+@if (!string.IsNullOrEmpty(_vm.StatusMessage))
+{
+    <div class="alert @(_vm.IsError ? "alert-danger" : "alert-success")">
+        @_vm.StatusMessage
+    </div>
+}
+
+<div class="card">
+    <h3>Add Deployment Target</h3>
+    <div class="form-row">
+        <div class="form-group">
+            <label>Device Certificate</label>
+            <select @bind="_vm.SelectedCertName">
+                <option value="">-- Select Certificate --</option>
+                @foreach (var cert in _vm.AvailableCerts)
+                {
+                    <option value="@cert.Name">@cert.Name (@cert.DnsNames)</option>
+                }
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Connection Address</label>
+            <input @bind="_vm.ConnectionAddress" placeholder="192.168.1.100" />
+        </div>
+        <div class="form-group">
+            <label>Port</label>
+            <input type="number" @bind="_vm.Port" style="width:100px" />
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label>Username</label>
+            <input @bind="_vm.Username" placeholder="admin" />
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" @bind="_vm.Password" />
+        </div>
+        <div class="form-group">
+            <label>Deploy Type</label>
+            <select @bind="_vm.DeployType">
+                @foreach (var dt in Enum.GetValues<DeployType>())
+                {
+                    <option value="@dt">@dt</option>
+                }
+            </select>
+        </div>
+    </div>
+    <button class="btn btn-primary" @onclick="AddTarget"
+            disabled="@(string.IsNullOrWhiteSpace(_vm.SelectedCertName) || string.IsNullOrWhiteSpace(_vm.ConnectionAddress))">
+        Add Target
+    </button>
+</div>
+
+<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h3 style="margin:0">Deployment Targets</h3>
+        <button class="btn btn-success" @onclick="DeployAll" disabled="@(_vm.IsDeploying || _vm.Targets.Count == 0)">
+            @if (_vm.IsDeploying)
+            {
+                <text>Deploying...</text>
+            }
+            else
+            {
+                <text>Deploy All</text>
+            }
+        </button>
+    </div>
+
+    @if (_vm.Targets.Count == 0)
+    {
+        <p style="color:#666">No deployment targets configured.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Certificate</th>
+                    <th>Host</th>
+                    <th>Type</th>
+                    <th>User</th>
+                    <th>Last Deployed</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var target in _vm.Targets)
+                {
+                    var certName = _vm.AvailableCerts.FirstOrDefault(c => c.Id == target.CertId)?.Name ?? $"ID {target.CertId}";
+                    <tr>
+                        <td>@target.Id</td>
+                        <td>@certName</td>
+                        <td>@target.ConnectionAddress:@target.Port</td>
+                        <td>@target.DeployType</td>
+                        <td>@target.Username</td>
+                        <td>@(target.LastDeployedUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" @onclick="() => DeploySingle(target.Id)" disabled="@_vm.IsDeploying">Deploy</button>
+                            <button class="btn btn-danger btn-sm" @onclick="() => RemoveTarget(target.Id)">Remove</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (_vm.DeployResults.Count > 0)
+{
+    <div class="card">
+        <h3>Deployment Results</h3>
+        @foreach (var result in _vm.DeployResults)
+        {
+            <p>@result</p>
+        }
+    </div>
+}
+
+@code {
+    [Inject] private CertDatabase Db { get; set; } = default!;
+    private DeployViewModel _vm = default!;
+
+    protected override void OnInitialized()
+    {
+        _vm = new DeployViewModel(Db.DatabasePath);
+        _vm.PropertyChanged += (_, _) => InvokeAsync(StateHasChanged);
+    }
+
+    private void AddTarget()
+    {
+        _vm.AddTargetCommand.Execute().Subscribe();
+    }
+
+    private void RemoveTarget(int id)
+    {
+        _vm.RemoveTargetCommand.Execute(id).Subscribe();
+    }
+
+    private void DeployAll()
+    {
+        _vm.DeployAllCommand.Execute().Subscribe();
+    }
+
+    private void DeploySingle(int targetId)
+    {
+        _vm.DeploySingleCommand.Execute(targetId).Subscribe();
+    }
+
+    public void Dispose()
+    {
+    }
+}
