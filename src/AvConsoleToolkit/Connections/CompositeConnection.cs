@@ -515,7 +515,7 @@ namespace AvConsoleToolkit.Connections
                     if (writeReceivedData)
                     {
                         // Print output as it's received
-                        AnsiConsole.Write(data);
+                        AnsiConsole.Write(AvConsoleToolkit.Utilities.TerminalOutputNormalizer.NormalizeForDisplay(data));
                     }
 
                     var currentOutput = output.ToString();
