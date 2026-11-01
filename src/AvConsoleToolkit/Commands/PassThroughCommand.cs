@@ -1028,31 +1028,7 @@ namespace AvConsoleToolkit.Commands
                 // Some devices send multiple prompts, so we need to remove all of them
                 if (this.Prompt != null)
                 {
-                    var outputToWrite = lastOutput;
-
-                    // Remove all instances of the prompt (with and without trailing space)
-                    var promptWithSpace = $"{this.Prompt} ";
-                    outputToWrite = outputToWrite.Replace(promptWithSpace, string.Empty);
-                    outputToWrite = outputToWrite.Replace(this.Prompt, string.Empty);
-
-                    // Clean up any resulting multiple consecutive newlines
-                    while (outputToWrite.Contains("\n\n\n"))
-                    {
-                        outputToWrite = outputToWrite.Replace("\n\n\n", "\n\n");
-                    }
-                    while (outputToWrite.Contains("\r\n\r\n\r\n"))
-                    {
-                        outputToWrite = outputToWrite.Replace("\r\n\r\n\r\n", "\r\n\r\n");
-                    }
-
-                    // Trim trailing whitespace
-                    outputToWrite = outputToWrite.TrimEnd('\r', '\n', ' ', '\t');
-                    if (!string.IsNullOrEmpty(outputToWrite))
-                    {
-                        outputToWrite += Environment.NewLine;
-                    }
-
-                    lastOutput = outputToWrite;
+                    lastOutput = TerminalOutputNormalizer.NormalizeCapturedOutput(lastOutput, this.Prompt);
                 }
 
                 if (!string.IsNullOrEmpty(lastOutput))
@@ -1097,32 +1073,11 @@ namespace AvConsoleToolkit.Commands
                                 // If there's new output, write it before the prompt
                                 if (!string.IsNullOrEmpty(newOutput))
                                 {
-                                    // Strip all occurrences of the prompt from device output to avoid duplicates
-                                    var outputToWrite = TerminalOutputNormalizer.NormalizeForDisplay(newOutput);
-                                    if (this.Prompt != null)
-                                    {
-                                        // Remove all instances of the prompt (with and without trailing space)
-                                        var promptWithSpace = $"{this.Prompt} ";
-                                        outputToWrite = outputToWrite.Replace(promptWithSpace, string.Empty);
-                                        outputToWrite = outputToWrite.Replace(this.Prompt, string.Empty);
-
-                                        // Clean up any resulting multiple consecutive newlines
-                                        while (outputToWrite.Contains("\n\n\n"))
-                                        {
-                                            outputToWrite = outputToWrite.Replace("\n\n\n", "\n\n");
-                                        }
-                                        while (outputToWrite.Contains("\r\n\r\n\r\n"))
-                                        {
-                                            outputToWrite = outputToWrite.Replace("\r\n\r\n\r\n", "\r\n\r\n");
-                                        }
-
-                                        // Trim trailing whitespace and ensure single trailing newline
-                                        outputToWrite = outputToWrite.TrimEnd('\r', '\n', ' ', '\t');
-                                        if (!string.IsNullOrEmpty(outputToWrite))
-                                        {
-                                            outputToWrite += Environment.NewLine;
-                                        }
-                                    }
+                                    // Strip all occurrences of the prompt from device output to avoid duplicates.
+                                    // Important: we should not add a synthetic newline per buffered chunk; the device's
+                                    // actual output stream determines line boundaries. Only normalize prompt echoes and
+                                    // carriage-return updates before printing.
+                                    var outputToWrite = TerminalOutputNormalizer.NormalizeCapturedOutput(newOutput, this.Prompt);
 
                                     // Write the new output
                                     if (!string.IsNullOrEmpty(outputToWrite))

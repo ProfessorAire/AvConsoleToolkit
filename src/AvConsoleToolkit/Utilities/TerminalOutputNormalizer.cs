@@ -26,7 +26,38 @@ namespace AvConsoleToolkit.Utilities
                 return value ?? string.Empty;
             }
 
-            return value.Replace("\r", string.Empty);
+            // Some device streams refresh the same terminal line using carriage returns.
+            // Preserve real newline boundaries but remove carriage-return control characters
+            // so a single progress line is not split by terminal cursor rewrites.
+            var normalized = value.Replace("\r", string.Empty);
+            normalized = normalized.Replace("\r\n", "\n");
+            return normalized;
+        }
+
+        public static string NormalizeCapturedOutput(string? value, string? prompt = null)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+
+            var normalized = NormalizeForDisplay(value);
+
+            if (!string.IsNullOrWhiteSpace(prompt))
+            {
+                var promptWithSpace = $"{prompt} ";
+                normalized = normalized.Replace(promptWithSpace, string.Empty);
+                normalized = normalized.Replace(prompt, string.Empty);
+            }
+
+            while (normalized.Contains("\n\n\n"))
+            {
+                normalized = normalized.Replace("\n\n\n", "\n\n");
+            }
+
+            // Do not inject synthetic newlines. Preserve the original device output exactly,
+            // except for removing prompt echoes and carriage-return updates.
+            return normalized.TrimEnd('\r', '\n', ' ', '\t');
         }
     }
 }

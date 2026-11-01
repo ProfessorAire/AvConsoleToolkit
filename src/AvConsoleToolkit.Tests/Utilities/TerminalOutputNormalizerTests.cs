@@ -17,13 +17,13 @@ namespace AvConsoleToolkit.Tests.Utilities
         }
 
         [Test]
-        public void NormalizeForDisplay_LeavesNormalTextUnchanged()
+        public void NormalizeCapturedOutput_PreservesActualNewLinesAndRemovesPromptEcho()
         {
-            const string value = "Program Boot Directory:01: \\SIMPL\\app01\nLoading Application:01........\n";
+            const string value = "Program Boot Directory:01: \\SIMPL\\app01\nLoading Application:01........\nACT> ";
 
-            var normalized = TerminalOutputNormalizer.NormalizeForDisplay(value);
+            var normalized = TerminalOutputNormalizer.NormalizeCapturedOutput(value, "ACT>");
 
-            Assert.That(normalized, Is.EqualTo(value));
+            Assert.That(normalized, Is.EqualTo("Program Boot Directory:01: \\SIMPL\\app01\nLoading Application:01........"));
         }
     }
 }
