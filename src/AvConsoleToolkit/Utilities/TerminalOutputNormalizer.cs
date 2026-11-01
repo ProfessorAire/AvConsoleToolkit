@@ -10,6 +10,8 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // </copyright>
 
+using System;
+
 namespace AvConsoleToolkit.Utilities
 {
     /// <summary>
@@ -26,12 +28,9 @@ namespace AvConsoleToolkit.Utilities
                 return value ?? string.Empty;
             }
 
-            // Some device streams refresh the same terminal line using carriage returns.
-            // Preserve real newline boundaries but remove carriage-return control characters
-            // so a single progress line is not split by terminal cursor rewrites.
-            var normalized = value.Replace("\r", string.Empty);
-            normalized = normalized.Replace("\r\n", "\n");
-            return normalized;
+            // Remove carriage-return rewrites used by devices to redraw the current line,
+            // but preserve actual newline characters that are part of the remote stream.
+            return value.Replace("\r", string.Empty);
         }
 
         public static string NormalizeCapturedOutput(string? value, string? prompt = null)
@@ -55,9 +54,15 @@ namespace AvConsoleToolkit.Utilities
                 normalized = normalized.Replace("\n\n\n", "\n\n");
             }
 
-            // Do not inject synthetic newlines. Preserve the original device output exactly,
-            // except for removing prompt echoes and carriage-return updates.
-            return normalized.TrimEnd('\r', '\n', ' ', '\t');
+            var hadTrailingNewLine = normalized.EndsWith('\n') || normalized.EndsWith('\r');
+            normalized = normalized.TrimEnd('\r', '\n');
+
+            if (hadTrailingNewLine && !string.IsNullOrEmpty(normalized))
+            {
+                normalized += Environment.NewLine;
+            }
+
+            return normalized;
         }
     }
 }
