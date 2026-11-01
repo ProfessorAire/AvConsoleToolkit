@@ -19,6 +19,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AvConsoleToolkit.Connections;
+using AvConsoleToolkit.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Spectre.Console.Rendering;
@@ -986,7 +987,7 @@ namespace AvConsoleToolkit.Commands
                                     }
                                 }
 
-                                this.outputBuffer.Append(data);
+                                this.outputBuffer.Append(TerminalOutputNormalizer.NormalizeForDisplay(data));
                             }
                         }
                         else
@@ -1097,7 +1098,7 @@ namespace AvConsoleToolkit.Commands
                                 if (!string.IsNullOrEmpty(newOutput))
                                 {
                                     // Strip all occurrences of the prompt from device output to avoid duplicates
-                                    var outputToWrite = newOutput;
+                                    var outputToWrite = TerminalOutputNormalizer.NormalizeForDisplay(newOutput);
                                     if (this.Prompt != null)
                                     {
                                         // Remove all instances of the prompt (with and without trailing space)
